@@ -48,6 +48,15 @@ from hydra.security import (
 )
 from hydra.workflows.engine import execute_workflow
 from hydra.workers.tasks import generate_code_tenant, execute_workflow_tenant
+from hydra.performance import (
+    pool_manager,
+    request_batcher,
+    streaming_handler,
+    get_optimized_session,
+    QueryOptimizer,
+    initialize_performance_optimizations,
+    cleanup_performance_resources,
+)
 
 
 class TaskStatus(str, Enum):
@@ -135,6 +144,18 @@ app = FastAPI(
 app.add_middleware(AuthMiddleware)
 app.add_middleware(TenantIsolationMiddleware)
 monitoring.instrument_fastapi(app)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize performance optimizations on startup."""
+    await initialize_performance_optimizations()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup performance resources on shutdown."""
+    await cleanup_performance_resources()
 
 @app.middleware("http")
 async def monitoring_middleware(request: Request, call_next):
@@ -371,6 +392,56 @@ async def generate_code(
         task_id=task_id,
         status=TaskStatus.PENDING,
         message="Code generation task queued"
+    )
+
+
+@app.post("/generate/stream")
+async def generate_code_streaming(
+    request: GenerateRequest,
+    api_key_info: tuple = Depends(get_current_api_key),
+    tenant: Tenant = Depends(get_current_tenant),
+    req: Request = None
+):
+    """Generate code with streaming response."""
+    # Sanitize input
+    is_valid, sanitized = input_sanitizer.sanitize_code_input(request.prompt)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=sanitized)
+
+    request.prompt = sanitized
+    task_id = str(uuid.uuid4())
+    
+    # Check tenant quota
+    if not check_tenant_quota(tenant.id, tokens=request.max_tokens, task_id=task_id):
+        raise HTTPException(status_code=429, detail="Tenant quota exceeded")
+    
+    config = get_config()
+    provider = config.llm_provider.name
+    
+    # Create streaming request
+    llm_request = {
+        "messages": [{"role": "user", "content": request.prompt}],
+        "max_tokens": request.max_tokens,
+        "temperature": 0.2,
+        "stream": True
+    }
+    
+    # Start streaming
+    asyncio.create_task(
+        streaming_handler.stream_llm_response(provider, llm_request, task_id)
+    )
+    
+    async def stream_generator():
+        queue = await streaming_handler.create_stream(task_id)
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield f"data: {chunk}\n\n"
+    
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream"
     )
 
 

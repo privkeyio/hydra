@@ -1,48 +1,148 @@
+"""
+Configuration management for Hydra system.
+"""
 import os
-import subprocess
+import yaml
+from pathlib import Path
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
-from anthropic import Anthropic
+from hydra.providers import LLMConfig, provider_factory
 
+# Load environment variables
 load_dotenv()
 
-USE_VENICE = os.getenv("USE_VENICE", "false").lower() == "true"
-USE_CLAUDE_CLI = os.getenv("USE_CLAUDE_CLI", "true").lower() == "true"
-CLAUDE_CLI_PATH = os.getenv("CLAUDE_CLI_PATH", "claude")  # Default to 'claude'
-anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", "dummy"))
 
-def generate_code_with_claude_cli(prompt):
-    try:
-        # Use CLAUDE_CLI_PATH from environment or default to 'claude'
-        cmd = f'{CLAUDE_CLI_PATH} "{prompt}"'
+class HydraConfig:
+    """Central configuration management for Hydra."""
+    
+    def __init__(self, config_path: Optional[str] = None):
+        self.config_path = config_path or self._find_config_file()
+        self.config = self._load_config()
+        self._override_with_env()
+        self.llm_provider = self._create_llm_provider()
+    
+    def _find_config_file(self) -> str:
+        """Find the configuration file."""
+        # Look for config in multiple locations
+        search_paths = [
+            Path.cwd() / "config" / "default.yaml",
+            Path.cwd() / "hydra.yaml",
+            Path(__file__).parent.parent.parent / "config" / "default.yaml",
+        ]
         
-        # Debug logging
-        print(f"[DEBUG] Running command: {cmd}")
+        for path in search_paths:
+            if path.exists():
+                return str(path)
+        
+        # If no config file found, use defaults
+        return None
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """Load configuration from file."""
+        if self.config_path and Path(self.config_path).exists():
+            with open(self.config_path, 'r') as f:
+                return yaml.safe_load(f)
+        
+        # Default configuration
+        return {
+            'llm': {
+                'provider': 'venice',
+                'model': None,  # Will use provider default
+                'temperature': 0.2,
+                'max_tokens': 2048,
+                'timeout': 30
+            },
+            'agent': {
+                'max_depth': 2,
+                'retry_attempts': 2,
+                'timeout': 30
+            },
+            'logging': {
+                'level': 'INFO',
+                'file': 'logs/agent_activity.log',
+                'max_bytes': 10485760,
+                'backup_count': 5
+            }
+        }
+    
+    def _override_with_env(self):
+        """Override configuration with environment variables."""
+        # LLM provider configuration
+        if os.getenv('LLM_PROVIDER'):
+            self.config['llm']['provider'] = os.getenv('LLM_PROVIDER')
+        
+        if os.getenv('LLM_MODEL'):
+            self.config['llm']['model'] = os.getenv('LLM_MODEL')
+        
+        if os.getenv('LLM_TEMPERATURE'):
+            self.config['llm']['temperature'] = float(os.getenv('LLM_TEMPERATURE'))
+        
+        if os.getenv('LLM_MAX_TOKENS'):
+            self.config['llm']['max_tokens'] = int(os.getenv('LLM_MAX_TOKENS'))
+        
+        # Agent configuration
+        if os.getenv('AGENT_MAX_DEPTH'):
+            self.config['agent']['max_depth'] = int(os.getenv('AGENT_MAX_DEPTH'))
+        
+        if os.getenv('AGENT_RETRY_ATTEMPTS'):
+            self.config['agent']['retry_attempts'] = int(os.getenv('AGENT_RETRY_ATTEMPTS'))
+    
+    def _create_llm_provider(self):
+        """Create the LLM provider based on configuration."""
+        llm_config = self.config['llm']
+        provider_type = llm_config['provider']
+        
+        # Build LLMConfig
+        config = LLMConfig(
+            provider_type=provider_type,
+            model=llm_config.get('model'),
+            temperature=llm_config.get('temperature', 0.2),
+            max_tokens=llm_config.get('max_tokens', 2048),
+            timeout=llm_config.get('timeout', 30),
+            extra_params={}
+        )
+        
+        # Add provider-specific configuration
+        if provider_type == 'venice':
+            config.api_key = os.getenv('VENICE_API_KEY')
+            config.base_url = os.getenv('VENICE_BASE_URL', 'https://api.venice.ai/api/v1')
             
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=os.environ.copy()
-        )
-        if result.returncode == 0:
-            return result.stdout
-        else:
-            raise Exception(f"Claude CLI error: {result.stderr}")
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        if USE_VENICE:
-            try:
-                import venice
-                client = venice.Client()
-                return client.generate(prompt)
-            except ImportError:
-                pass
-        from anthropic import Anthropic
-        client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return message.content[0].text
+        elif provider_type == 'anthropic':
+            config.api_key = os.getenv('ANTHROPIC_API_KEY')
+            
+        elif provider_type == 'openai':
+            config.api_key = os.getenv('OPENAI_API_KEY')
+            config.base_url = os.getenv('OPENAI_BASE_URL')  # For custom endpoints
+            
+        elif provider_type == 'claude_cli':
+            config.extra_params['claude_path'] = os.getenv('CLAUDE_CLI_PATH', 'claude')
+            config.extra_params['cli_flags'] = os.getenv('CLAUDE_CLI_FLAGS', '')
+        
+        return provider_factory.create(config)
+    
+    def get_agent_config(self) -> Dict[str, Any]:
+        """Get agent configuration."""
+        return self.config['agent']
+    
+    def get_logging_config(self) -> Dict[str, Any]:
+        """Get logging configuration."""
+        return self.config['logging']
+
+
+# Global configuration instance
+_config_instance = None
+
+
+def get_config() -> HydraConfig:
+    """Get or create the global configuration instance."""
+    global _config_instance
+    if _config_instance is None:
+        _config_instance = HydraConfig()
+    return _config_instance
+
+
+def reset_config(config_path: Optional[str] = None):
+    """Reset the global configuration instance."""
+    global _config_instance
+    _config_instance = HydraConfig(config_path)
+    return _config_instance

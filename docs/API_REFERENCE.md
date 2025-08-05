@@ -2,6 +2,7 @@
 
 ## Table of Contents
 - [CodeAgent Class](#codeagent-class)
+- [LLM Provider System](#llm-provider-system)
 - [Workflow Engine](#workflow-engine)
 - [CLI Interface](#cli-interface)
 - [Configuration](#configuration)
@@ -202,6 +203,137 @@ python -m hydra.cli "Create a function"
 # With options
 python -m hydra.cli "Complex task" --agent-name "manager" --json
 ```
+
+## LLM Provider System
+
+### Abstract Base Class: `hydra.providers.base.LLMProvider`
+
+Base class for all LLM provider implementations.
+
+#### Properties
+
+- `name` (str): Provider identifier
+- `model` (str): Current model being used
+- `config` (LLMConfig): Provider configuration
+
+#### Abstract Methods
+
+##### `validate_config()`
+
+Validates provider-specific configuration requirements.
+
+**Raises:**
+- `ValueError`: If configuration is invalid
+
+##### `generate(prompt: str, **kwargs) -> str`
+
+Generates text response from the LLM.
+
+**Parameters:**
+- `prompt` (str): Input prompt
+- `**kwargs`: Optional parameters (temperature, max_tokens, etc.)
+
+**Returns:**
+- str: Generated text response
+
+##### `generate_json(prompt: str, **kwargs) -> Dict[str, Any]`
+
+Generates JSON response from the LLM.
+
+**Parameters:**
+- `prompt` (str): Input prompt requesting JSON
+- `**kwargs`: Optional parameters
+
+**Returns:**
+- Dict: Parsed JSON response
+
+##### `list_models() -> List[str]`
+
+Lists available models for this provider.
+
+**Returns:**
+- List[str]: Available model identifiers
+
+### Data Class: `hydra.providers.base.LLMConfig`
+
+Configuration for LLM providers.
+
+```python
+@dataclass
+class LLMConfig:
+    provider_type: str
+    model: str
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    temperature: float = 0.2
+    max_tokens: int = 2048
+    timeout: int = 30
+    extra_params: Dict[str, Any] = None
+```
+
+### Factory: `hydra.providers.factory.LLMProviderFactory`
+
+Factory for creating provider instances.
+
+#### Method: `create(config: LLMConfig) -> LLMProvider`
+
+Creates a provider instance from configuration.
+
+**Parameters:**
+- `config` (LLMConfig): Provider configuration
+
+**Returns:**
+- LLMProvider: Instantiated provider
+
+**Example:**
+```python
+from hydra.providers import LLMConfig, provider_factory
+
+config = LLMConfig(
+    provider_type='venice',
+    model='qwen-2.5-coder-32b',
+    api_key='your-api-key'
+)
+
+provider = provider_factory.create(config)
+response = provider.generate("Write a hello world function")
+```
+
+### Available Providers
+
+#### VeniceProvider
+
+Venice AI provider using OpenAI-compatible API.
+
+**Configuration:**
+- `api_key`: Required Venice API key
+- `base_url`: API endpoint (default: https://api.venice.ai/api/v1)
+- `model`: Model to use (default: qwen-2.5-coder-32b)
+
+#### AnthropicProvider
+
+Anthropic Claude provider.
+
+**Configuration:**
+- `api_key`: Required Anthropic API key
+- `model`: Claude model (default: claude-3-5-sonnet-20241022)
+
+#### OpenAIProvider
+
+OpenAI GPT provider.
+
+**Configuration:**
+- `api_key`: Required OpenAI API key
+- `base_url`: Optional custom endpoint
+- `model`: GPT model (default: gpt-4)
+
+#### ClaudeCLIProvider
+
+Claude CLI wrapper provider.
+
+**Configuration:**
+- `claude_path`: Path to Claude binary (in extra_params)
+- `cli_flags`: Optional CLI flags (in extra_params)
 
 ## Configuration
 

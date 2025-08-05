@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from hydra.agents.base import CodeAgent
 from hydra.api.auth import AuthMiddleware, get_current_api_key
+from hydra.cache import get_cache
 from hydra.config import get_config
 from hydra.monitoring import monitoring, timed_operation
 from hydra.workflows.engine import execute_workflow
@@ -59,6 +60,28 @@ class HealthResponse(BaseModel):
     version: str = "1.0.0"
 
 
+class CacheInvalidateRequest(BaseModel):
+    cache_type: str = Field(...,
+                            description="Cache type: 'code', 'task', 'api', or 'all'")
+    key: Optional[str] = Field(None,
+                               description="Specific key to invalidate (optional)")
+
+
+class CacheInvalidateResponse(BaseModel):
+    success: bool
+    keys_deleted: int
+    message: str
+
+
+class CacheStatsResponse(BaseModel):
+    memory_used: str
+    memory_peak: str
+    total_keys: int
+    connected_clients: int
+    cache_hit_rate: float
+    uptime_seconds: int
+
+
 app = FastAPI(
     title="Hydra API",
     description="REST API for Hydra AI agent system",
@@ -99,6 +122,21 @@ async def process_generate_task(task_id: str, request: GenerateRequest):
         tasks_store[task_id]["status"] = TaskStatus.IN_PROGRESS
         tasks_store[task_id]["progress"] = 10
 
+        cache = get_cache()
+
+        cached_code = cache.get_code_cache(
+            request.prompt,
+            language=request.language,
+            max_tokens=request.max_tokens
+        )
+
+        if cached_code:
+            tasks_store[task_id]["status"] = TaskStatus.COMPLETED
+            tasks_store[task_id]["progress"] = 100
+            tasks_store[task_id]["completed_at"] = datetime.utcnow()
+            tasks_store[task_id]["result"] = {"code": cached_code, "cached": True}
+            return
+
         config = get_config()
         agent = CodeAgent(config)
 
@@ -111,10 +149,19 @@ async def process_generate_task(task_id: str, request: GenerateRequest):
             max_tokens=request.max_tokens
         )
 
+        cache.set_code_cache(
+            request.prompt,
+            result,
+            language=request.language,
+            max_tokens=request.max_tokens
+        )
+
         tasks_store[task_id]["status"] = TaskStatus.COMPLETED
         tasks_store[task_id]["progress"] = 100
         tasks_store[task_id]["completed_at"] = datetime.utcnow()
-        tasks_store[task_id]["result"] = {"code": result}
+        tasks_store[task_id]["result"] = {"code": result, "cached": False}
+
+        cache.set_task_result(task_id, tasks_store[task_id])
 
     except Exception as e:
         tasks_store[task_id]["status"] = TaskStatus.FAILED
@@ -145,6 +192,9 @@ async def process_workflow_task(task_id: str, request: WorkflowRequest):
         tasks_store[task_id]["progress"] = 100
         tasks_store[task_id]["completed_at"] = datetime.utcnow()
         tasks_store[task_id]["result"] = result
+
+        cache = get_cache()
+        cache.set_task_result(task_id, tasks_store[task_id])
 
     except Exception as e:
         tasks_store[task_id]["status"] = TaskStatus.FAILED
@@ -207,7 +257,8 @@ async def execute_workflow_endpoint(
 
 
 @app.get("/status/{task_id}", response_model=StatusResponse)
-async def get_task_status(task_id: str, api_key_info: tuple = Depends(get_current_api_key)):
+async def get_task_status(task_id: str,
+                          api_key_info: tuple = Depends(get_current_api_key)):
     """Get the status of a specific task."""
     if task_id not in tasks_store:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -249,6 +300,70 @@ async def health_check():
             timestamp=datetime.utcnow(),
             providers={"error": str(e)}
         )
+
+
+@app.post("/cache/invalidate", response_model=CacheInvalidateResponse)
+async def invalidate_cache(
+    request: CacheInvalidateRequest,
+    api_key_info: tuple = Depends(get_current_api_key)
+):
+    """Invalidate cache entries."""
+    cache = get_cache()
+
+    try:
+        if request.cache_type == "all":
+            keys_deleted = (
+                cache.invalidate_code_cache() +
+                cache.invalidate_task_cache() +
+                cache.invalidate_api_cache()
+            )
+            message = "All cache entries invalidated"
+        elif request.cache_type == "code":
+            keys_deleted = cache.invalidate_code_cache()
+            message = "Code cache invalidated"
+        elif request.cache_type == "task":
+            if request.key:
+                keys_deleted = cache.invalidate_task_cache(request.key)
+                message = f"Task cache for {request.key} invalidated"
+            else:
+                keys_deleted = cache.invalidate_task_cache()
+                message = "All task cache invalidated"
+        elif request.cache_type == "api":
+            if request.key:
+                keys_deleted = cache.invalidate_api_cache(request.key)
+                message = f"API cache for {request.key} invalidated"
+            else:
+                keys_deleted = cache.invalidate_api_cache()
+                message = "All API cache invalidated"
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid cache_type. Must be 'code', 'task', 'api', or 'all'"
+            )
+
+        return CacheInvalidateResponse(
+            success=True,
+            keys_deleted=keys_deleted,
+            message=message
+        )
+    except Exception as e:
+        return CacheInvalidateResponse(
+            success=False,
+            keys_deleted=0,
+            message=f"Cache invalidation failed: {str(e)}"
+        )
+
+
+@app.get("/cache/stats", response_model=CacheStatsResponse)
+async def get_cache_stats(api_key_info: tuple = Depends(get_current_api_key)):
+    """Get cache statistics."""
+    cache = get_cache()
+    stats = cache.get_cache_stats()
+
+    if "error" in stats:
+        raise HTTPException(status_code=500, detail=stats["error"])
+
+    return CacheStatsResponse(**stats)
 
 
 if __name__ == "__main__":

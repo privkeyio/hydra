@@ -48,7 +48,7 @@ def register_tenant_queue(tenant_id: str, priority: bool = False):
     queue_name = get_tenant_queue_name(tenant_id, priority)
     routing_key = f"tenant.{tenant_id}.{'high' if priority else 'normal'}"
     queue_priority = 10 if priority else 5
-    
+
     queue = Queue(
         queue_name,
         tenant_exchange,
@@ -59,12 +59,12 @@ def register_tenant_queue(tenant_id: str, priority: bool = False):
             'x-message-ttl': 3600000  # 1 hour TTL
         }
     )
-    
+
     # Add queue to configuration
     existing_queues = list(app.conf.task_queues)
     existing_queues.append(queue)
     app.conf.task_queues = tuple(existing_queues)
-    
+
     return queue_name
 
 app.conf.task_routes = {

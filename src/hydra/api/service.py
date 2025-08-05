@@ -30,33 +30,28 @@ from hydra.agents.base import CodeAgent
 from hydra.api.auth import AuthMiddleware, get_current_api_key
 from hydra.api.tenant import (
     TenantIsolationMiddleware,
+    check_tenant_quota,
     get_current_tenant,
     get_tenant_usage_stats,
-    check_tenant_quota,
-    update_tenant_usage,
 )
 from hydra.billing import get_billing_service
 from hydra.cache import get_cache
 from hydra.config import get_config
-from hydra.models.db import APIKey, Usage, Tenant, Task, get_db
+from hydra.models.db import APIKey, Tenant, Usage, get_db
 from hydra.monitoring import monitoring, timed_operation
+from hydra.performance import (
+    cleanup_performance_resources,
+    initialize_performance_optimizations,
+    streaming_handler,
+)
 from hydra.security import (
     SecurityHeaders,
     audit_logger,
     input_sanitizer,
     request_signer,
 )
+from hydra.workers.tasks import execute_workflow_tenant, generate_code_tenant
 from hydra.workflows.engine import execute_workflow
-from hydra.workers.tasks import generate_code_tenant, execute_workflow_tenant
-from hydra.performance import (
-    pool_manager,
-    request_batcher,
-    streaming_handler,
-    get_optimized_session,
-    QueryOptimizer,
-    initialize_performance_optimizations,
-    cleanup_performance_resources,
-)
 
 
 class TaskStatus(str, Enum):
@@ -354,7 +349,7 @@ async def generate_code(
 
     request.prompt = sanitized
     task_id = str(uuid.uuid4())
-    
+
     # Check tenant quota
     if not check_tenant_quota(tenant.id, tokens=request.max_tokens, task_id=task_id):
         raise HTTPException(
@@ -410,14 +405,14 @@ async def generate_code_streaming(
 
     request.prompt = sanitized
     task_id = str(uuid.uuid4())
-    
+
     # Check tenant quota
     if not check_tenant_quota(tenant.id, tokens=request.max_tokens, task_id=task_id):
         raise HTTPException(status_code=429, detail="Tenant quota exceeded")
-    
+
     config = get_config()
     provider = config.llm_provider.name
-    
+
     # Create streaming request
     llm_request = {
         "messages": [{"role": "user", "content": request.prompt}],
@@ -425,12 +420,12 @@ async def generate_code_streaming(
         "temperature": 0.2,
         "stream": True
     }
-    
+
     # Start streaming
     asyncio.create_task(
         streaming_handler.stream_llm_response(provider, llm_request, task_id)
     )
-    
+
     async def stream_generator():
         queue = await streaming_handler.create_stream(task_id)
         while True:
@@ -438,7 +433,7 @@ async def generate_code_streaming(
             if chunk is None:
                 break
             yield f"data: {chunk}\n\n"
-    
+
     return StreamingResponse(
         stream_generator(),
         media_type="text/event-stream"
@@ -467,10 +462,10 @@ async def execute_workflow_endpoint(
 
     request.task = sanitized
     task_id = str(uuid.uuid4())
-    
+
     # Estimate tokens for workflow
     estimated_tokens = request.agents * request.max_iterations * 1000
-    
+
     # Check tenant quota
     if not check_tenant_quota(tenant.id, tokens=estimated_tokens, task_id=task_id):
         raise HTTPException(
@@ -818,10 +813,10 @@ async def create_api_key(
     """Create new API key."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     if "tenant_id" not in data:
         raise HTTPException(status_code=400, detail="tenant_id is required")
-    
+
     # Verify tenant exists
     tenant = db.query(Tenant).filter(Tenant.id == data["tenant_id"]).first()
     if not tenant:
@@ -1161,12 +1156,12 @@ async def create_tenant(
     """Create a new tenant (admin only)."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     # Check if tenant already exists
     existing = db.query(Tenant).filter(Tenant.id == request.id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Tenant ID already exists")
-    
+
     tenant = Tenant(
         id=request.id,
         name=request.name,
@@ -1174,11 +1169,11 @@ async def create_tenant(
         max_tokens_per_month=request.max_tokens_per_month,
         max_concurrent_tasks=request.max_concurrent_tasks
     )
-    
+
     db.add(tenant)
     db.commit()
     db.refresh(tenant)
-    
+
     audit_logger.log_operation(
         "TENANT_CREATED",
         api_key_info[0],
@@ -1186,7 +1181,7 @@ async def create_tenant(
         "SUCCESS",
         {"name": request.name}
     )
-    
+
     return TenantResponse(
         id=tenant.id,
         name=tenant.name,
@@ -1206,9 +1201,9 @@ async def list_tenants(
     """List all tenants (admin only)."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     tenants = db.query(Tenant).all()
-    
+
     return [
         TenantResponse(
             id=t.id,
@@ -1232,11 +1227,11 @@ async def get_tenant(
     """Get tenant details (admin only)."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    
+
     return TenantResponse(
         id=tenant.id,
         name=tenant.name,
@@ -1258,11 +1253,11 @@ async def update_tenant(
     """Update tenant configuration (admin only)."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    
+
     if "name" in data:
         tenant.name = data["name"]
     if "is_active" in data:
@@ -1273,10 +1268,10 @@ async def update_tenant(
         tenant.max_tokens_per_month = data["max_tokens_per_month"]
     if "max_concurrent_tasks" in data:
         tenant.max_concurrent_tasks = data["max_concurrent_tasks"]
-    
+
     db.commit()
     db.refresh(tenant)
-    
+
     audit_logger.log_operation(
         "TENANT_UPDATED",
         api_key_info[0],
@@ -1284,7 +1279,7 @@ async def update_tenant(
         "SUCCESS",
         data
     )
-    
+
     return TenantResponse(
         id=tenant.id,
         name=tenant.name,
@@ -1305,11 +1300,11 @@ async def get_tenant_usage(
     """Get tenant usage statistics (admin only)."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     stats = get_tenant_usage_stats(tenant_id)
     if not stats:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    
+
     return TenantUsageResponse(**stats)
 
 
@@ -1322,11 +1317,11 @@ async def delete_tenant(
     """Delete tenant (admin only)."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    
+
     # Check if tenant has any active resources
     active_keys = db.query(APIKey).filter(APIKey.tenant_id == tenant_id).count()
     if active_keys > 0:
@@ -1334,10 +1329,10 @@ async def delete_tenant(
             status_code=400,
             detail=f"Cannot delete tenant with {active_keys} active API keys"
         )
-    
+
     db.delete(tenant)
     db.commit()
-    
+
     audit_logger.log_operation(
         "TENANT_DELETED",
         api_key_info[0],
@@ -1345,7 +1340,7 @@ async def delete_tenant(
         "SUCCESS",
         {"name": tenant.name}
     )
-    
+
     return {"success": True}
 
 

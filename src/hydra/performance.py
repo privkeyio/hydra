@@ -10,9 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 from sqlalchemy import select, text
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.pool import QueuePool
 
 logger = logging.getLogger(__name__)

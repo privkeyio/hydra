@@ -2,7 +2,7 @@
 """
 import asyncio
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from openai import AsyncOpenAI, OpenAI
 
@@ -112,18 +112,18 @@ class VeniceProvider(LLMProvider):
                 "deepseek-coder-v2-lite",
                 "qwen-2.5-qwq-32b"
             ]
-    
+
     async def generate_async(self, prompt: str, **kwargs) -> str:
         """Generate a response asynchronously."""
         try:
             temperature = kwargs.get('temperature', self.config.temperature)
             max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
-            
+
             messages = [
                 {"role": "system", "content": "You are an expert Python programmer. Always respond with clean, well-structured code."},
                 {"role": "user", "content": prompt}
             ]
-            
+
             response = await self.async_client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
@@ -131,21 +131,21 @@ class VeniceProvider(LLMProvider):
                 temperature=temperature,
                 **self.config.extra_params
             )
-            
+
             return response.choices[0].message.content
-            
+
         except Exception as e:
             raise Exception(f"Venice async API error: {str(e)}")
-    
+
     async def generate_batch_async(self, prompts: List[str], **kwargs) -> List[str]:
         """Generate responses for multiple prompts in batch."""
         tasks = []
         for prompt in prompts:
             task = self.generate_async(prompt, **kwargs)
             tasks.append(task)
-        
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Convert exceptions to error strings
         final_results = []
         for result in results:
@@ -153,5 +153,5 @@ class VeniceProvider(LLMProvider):
                 final_results.append(f"Error: {str(result)}")
             else:
                 final_results.append(result)
-        
+
         return final_results

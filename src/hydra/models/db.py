@@ -31,7 +31,7 @@ class Tenant(Base):
     max_requests_per_minute = Column(Integer, default=60, nullable=False)
     max_tokens_per_month = Column(Integer, default=1000000, nullable=False)
     max_concurrent_tasks = Column(Integer, default=10, nullable=False)
-    
+
     api_keys = relationship("APIKey", back_populates="tenant")
     tasks = relationship("Task", back_populates="tenant")
 

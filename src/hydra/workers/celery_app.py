@@ -30,6 +30,7 @@ app.conf.update(
 
 default_exchange = Exchange("default", type="direct")
 priority_exchange = Exchange("priority", type="direct")
+tenant_exchange = Exchange("tenant", type="topic")
 
 app.conf.task_queues = (
     Queue("default", default_exchange, routing_key="default", priority=1),
@@ -37,11 +38,42 @@ app.conf.task_queues = (
     Queue("dead_letter", default_exchange, routing_key="dead_letter", priority=0),
 )
 
+def get_tenant_queue_name(tenant_id: str, priority: bool = False) -> str:
+    """Get queue name for tenant."""
+    suffix = "_priority" if priority else ""
+    return f"tenant_{tenant_id}{suffix}"
+
+def register_tenant_queue(tenant_id: str, priority: bool = False):
+    """Dynamically register a tenant-specific queue."""
+    queue_name = get_tenant_queue_name(tenant_id, priority)
+    routing_key = f"tenant.{tenant_id}.{'high' if priority else 'normal'}"
+    queue_priority = 10 if priority else 5
+    
+    queue = Queue(
+        queue_name,
+        tenant_exchange,
+        routing_key=routing_key,
+        priority=queue_priority,
+        queue_arguments={
+            'x-max-priority': 10,
+            'x-message-ttl': 3600000  # 1 hour TTL
+        }
+    )
+    
+    # Add queue to configuration
+    existing_queues = list(app.conf.task_queues)
+    existing_queues.append(queue)
+    app.conf.task_queues = tuple(existing_queues)
+    
+    return queue_name
+
 app.conf.task_routes = {
     "hydra.workers.tasks.generate_code": {"queue": "default"},
     "hydra.workers.tasks.execute_workflow": {"queue": "default"},
     "hydra.workers.tasks.generate_code_priority": {"queue": "high_priority"},
     "hydra.workers.tasks.execute_workflow_priority": {"queue": "high_priority"},
+    "hydra.workers.tasks.generate_code_tenant": {"exchange": "tenant", "routing_key": "tenant.*"},
+    "hydra.workers.tasks.execute_workflow_tenant": {"exchange": "tenant", "routing_key": "tenant.*"},
 }
 
 app.conf.task_default_queue = "default"

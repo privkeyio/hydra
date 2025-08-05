@@ -21,10 +21,26 @@ from sqlalchemy.pool import QueuePool
 Base = declarative_base()
 
 
+class Tenant(Base):
+    __tablename__ = "tenants"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    max_requests_per_minute = Column(Integer, default=60, nullable=False)
+    max_tokens_per_month = Column(Integer, default=1000000, nullable=False)
+    max_concurrent_tasks = Column(Integer, default=10, nullable=False)
+    
+    api_keys = relationship("APIKey", back_populates="tenant")
+    tasks = relationship("Task", back_populates="tenant")
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(String, primary_key=True)
+    tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
     status = Column(String, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     completed_at = Column(DateTime, nullable=True)
@@ -33,6 +49,7 @@ class Task(Base):
     error = Column(Text, nullable=True)
     agent_count = Column(Integer, default=1, nullable=False)
 
+    tenant = relationship("Tenant", back_populates="tasks")
     usage_records = relationship("Usage", back_populates="task")
 
 
@@ -40,6 +57,7 @@ class APIKey(Base):
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
     key = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -47,6 +65,7 @@ class APIKey(Base):
     rate_limit = Column(Integer, nullable=True)
     monthly_cost_limit = Column(Numeric(10, 2), nullable=True)
 
+    tenant = relationship("Tenant", back_populates="api_keys")
     usage_records = relationship("Usage", back_populates="api_key")
 
 
@@ -72,6 +91,8 @@ class Usage(Base):
 Index("ix_usage_api_key_timestamp", Usage.api_key_id, Usage.timestamp)
 Index("ix_usage_endpoint_timestamp", Usage.endpoint, Usage.timestamp)
 Index("ix_tasks_status_created", Task.status, Task.created_at)
+Index("ix_tasks_tenant_status", Task.tenant_id, Task.status)
+Index("ix_api_keys_tenant", APIKey.tenant_id)
 
 
 class DatabaseManager:

@@ -28,10 +28,17 @@ from sqlalchemy.orm import Session
 
 from hydra.agents.base import CodeAgent
 from hydra.api.auth import AuthMiddleware, get_current_api_key
+from hydra.api.tenant import (
+    TenantIsolationMiddleware,
+    get_current_tenant,
+    get_tenant_usage_stats,
+    check_tenant_quota,
+    update_tenant_usage,
+)
 from hydra.billing import get_billing_service
 from hydra.cache import get_cache
 from hydra.config import get_config
-from hydra.models.db import APIKey, Usage, get_db
+from hydra.models.db import APIKey, Usage, Tenant, Task, get_db
 from hydra.monitoring import monitoring, timed_operation
 from hydra.security import (
     SecurityHeaders,
@@ -40,6 +47,7 @@ from hydra.security import (
     request_signer,
 )
 from hydra.workflows.engine import execute_workflow
+from hydra.workers.tasks import generate_code_tenant, execute_workflow_tenant
 
 
 class TaskStatus(str, Enum):
@@ -125,6 +133,7 @@ app = FastAPI(
 )
 
 app.add_middleware(AuthMiddleware)
+app.add_middleware(TenantIsolationMiddleware)
 monitoring.instrument_fastapi(app)
 
 @app.middleware("http")
@@ -307,6 +316,7 @@ async def generate_code(
     request: GenerateRequest,
     background_tasks: BackgroundTasks,
     api_key_info: tuple = Depends(get_current_api_key),
+    tenant: Tenant = Depends(get_current_tenant),
     req: Request = None
 ):
     """Generate code using a single agent."""
@@ -323,6 +333,13 @@ async def generate_code(
 
     request.prompt = sanitized
     task_id = str(uuid.uuid4())
+    
+    # Check tenant quota
+    if not check_tenant_quota(tenant.id, tokens=request.max_tokens, task_id=task_id):
+        raise HTTPException(
+            status_code=429,
+            detail="Tenant quota exceeded"
+        )
 
     # Audit log
     audit_logger.log_operation(
@@ -331,22 +348,24 @@ async def generate_code(
         f"task/{task_id}",
         "INITIATED",
         {
+            "tenant_id": tenant.id,
             "language": request.language,
             "max_tokens": request.max_tokens,
             "ip_address": req.client.host if req else None
         }
     )
 
-    tasks_store[task_id] = {
-        "status": TaskStatus.PENDING,
-        "progress": 0,
-        "created_at": datetime.utcnow(),
-        "completed_at": None,
-        "result": None,
-        "error": None
-    }
-
-    background_tasks.add_task(process_generate_task, task_id, request, api_key_info[0])
+    # Queue tenant-specific task
+    result = generate_code_tenant.apply_async(
+        args=[request.prompt, tenant.id],
+        kwargs={
+            "language": request.language,
+            "max_tokens": request.max_tokens,
+            "task_id": task_id,
+            "is_priority": api_key_info[1]
+        },
+        task_id=task_id
+    )
 
     return TaskResponse(
         task_id=task_id,
@@ -360,6 +379,7 @@ async def execute_workflow_endpoint(
     request: WorkflowRequest,
     background_tasks: BackgroundTasks,
     api_key_info: tuple = Depends(get_current_api_key),
+    tenant: Tenant = Depends(get_current_tenant),
     req: Request = None
 ):
     """Execute a multi-agent workflow."""
@@ -376,6 +396,16 @@ async def execute_workflow_endpoint(
 
     request.task = sanitized
     task_id = str(uuid.uuid4())
+    
+    # Estimate tokens for workflow
+    estimated_tokens = request.agents * request.max_iterations * 1000
+    
+    # Check tenant quota
+    if not check_tenant_quota(tenant.id, tokens=estimated_tokens, task_id=task_id):
+        raise HTTPException(
+            status_code=429,
+            detail="Tenant quota exceeded"
+        )
 
     # Audit log
     audit_logger.log_operation(
@@ -384,22 +414,24 @@ async def execute_workflow_endpoint(
         f"task/{task_id}",
         "INITIATED",
         {
+            "tenant_id": tenant.id,
             "agents": request.agents,
             "max_iterations": request.max_iterations,
             "ip_address": req.client.host if req else None
         }
     )
 
-    tasks_store[task_id] = {
-        "status": TaskStatus.PENDING,
-        "progress": 0,
-        "created_at": datetime.utcnow(),
-        "completed_at": None,
-        "result": None,
-        "error": None
-    }
-
-    background_tasks.add_task(process_workflow_task, task_id, request, api_key_info[0])
+    # Queue tenant-specific task
+    result = execute_workflow_tenant.apply_async(
+        args=[request.task, tenant.id],
+        kwargs={
+            "num_agents": request.agents,
+            "max_iterations": request.max_iterations,
+            "task_id": task_id,
+            "is_priority": api_key_info[1]
+        },
+        task_id=task_id
+    )
 
     return TaskResponse(
         task_id=task_id,
@@ -715,6 +747,14 @@ async def create_api_key(
     """Create new API key."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if "tenant_id" not in data:
+        raise HTTPException(status_code=400, detail="tenant_id is required")
+    
+    # Verify tenant exists
+    tenant = db.query(Tenant).filter(Tenant.id == data["tenant_id"]).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
 
     key = "sk-" + hashlib.sha256(
         f"{data['name']}-{datetime.utcnow()}".encode()
@@ -723,6 +763,7 @@ async def create_api_key(
     api_key = APIKey(
         key=key,
         name=data["name"],
+        tenant_id=data["tenant_id"],
         rate_limit=data.get("rate_limit", 1000)
     )
 
@@ -734,10 +775,10 @@ async def create_api_key(
         api_key_info[0],
         key,
         "SUCCESS",
-        {"name": data["name"]}
+        {"name": data["name"], "tenant_id": data["tenant_id"]}
     )
 
-    return {"key": key, "name": data["name"]}
+    return {"key": key, "name": data["name"], "tenant_id": data["tenant_id"]}
 
 
 @app.put("/admin/api-keys/{key}")
@@ -1009,6 +1050,241 @@ async def export_usage_csv(
             )
         }
     )
+
+
+class TenantRequest(BaseModel):
+    id: str = Field(..., description="Unique tenant identifier")
+    name: str = Field(..., description="Tenant name")
+    max_requests_per_minute: Optional[int] = Field(60, description="Max requests per minute")
+    max_tokens_per_month: Optional[int] = Field(1000000, description="Max tokens per month")
+    max_concurrent_tasks: Optional[int] = Field(10, description="Max concurrent tasks")
+
+
+class TenantResponse(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+    is_active: bool
+    max_requests_per_minute: int
+    max_tokens_per_month: int
+    max_concurrent_tasks: int
+
+
+class TenantUsageResponse(BaseModel):
+    tenant_id: str
+    tenant_name: str
+    current_month_tokens: int
+    max_tokens_per_month: int
+    active_tasks: int
+    max_concurrent_tasks: int
+    tasks_this_month: int
+    requests_per_minute_limit: int
+
+
+@app.post("/admin/tenants", response_model=TenantResponse)
+async def create_tenant(
+    request: TenantRequest,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Create a new tenant (admin only)."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if tenant already exists
+    existing = db.query(Tenant).filter(Tenant.id == request.id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Tenant ID already exists")
+    
+    tenant = Tenant(
+        id=request.id,
+        name=request.name,
+        max_requests_per_minute=request.max_requests_per_minute,
+        max_tokens_per_month=request.max_tokens_per_month,
+        max_concurrent_tasks=request.max_concurrent_tasks
+    )
+    
+    db.add(tenant)
+    db.commit()
+    db.refresh(tenant)
+    
+    audit_logger.log_operation(
+        "TENANT_CREATED",
+        api_key_info[0],
+        tenant.id,
+        "SUCCESS",
+        {"name": request.name}
+    )
+    
+    return TenantResponse(
+        id=tenant.id,
+        name=tenant.name,
+        created_at=tenant.created_at,
+        is_active=tenant.is_active,
+        max_requests_per_minute=tenant.max_requests_per_minute,
+        max_tokens_per_month=tenant.max_tokens_per_month,
+        max_concurrent_tasks=tenant.max_concurrent_tasks
+    )
+
+
+@app.get("/admin/tenants", response_model=List[TenantResponse])
+async def list_tenants(
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """List all tenants (admin only)."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenants = db.query(Tenant).all()
+    
+    return [
+        TenantResponse(
+            id=t.id,
+            name=t.name,
+            created_at=t.created_at,
+            is_active=t.is_active,
+            max_requests_per_minute=t.max_requests_per_minute,
+            max_tokens_per_month=t.max_tokens_per_month,
+            max_concurrent_tasks=t.max_concurrent_tasks
+        )
+        for t in tenants
+    ]
+
+
+@app.get("/admin/tenants/{tenant_id}", response_model=TenantResponse)
+async def get_tenant(
+    tenant_id: str,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get tenant details (admin only)."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    return TenantResponse(
+        id=tenant.id,
+        name=tenant.name,
+        created_at=tenant.created_at,
+        is_active=tenant.is_active,
+        max_requests_per_minute=tenant.max_requests_per_minute,
+        max_tokens_per_month=tenant.max_tokens_per_month,
+        max_concurrent_tasks=tenant.max_concurrent_tasks
+    )
+
+
+@app.put("/admin/tenants/{tenant_id}", response_model=TenantResponse)
+async def update_tenant(
+    tenant_id: str,
+    data: dict,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Update tenant configuration (admin only)."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    if "name" in data:
+        tenant.name = data["name"]
+    if "is_active" in data:
+        tenant.is_active = data["is_active"]
+    if "max_requests_per_minute" in data:
+        tenant.max_requests_per_minute = data["max_requests_per_minute"]
+    if "max_tokens_per_month" in data:
+        tenant.max_tokens_per_month = data["max_tokens_per_month"]
+    if "max_concurrent_tasks" in data:
+        tenant.max_concurrent_tasks = data["max_concurrent_tasks"]
+    
+    db.commit()
+    db.refresh(tenant)
+    
+    audit_logger.log_operation(
+        "TENANT_UPDATED",
+        api_key_info[0],
+        tenant_id,
+        "SUCCESS",
+        data
+    )
+    
+    return TenantResponse(
+        id=tenant.id,
+        name=tenant.name,
+        created_at=tenant.created_at,
+        is_active=tenant.is_active,
+        max_requests_per_minute=tenant.max_requests_per_minute,
+        max_tokens_per_month=tenant.max_tokens_per_month,
+        max_concurrent_tasks=tenant.max_concurrent_tasks
+    )
+
+
+@app.get("/admin/tenants/{tenant_id}/usage", response_model=TenantUsageResponse)
+async def get_tenant_usage(
+    tenant_id: str,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get tenant usage statistics (admin only)."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    stats = get_tenant_usage_stats(tenant_id)
+    if not stats:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    return TenantUsageResponse(**stats)
+
+
+@app.delete("/admin/tenants/{tenant_id}")
+async def delete_tenant(
+    tenant_id: str,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Delete tenant (admin only)."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Check if tenant has any active resources
+    active_keys = db.query(APIKey).filter(APIKey.tenant_id == tenant_id).count()
+    if active_keys > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete tenant with {active_keys} active API keys"
+        )
+    
+    db.delete(tenant)
+    db.commit()
+    
+    audit_logger.log_operation(
+        "TENANT_DELETED",
+        api_key_info[0],
+        tenant_id,
+        "SUCCESS",
+        {"name": tenant.name}
+    )
+    
+    return {"success": True}
+
+
+@app.get("/tenant/usage", response_model=TenantUsageResponse)
+async def get_current_tenant_usage(
+    tenant: Tenant = Depends(get_current_tenant)
+):
+    """Get current tenant's usage statistics."""
+    stats = get_tenant_usage_stats(tenant.id)
+    return TenantUsageResponse(**stats)
 
 
 if __name__ == "__main__":

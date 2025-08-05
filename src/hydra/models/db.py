@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     create_engine,
@@ -44,6 +45,7 @@ class APIKey(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     rate_limit = Column(Integer, nullable=True)
+    monthly_cost_limit = Column(Numeric(10, 2), nullable=True)
 
     usage_records = relationship("Usage", back_populates="api_key")
 
@@ -57,6 +59,11 @@ class Usage(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     tokens_used = Column(Integer, nullable=False)
     task_id = Column(String, ForeignKey("tasks.id"), nullable=True, index=True)
+    model = Column(String, nullable=True, index=True)
+    provider = Column(String, nullable=True, index=True)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    cost = Column(Numeric(10, 6), nullable=True)
 
     api_key = relationship("APIKey", back_populates="usage_records")
     task = relationship("Task", back_populates="usage_records")

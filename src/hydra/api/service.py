@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from io import StringIO
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import (
     BackgroundTasks,
@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from hydra.agents.base import CodeAgent
 from hydra.api.auth import AuthMiddleware, get_current_api_key
+from hydra.billing import get_billing_service
 from hydra.cache import get_cache
 from hydra.config import get_config
 from hydra.models.db import APIKey, Usage, get_db
@@ -98,11 +99,21 @@ class CacheInvalidateResponse(BaseModel):
 
 class CacheStatsResponse(BaseModel):
     memory_used: str
-    memory_peak: str
-    total_keys: int
-    connected_clients: int
-    cache_hit_rate: float
-    uptime_seconds: int
+
+
+class UsageReportResponse(BaseModel):
+    api_key: str
+    period: str
+    total_requests: int
+    total_tokens: int
+    total_cost: float
+    endpoint_breakdown: Dict[str, Dict[str, Any]]
+
+
+class UsageLimitsResponse(BaseModel):
+    current_cost: float
+    monthly_limit: Optional[float]
+    alerts: List[Dict[str, str]]
 
 
 app = FastAPI(
@@ -144,7 +155,7 @@ admin_websockets: Set[WebSocket] = set()
 
 
 @timed_operation("code_generation")
-async def process_generate_task(task_id: str, request: GenerateRequest):
+async def process_generate_task(task_id: str, request: GenerateRequest, api_key: str):
     """Background task for code generation."""
     try:
         tasks_store[task_id]["status"] = TaskStatus.IN_PROGRESS
@@ -209,6 +220,27 @@ async def process_generate_task(task_id: str, request: GenerateRequest):
 
         cache.set_task_result(task_id, tasks_store[task_id])
 
+        # Track usage for billing
+        try:
+            from hydra.models.db import get_db
+            db = get_db()
+            api_key_obj = db.query(APIKey).filter(APIKey.key == api_key).first()
+            if api_key_obj:
+                billing_service = get_billing_service()
+                billing_service.track_usage(
+                    api_key_id=api_key_obj.id,
+                    endpoint="/generate",
+                    prompt=request.prompt,
+                    response=result,
+                    model=config.llm_provider.model,
+                    task_id=task_id
+                )
+            db.close()
+        except Exception as e:
+            # Don't fail the task if billing tracking fails
+            import logging
+            logging.getLogger(__name__).error(f"Billing tracking failed: {e}")
+
     except Exception as e:
         tasks_store[task_id]["status"] = TaskStatus.FAILED
         tasks_store[task_id]["error"] = str(e)
@@ -216,7 +248,7 @@ async def process_generate_task(task_id: str, request: GenerateRequest):
 
 
 @timed_operation("workflow")
-async def process_workflow_task(task_id: str, request: WorkflowRequest):
+async def process_workflow_task(task_id: str, request: WorkflowRequest, api_key: str):
     """Background task for workflow execution."""
     try:
         tasks_store[task_id]["status"] = TaskStatus.IN_PROGRESS
@@ -241,6 +273,28 @@ async def process_workflow_task(task_id: str, request: WorkflowRequest):
 
         cache = get_cache()
         cache.set_task_result(task_id, tasks_store[task_id])
+
+        # Track usage for billing
+        try:
+            from hydra.models.db import get_db
+            db = get_db()
+            api_key_obj = db.query(APIKey).filter(APIKey.key == api_key).first()
+            if api_key_obj:
+                billing_service = get_billing_service()
+                # Estimate response length for workflows
+                response_text = str(result) if result else ""
+                billing_service.track_usage(
+                    api_key_id=api_key_obj.id,
+                    endpoint="/workflow",
+                    prompt=request.task,
+                    response=response_text,
+                    model=config.llm_provider.model,
+                    task_id=task_id
+                )
+            db.close()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Billing tracking failed: {e}")
 
     except Exception as e:
         tasks_store[task_id]["status"] = TaskStatus.FAILED
@@ -292,7 +346,7 @@ async def generate_code(
         "error": None
     }
 
-    background_tasks.add_task(process_generate_task, task_id, request)
+    background_tasks.add_task(process_generate_task, task_id, request, api_key_info[0])
 
     return TaskResponse(
         task_id=task_id,
@@ -345,7 +399,7 @@ async def execute_workflow_endpoint(
         "error": None
     }
 
-    background_tasks.add_task(process_workflow_task, task_id, request)
+    background_tasks.add_task(process_workflow_task, task_id, request, api_key_info[0])
 
     return TaskResponse(
         task_id=task_id,
@@ -542,17 +596,17 @@ async def get_realtime_metrics(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     active_tasks = sum(
-        1 for t in tasks_store.values() 
+        1 for t in tasks_store.values()
         if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
     )
     queue_size = sum(
-        1 for t in tasks_store.values() 
+        1 for t in tasks_store.values()
         if t["status"] == TaskStatus.PENDING
     )
 
     recent_requests = db.query(Usage).order_by(desc(Usage.timestamp)).limit(100).all()
     error_count = sum(
-        1 for t in tasks_store.values() 
+        1 for t in tasks_store.values()
         if t["status"] == TaskStatus.FAILED
     )
 
@@ -620,7 +674,7 @@ async def get_task_queue(
             "status": task_data["status"],
             "created_at": task_data["created_at"].isoformat(),
             "completed_at": (
-                task_data["completed_at"].isoformat() 
+                task_data["completed_at"].isoformat()
                 if task_data["completed_at"] else None
             ),
             "agent_count": task_data.get("agent_count", 1),
@@ -750,7 +804,7 @@ async def delete_api_key(
 
 
 @app.get("/admin/export/usage")
-async def export_usage_csv(
+async def export_usage_data(
     start: str,
     end: str,
     api_key_info: tuple = Depends(get_current_api_key),
@@ -768,7 +822,7 @@ async def export_usage_csv(
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "Timestamp", "API Key", "Endpoint", 
+        "Timestamp", "API Key", "Endpoint",
         "Tokens Used", "Task ID", "Response Time"
     ])
 
@@ -820,11 +874,11 @@ async def admin_websocket_endpoint(websocket: WebSocket):
             "error_rate": 0,
             "avg_latency": 0,
             "active_tasks": sum(
-                1 for t in tasks_store.values() 
+                1 for t in tasks_store.values()
                 if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
             ),
             "queue_size": sum(
-                1 for t in tasks_store.values() 
+                1 for t in tasks_store.values()
                 if t["status"] == TaskStatus.PENDING
             )
         }
@@ -837,17 +891,17 @@ async def admin_websocket_endpoint(websocket: WebSocket):
             metrics = {
                 "request_count": len(tasks_store),
                 "error_rate": (
-                    sum(1 for t in tasks_store.values() 
-                        if t["status"] == TaskStatus.FAILED) 
+                    sum(1 for t in tasks_store.values()
+                        if t["status"] == TaskStatus.FAILED)
                     / max(len(tasks_store), 1) * 100
                 ),
                 "avg_latency": 0,
                 "active_tasks": sum(
-                    1 for t in tasks_store.values() 
+                    1 for t in tasks_store.values()
                     if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
                 ),
                 "queue_size": sum(
-                    1 for t in tasks_store.values() 
+                    1 for t in tasks_store.values()
                     if t["status"] == TaskStatus.PENDING
                 )
             }
@@ -859,6 +913,102 @@ async def admin_websocket_endpoint(websocket: WebSocket):
         admin_websockets.discard(websocket)
     except Exception:
         admin_websockets.discard(websocket)
+
+
+@app.get("/billing/usage", response_model=List[Dict])
+async def get_usage_history(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get usage history for the current API key."""
+    billing_service = get_billing_service()
+
+    start_dt = datetime.fromisoformat(start_date) if start_date else None
+    end_dt = datetime.fromisoformat(end_date) if end_date else None
+
+    usage_records = billing_service.get_usage_for_api_key(
+        api_key_info[0], start_dt, end_dt
+    )
+
+    return usage_records
+
+
+@app.get("/billing/report/{year}/{month}", response_model=UsageReportResponse)
+async def get_monthly_report(
+    year: int,
+    month: int,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get monthly usage report for the current API key."""
+    billing_service = get_billing_service()
+
+    report = billing_service.get_monthly_report(api_key_info[0], year, month)
+
+    return UsageReportResponse(**report)
+
+
+@app.get("/billing/limits", response_model=UsageLimitsResponse)
+async def get_usage_limits(
+    monthly_limit: Optional[float] = None,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Check usage limits and get alerts."""
+    from decimal import Decimal
+
+    billing_service = get_billing_service()
+
+    limit_decimal = Decimal(str(monthly_limit)) if monthly_limit else None
+    limits_info = billing_service.check_usage_limits(api_key_info[0], limit_decimal)
+
+    return UsageLimitsResponse(**limits_info)
+
+
+@app.get("/admin/billing/export/{api_key}")
+async def export_usage_csv(
+    api_key: str,
+    year: int,
+    month: int,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Export usage data as CSV for admin users."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    billing_service = get_billing_service()
+    report = billing_service.get_monthly_report(api_key, year, month)
+
+    output = StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "Timestamp", "Endpoint", "Tokens Used", "Estimated Cost", "Task ID"
+    ])
+
+    for record in report["usage_records"]:
+        writer.writerow([
+            record["timestamp"],
+            record["endpoint"],
+            record["tokens_used"],
+            record["estimated_cost"],
+            record["task_id"] or ""
+        ])
+
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=usage_{api_key}_{year}_{month}.csv"
+            )
+        }
+    )
 
 
 if __name__ == "__main__":

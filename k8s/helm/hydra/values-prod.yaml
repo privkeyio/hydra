@@ -1,0 +1,43 @@
+replicaCount: 3
+
+image:
+  tag: "prod"
+  pullPolicy: Always
+
+ingress:
+  hosts:
+    - host: api.hydra.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: hydra-tls-prod
+      hosts:
+        - api.hydra.io
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 60
+
+config:
+  logLevel: "WARNING"
+  rateLimitRequests: "100"
+  maxAgents: "20"
+
+nodeSelector:
+  node-type: compute-optimized
+
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "hydra"
+    effect: "NoSchedule"

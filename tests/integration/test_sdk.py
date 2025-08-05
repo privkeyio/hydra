@@ -1,4 +1,9 @@
-from config import generate_code_with_claude_cli
+import pytest
+from hydra.agents.base import CodeAgent
 
-result = generate_code_with_claude_cli("Generate a Hello World function in Python")
-print(result)
+
+def test_code_generation():
+    agent = CodeAgent("test_agent")
+    result = agent.generate_code("Generate a Hello World function in Python")
+    assert result is not None
+    assert "def" in result or "print" in result

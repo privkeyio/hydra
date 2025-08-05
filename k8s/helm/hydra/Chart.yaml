@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hydra
+description: Production-ready deployment for Hydra API
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

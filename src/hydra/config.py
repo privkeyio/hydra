@@ -1,11 +1,11 @@
-"""
-Configuration management for Hydra system.
-"""
+"""Configuration management for Hydra system."""
 import os
-import yaml
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+import yaml
 from dotenv import load_dotenv
+
 from hydra.providers import LLMConfig, provider_factory
 
 # Load environment variables
@@ -14,13 +14,13 @@ load_dotenv()
 
 class HydraConfig:
     """Central configuration management for Hydra."""
-    
+
     def __init__(self, config_path: Optional[str] = None):
         self.config_path = config_path or self._find_config_file()
         self.config = self._load_config()
         self._override_with_env()
         self.llm_provider = self._create_llm_provider()
-    
+
     def _find_config_file(self) -> str:
         """Find the configuration file."""
         # Look for config in multiple locations
@@ -29,20 +29,20 @@ class HydraConfig:
             Path.cwd() / "hydra.yaml",
             Path(__file__).parent.parent.parent / "config" / "default.yaml",
         ]
-        
+
         for path in search_paths:
             if path.exists():
                 return str(path)
-        
+
         # If no config file found, use defaults
         return None
-    
+
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from file."""
         if self.config_path and Path(self.config_path).exists():
             with open(self.config_path, 'r') as f:
                 return yaml.safe_load(f)
-        
+
         # Default configuration
         return {
             'llm': {
@@ -64,34 +64,36 @@ class HydraConfig:
                 'backup_count': 5
             }
         }
-    
+
     def _override_with_env(self):
         """Override configuration with environment variables."""
         # LLM provider configuration
         if os.getenv('LLM_PROVIDER'):
             self.config['llm']['provider'] = os.getenv('LLM_PROVIDER')
-        
+
         if os.getenv('LLM_MODEL'):
             self.config['llm']['model'] = os.getenv('LLM_MODEL')
-        
+
         if os.getenv('LLM_TEMPERATURE'):
             self.config['llm']['temperature'] = float(os.getenv('LLM_TEMPERATURE'))
-        
+
         if os.getenv('LLM_MAX_TOKENS'):
             self.config['llm']['max_tokens'] = int(os.getenv('LLM_MAX_TOKENS'))
-        
+
         # Agent configuration
         if os.getenv('AGENT_MAX_DEPTH'):
             self.config['agent']['max_depth'] = int(os.getenv('AGENT_MAX_DEPTH'))
-        
+
         if os.getenv('AGENT_RETRY_ATTEMPTS'):
-            self.config['agent']['retry_attempts'] = int(os.getenv('AGENT_RETRY_ATTEMPTS'))
-    
+            self.config['agent']['retry_attempts'] = int(
+                os.getenv('AGENT_RETRY_ATTEMPTS')
+            )
+
     def _create_llm_provider(self):
         """Create the LLM provider based on configuration."""
         llm_config = self.config['llm']
         provider_type = llm_config['provider']
-        
+
         # Build LLMConfig
         config = LLMConfig(
             provider_type=provider_type,
@@ -101,29 +103,34 @@ class HydraConfig:
             timeout=llm_config.get('timeout', 30),
             extra_params={}
         )
-        
+
         # Add provider-specific configuration
         if provider_type == 'venice':
             config.api_key = os.getenv('VENICE_API_KEY')
-            config.base_url = os.getenv('VENICE_BASE_URL', 'https://api.venice.ai/api/v1')
-            
+            config.base_url = os.getenv(
+                'VENICE_BASE_URL', 'https://api.venice.ai/api/v1'
+            )
+
         elif provider_type == 'anthropic':
             config.api_key = os.getenv('ANTHROPIC_API_KEY')
-            
+
         elif provider_type == 'openai':
             config.api_key = os.getenv('OPENAI_API_KEY')
             config.base_url = os.getenv('OPENAI_BASE_URL')  # For custom endpoints
-            
+
         elif provider_type == 'claude_cli':
             config.extra_params['claude_path'] = os.getenv('CLAUDE_CLI_PATH', 'claude')
             config.extra_params['cli_flags'] = os.getenv('CLAUDE_CLI_FLAGS', '')
-        
+
+        elif provider_type == 'mock':
+            config.api_key = 'test_key'  # Mock provider doesn't need real API key
+
         return provider_factory.create(config)
-    
+
     def get_agent_config(self) -> Dict[str, Any]:
         """Get agent configuration."""
         return self.config['agent']
-    
+
     def get_logging_config(self) -> Dict[str, Any]:
         """Get logging configuration."""
         return self.config['logging']

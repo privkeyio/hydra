@@ -30,7 +30,7 @@ class TestWorkflowEngine(unittest.TestCase):
             "subtasks": ["subtask1", "subtask2"]
         }
         
-        from workflow_engine import plan_node
+        from hydra.workflows.engine import plan_node
         
         state = WorkflowState(
             task="Complex task",
@@ -49,7 +49,7 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(result["subtasks"][0], "subtask1")
         
     def test_depth_enforcement(self):
-        from workflow_engine import plan_node
+        from hydra.workflows.engine import plan_node
         
         state = WorkflowState(
             task="Deep task",
@@ -107,7 +107,7 @@ class TestWorkflowEngine(unittest.TestCase):
         self.assertEqual(result["results"]["summary"]["successful"], 2)
         
     def test_conditional_edges(self):
-        from workflow_engine import should_spawn
+        from hydra.workflows.engine import should_spawn
         
         state_with_subtasks = WorkflowState(
             task="",

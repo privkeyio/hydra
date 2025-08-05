@@ -1,0 +1,27 @@
+replicaCount: 2
+
+image:
+  tag: "staging"
+
+ingress:
+  hosts:
+    - host: api-staging.hydra.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 750m
+    memory: 384Mi
+  requests:
+    cpu: 200m
+    memory: 192Mi
+
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 5
+
+config:
+  logLevel: "INFO"
+  rateLimitRequests: "500"

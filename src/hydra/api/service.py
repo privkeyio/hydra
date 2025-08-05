@@ -6,10 +6,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from hydra.agents.base import CodeAgent
+from hydra.api.auth import AuthMiddleware, get_current_api_key
 from hydra.config import get_config
 from hydra.workflows.engine import execute_workflow
 
@@ -63,6 +64,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+app.add_middleware(AuthMiddleware)
 
 tasks_store: Dict[str, Dict[str, Any]] = {}
 
@@ -126,7 +129,11 @@ async def process_workflow_task(task_id: str, request: WorkflowRequest):
 
 
 @app.post("/generate", response_model=TaskResponse)
-async def generate_code(request: GenerateRequest, background_tasks: BackgroundTasks):
+async def generate_code(
+    request: GenerateRequest,
+    background_tasks: BackgroundTasks,
+    api_key_info: tuple = Depends(get_current_api_key)
+):
     """Generate code using a single agent."""
     task_id = str(uuid.uuid4())
 
@@ -150,7 +157,9 @@ async def generate_code(request: GenerateRequest, background_tasks: BackgroundTa
 
 @app.post("/workflow", response_model=TaskResponse)
 async def execute_workflow_endpoint(
-    request: WorkflowRequest, background_tasks: BackgroundTasks
+    request: WorkflowRequest,
+    background_tasks: BackgroundTasks,
+    api_key_info: tuple = Depends(get_current_api_key)
 ):
     """Execute a multi-agent workflow."""
     task_id = str(uuid.uuid4())
@@ -174,7 +183,7 @@ async def execute_workflow_endpoint(
 
 
 @app.get("/status/{task_id}", response_model=StatusResponse)
-async def get_task_status(task_id: str):
+async def get_task_status(task_id: str, api_key_info: tuple = Depends(get_current_api_key)):
     """Get the status of a specific task."""
     if task_id not in tasks_store:
         raise HTTPException(status_code=404, detail="Task not found")

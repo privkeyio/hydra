@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-import sys
 import argparse
 import json
-from typing import Dict, Any
+import sys
+from typing import Any, Dict
+
 from hydra.workflows.engine import execute_workflow
 
 

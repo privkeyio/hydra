@@ -1,5 +1,4 @@
-"""
-Hydra: Self-Replicating Coding Agent System
+"""Hydra: Self-Replicating Coding Agent System
 
 A hierarchical AI agent system for autonomous code generation and task delegation.
 """

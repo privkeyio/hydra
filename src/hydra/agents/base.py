@@ -1,10 +1,11 @@
 import ast
-import subprocess
 import json
 import logging
 import os
-from typing import Optional, Dict, Any
+import subprocess
 from logging.handlers import RotatingFileHandler
+from typing import Any, Dict, Optional
+
 from hydra.config import get_config
 
 
@@ -55,7 +56,7 @@ class CodeAgent:
         if self.parent is None:
             return self.name
         return f"{self.parent._get_hierarchy_path()} -> {self.name}"
-    
+
     def reason(self, task: str) -> Dict[str, Any]:
         if self.depth > self.max_depth:
             error_msg = (
@@ -116,7 +117,7 @@ Return ONLY executable Python code. No explanations or markdown."""
 
         try:
             code = self.llm_provider.generate(code_prompt)
-            
+
             # Clean up code formatting
             code = code.strip()
             if code.startswith("```python"):
@@ -134,7 +135,7 @@ Return ONLY executable Python code. No explanations or markdown."""
                 f"({len(code)} chars)"
             )
             return code
-            
+
         except SyntaxError as e:
             error_msg = f"Generated invalid Python code: {e}"
             self.logger.error(
@@ -164,7 +165,7 @@ Return ONLY executable Python code. No explanations or markdown."""
                 env['PYTHONPATH'] = f"{src_path}:{env['PYTHONPATH']}"
             else:
                 env['PYTHONPATH'] = src_path
-            
+
             result = subprocess.run(
                 ["python", "-c", code_str],
                 capture_output=True,

@@ -1,7 +1,9 @@
-from typing import TypedDict, List, Dict, Any
-from langgraph.graph import StateGraph, END
-from hydra.agents.base import CodeAgent
 import logging
+from typing import Any, Dict, List, TypedDict
+
+from langgraph.graph import END, StateGraph
+
+from hydra.agents.base import CodeAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,7 +21,7 @@ class WorkflowState(TypedDict):
 
 def plan_node(state: WorkflowState) -> WorkflowState:
     agent = CodeAgent(state["current_agent"], depth=state["depth"])
-    
+
     try:
         reasoning = agent.reason(state["task"])
         state["plan"] = reasoning.get("plan", "")
@@ -29,17 +31,17 @@ def plan_node(state: WorkflowState) -> WorkflowState:
         logger.warning(f"Depth limit reached: {e}")
         state["subtasks"] = []
         state["plan"] = f"Depth limit reached at level {state['depth']}"
-    
+
     return state
 
 
 def spawn_node(state: WorkflowState) -> WorkflowState:
     parent_agent = CodeAgent(state["current_agent"], depth=state["depth"])
-    
+
     for i, subtask in enumerate(state["subtasks"]):
         employee_name = f"{state['current_agent']}_employee_{i}"
         state["agents"].append(employee_name)
-        
+
         spawn_code = f"""
 from hydra.agents.base import CodeAgent
 
@@ -53,7 +55,7 @@ result = {{
 }}
 print(result)
 """
-        
+
         try:
             exec_result = parent_agent.execute_code(spawn_code)
             if exec_result["success"]:
@@ -73,20 +75,20 @@ print(result)
                 "task": subtask
             }
             logger.error(f"Exception spawning {employee_name}: {e}")
-    
+
     return state
 
 
 def aggregate_node(state: WorkflowState) -> WorkflowState:
     logger.info(f"Aggregating results from {len(state['agents'])} agents")
-    
+
     state["results"]["summary"] = {
         "total_agents": len(state["agents"]),
         "successful": len([r for r in state["results"].values() if "error" not in r]),
         "failed": len([r for r in state["results"].values() if "error" in r]),
         "depth_reached": state["depth"]
     }
-    
+
     return state
 
 
@@ -99,13 +101,13 @@ def should_spawn(state: WorkflowState) -> str:
 
 def create_workflow():
     workflow = StateGraph(WorkflowState)
-    
+
     workflow.add_node("plan", plan_node)
     workflow.add_node("spawn", spawn_node)
     workflow.add_node("aggregate", aggregate_node)
-    
+
     workflow.set_entry_point("plan")
-    
+
     workflow.add_conditional_edges(
         "plan",
         should_spawn,
@@ -114,16 +116,16 @@ def create_workflow():
             "aggregate": "aggregate"
         }
     )
-    
+
     workflow.add_edge("spawn", "aggregate")
     workflow.add_edge("aggregate", END)
-    
+
     return workflow.compile()
 
 
 def execute_workflow(task: str, agent_name: str = "boss", depth: int = 0) -> Dict[str, Any]:
     workflow = create_workflow()
-    
+
     initial_state = WorkflowState(
         task=task,
         depth=depth,
@@ -133,7 +135,7 @@ def execute_workflow(task: str, agent_name: str = "boss", depth: int = 0) -> Dic
         subtasks=[],
         plan=""
     )
-    
+
     try:
         final_state = workflow.invoke(initial_state)
         return final_state

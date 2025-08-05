@@ -1,19 +1,36 @@
 """FastAPI service layer for Hydra REST API."""
 
 import asyncio
+import csv
+import hashlib
+import json
 import time
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from io import StringIO
+from typing import Any, Dict, Optional, Set
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import desc
+from sqlalchemy.orm import Session
 
 from hydra.agents.base import CodeAgent
 from hydra.api.auth import AuthMiddleware, get_current_api_key
 from hydra.cache import get_cache
 from hydra.config import get_config
+from hydra.models.db import APIKey, Usage, get_db
 from hydra.monitoring import monitoring, timed_operation
 from hydra.security import (
     SecurityHeaders,
@@ -123,6 +140,7 @@ async def monitoring_middleware(request: Request, call_next):
     return response
 
 tasks_store: Dict[str, Dict[str, Any]] = {}
+admin_websockets: Set[WebSocket] = set()
 
 
 @timed_operation("code_generation")
@@ -131,6 +149,15 @@ async def process_generate_task(task_id: str, request: GenerateRequest):
     try:
         tasks_store[task_id]["status"] = TaskStatus.IN_PROGRESS
         tasks_store[task_id]["progress"] = 10
+
+        await notify_admin_clients("task_update", {
+            "task": {
+                "id": task_id,
+                "status": TaskStatus.IN_PROGRESS,
+                "progress": 10,
+                "created_at": tasks_store[task_id]["created_at"].isoformat()
+            }
+        })
 
         cache = get_cache()
 
@@ -151,6 +178,15 @@ async def process_generate_task(task_id: str, request: GenerateRequest):
         agent = CodeAgent(config)
 
         tasks_store[task_id]["progress"] = 50
+
+        await notify_admin_clients("task_update", {
+            "task": {
+                "id": task_id,
+                "status": TaskStatus.IN_PROGRESS,
+                "progress": 50,
+                "created_at": tasks_store[task_id]["created_at"].isoformat()
+            }
+        })
 
         result = await asyncio.to_thread(
             agent.generate_code,
@@ -494,6 +530,335 @@ async def query_audit_logs(
         "logs": [],
         "message": "Audit log querying requires database integration"
     }
+
+
+@app.get("/admin/metrics/realtime")
+async def get_realtime_metrics(
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get real-time metrics for admin dashboard."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    active_tasks = sum(
+        1 for t in tasks_store.values() 
+        if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
+    )
+    queue_size = sum(
+        1 for t in tasks_store.values() 
+        if t["status"] == TaskStatus.PENDING
+    )
+
+    recent_requests = db.query(Usage).order_by(desc(Usage.timestamp)).limit(100).all()
+    error_count = sum(
+        1 for t in tasks_store.values() 
+        if t["status"] == TaskStatus.FAILED
+    )
+
+    avg_latency = 0
+    if recent_requests:
+        latencies = [r.response_time for r in recent_requests if r.response_time]
+        avg_latency = sum(latencies) / len(latencies) if latencies else 0
+
+    return {
+        "request_count": len(recent_requests),
+        "error_rate": (error_count / len(tasks_store) * 100) if tasks_store else 0,
+        "avg_latency": avg_latency,
+        "active_tasks": active_tasks,
+        "queue_size": queue_size
+    }
+
+
+@app.get("/admin/metrics/usage")
+async def get_usage_metrics(
+    start: str,
+    end: str,
+    api_key: Optional[str] = None,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get usage metrics with date filtering."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    query = db.query(Usage).filter(
+        Usage.timestamp >= start,
+        Usage.timestamp <= end
+    )
+
+    if api_key:
+        query = query.filter(Usage.api_key_id == api_key)
+
+    results = query.all()
+
+    return [
+        {
+            "timestamp": r.timestamp.isoformat(),
+            "api_key_id": r.api_key_id,
+            "endpoint": r.endpoint,
+            "tokens_used": r.tokens_used,
+            "task_id": r.task_id
+        }
+        for r in results
+    ]
+
+
+@app.get("/admin/tasks/queue")
+async def get_task_queue(
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Get current task queue status."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tasks = []
+    for task_id, task_data in tasks_store.items():
+        tasks.append({
+            "id": task_id,
+            "status": task_data["status"],
+            "created_at": task_data["created_at"].isoformat(),
+            "completed_at": (
+                task_data["completed_at"].isoformat() 
+                if task_data["completed_at"] else None
+            ),
+            "agent_count": task_data.get("agent_count", 1),
+            "progress": task_data.get("progress", 0)
+        })
+
+    return sorted(tasks, key=lambda x: x["created_at"], reverse=True)[:50]
+
+
+@app.get("/admin/api-keys")
+async def list_api_keys(
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """List all API keys."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    keys = db.query(APIKey).all()
+    return [
+        {
+            "key": k.key,
+            "name": k.name,
+            "created_at": k.created_at.isoformat(),
+            "is_active": k.is_active,
+            "rate_limit": k.rate_limit
+        }
+        for k in keys
+    ]
+
+
+@app.post("/admin/api-keys")
+async def create_api_key(
+    data: dict,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Create new API key."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    key = "sk-" + hashlib.sha256(
+        f"{data['name']}-{datetime.utcnow()}".encode()
+    ).hexdigest()[:32]
+
+    api_key = APIKey(
+        key=key,
+        name=data["name"],
+        rate_limit=data.get("rate_limit", 1000)
+    )
+
+    db.add(api_key)
+    db.commit()
+
+    audit_logger.log_operation(
+        "API_KEY_CREATED",
+        api_key_info[0],
+        key,
+        "SUCCESS",
+        {"name": data["name"]}
+    )
+
+    return {"key": key, "name": data["name"]}
+
+
+@app.put("/admin/api-keys/{key}")
+async def update_api_key(
+    key: str,
+    data: dict,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Update API key."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    api_key = db.query(APIKey).filter(APIKey.key == key).first()
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    if "name" in data:
+        api_key.name = data["name"]
+    if "is_active" in data:
+        api_key.is_active = data["is_active"]
+    if "rate_limit" in data:
+        api_key.rate_limit = data["rate_limit"]
+
+    db.commit()
+
+    audit_logger.log_operation(
+        "API_KEY_UPDATED",
+        api_key_info[0],
+        key,
+        "SUCCESS",
+        data
+    )
+
+    return {"success": True}
+
+
+@app.delete("/admin/api-keys/{key}")
+async def delete_api_key(
+    key: str,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Delete API key."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    api_key = db.query(APIKey).filter(APIKey.key == key).first()
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    db.delete(api_key)
+    db.commit()
+
+    audit_logger.log_operation(
+        "API_KEY_DELETED",
+        api_key_info[0],
+        key,
+        "SUCCESS",
+        {"name": api_key.name}
+    )
+
+    return {"success": True}
+
+
+@app.get("/admin/export/usage")
+async def export_usage_csv(
+    start: str,
+    end: str,
+    api_key_info: tuple = Depends(get_current_api_key),
+    db: Session = Depends(get_db)
+):
+    """Export usage data as CSV."""
+    if not api_key_info[1]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    usage_data = db.query(Usage).filter(
+        Usage.timestamp >= start,
+        Usage.timestamp <= end
+    ).all()
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Timestamp", "API Key", "Endpoint", 
+        "Tokens Used", "Task ID", "Response Time"
+    ])
+
+    for u in usage_data:
+        writer.writerow([
+            u.timestamp.isoformat(),
+            u.api_key_id,
+            u.endpoint,
+            u.tokens_used,
+            u.task_id or "",
+            u.response_time or ""
+        ])
+
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=usage_{start}_to_{end}.csv"
+        }
+    )
+
+
+async def notify_admin_clients(message_type: str, data: dict):
+    """Send notification to all connected admin WebSocket clients."""
+    message = json.dumps({"type": message_type, **data})
+    dead_clients = set()
+
+    for ws in admin_websockets:
+        try:
+            await ws.send_text(message)
+        except Exception:
+            dead_clients.add(ws)
+
+    admin_websockets.difference_update(dead_clients)
+
+
+@app.websocket("/ws/admin")
+async def admin_websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for admin dashboard real-time updates."""
+    await websocket.accept()
+    admin_websockets.add(websocket)
+
+    try:
+        # Send initial metrics
+        metrics = {
+            "request_count": len(tasks_store),
+            "error_rate": 0,
+            "avg_latency": 0,
+            "active_tasks": sum(
+                1 for t in tasks_store.values() 
+                if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
+            ),
+            "queue_size": sum(
+                1 for t in tasks_store.values() 
+                if t["status"] == TaskStatus.PENDING
+            )
+        }
+        await websocket.send_text(json.dumps({"type": "metrics", "metrics": metrics}))
+
+        # Keep connection alive
+        while True:
+            # Send periodic metrics updates
+            await asyncio.sleep(5)
+            metrics = {
+                "request_count": len(tasks_store),
+                "error_rate": (
+                    sum(1 for t in tasks_store.values() 
+                        if t["status"] == TaskStatus.FAILED) 
+                    / max(len(tasks_store), 1) * 100
+                ),
+                "avg_latency": 0,
+                "active_tasks": sum(
+                    1 for t in tasks_store.values() 
+                    if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
+                ),
+                "queue_size": sum(
+                    1 for t in tasks_store.values() 
+                    if t["status"] == TaskStatus.PENDING
+                )
+            }
+            await websocket.send_text(
+                json.dumps({"type": "metrics", "metrics": metrics})
+            )
+
+    except WebSocketDisconnect:
+        admin_websockets.discard(websocket)
+    except Exception:
+        admin_websockets.discard(websocket)
 
 
 if __name__ == "__main__":

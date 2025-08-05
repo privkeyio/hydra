@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+"""Convenience script to run Hydra from the command line."""
+
+import sys
+from hydra.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())

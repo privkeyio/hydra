@@ -1,84 +1,254 @@
 # Project Hydra: Self-Replicating Coding Agent System
 
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Internal Project](https://img.shields.io/badge/status-internal-red.svg)]()
+
 ## Overview
-This project implements a hierarchical AI agent system designed for in-house coding assistance. It enables a primary "boss" agent to decompose tasks, generate and execute code, and spawn "employee" agents that inherit the same capabilities. This creates a recursive structure for delegating workloads, such as code refactoring, function development, or testing.
 
-The system uses Claude Code (via its Python SDK) for intelligent reasoning and code generation, powered by Anthropic's Claude models (Sonnet 4 for quick tasks, Opus 4 for complex ones). A fallback to the Venice API is available for open-source model alternatives.
+Hydra is a production-grade hierarchical AI agent system designed for autonomous code generation and task delegation. It enables a primary "boss" agent to decompose complex coding tasks, generate and execute code, and spawn "employee" agents that inherit the same capabilities, creating a recursive structure for handling sophisticated software development workflows.
 
-Key principles: Modular design for easy extension, safeguards against recursion issues, and local execution for security.
+## Key Features
 
-## Features
-- **Task Decomposition and Delegation**: Agents break down complex coding tasks and assign subtasks to spawned employees.
-- **Code Generation and Execution**: Uses Claude Code to produce and run Python code in a sandboxed environment.
-- **Hierarchy and Recursion**: Supports up to 2 levels of agent spawning with depth limits to prevent infinite loops.
-- **Logging and Error Handling**: Tracks agent interactions, results, and retries on failures.
-- **CLI Interface**: Simple command-line entry point for task input.
-- **Fallback Integration**: Configurable switch to Venice API for alternative models.
+- 🤖 **Hierarchical Agent Architecture**: Multi-level agent spawning with parent-child relationships
+- 🧠 **Intelligent Task Decomposition**: Automatic breaking down of complex tasks into manageable subtasks
+- 💻 **Autonomous Code Generation**: AI-powered code creation using Claude/Anthropic models
+- 🔒 **Sandboxed Execution**: Safe code execution in isolated subprocess environments
+- 📊 **Comprehensive Logging**: Detailed activity tracking with automatic log rotation
+- 🔄 **Retry Logic**: Automatic retry on failures with configurable attempts
+- 🛡️ **Safety Guards**: Built-in recursion limits and timeout protection
+- 🔌 **Extensible Design**: Modular architecture for easy feature additions
 
-## Requirements
-- Python 3.12+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.11 or higher
 - Virtual environment (recommended)
-- API keys for Claude Code (Anthropic) or Venice API
+- Anthropic API key
 
-## Installation
-1. Clone the repository:
-   ```
-   git clone <internal-repo-url>
-   cd project-hydra
-   ```
+### Installation
 
-2. Set up a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+1. **Clone the repository:**
+```bash
+git clone <internal-repo-url>
+cd hydra
+```
 
-3. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-   (Dependencies include: langchain, langgraph, claude-code-sdk, python-dotenv. For fallback: openai)
+2. **Run the setup script:**
+```bash
+./scripts/setup.sh
+```
 
-4. Configure environment variables:
-   - Create a `.env` file in the root directory.
-   - Add your API key(s):
-     ```
-     ANTHROPIC_API_KEY=your_claude_code_key_here
-     VENICE_API_KEY=your_venice_key_here  # Optional for fallback
-     ```
+3. **Configure your API keys:**
+```bash
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY
+```
+
+4. **Verify installation:**
+```bash
+source venv/bin/activate
+make test
+```
 
 ## Usage
-Run the system via the CLI in `main.py`. Provide a coding task as an argument.
 
-Example:
+### Command Line Interface
+
+```bash
+# Basic usage
+hydra "Create a function to calculate fibonacci numbers"
+
+# Multi-line input via stdin
+echo "Create two functions:
+1. add(a, b) that returns sum
+2. subtract(a, b) that returns difference" | hydra
+
+# JSON output format
+hydra "Refactor this code" --json
+
+# Custom agent name
+hydra "Build a calculator" --agent-name "architect"
+
+# Specify starting depth
+hydra "Complex task" --depth 1
 ```
-python main.py "Refactor the following Python code into modular functions: def add(a, b): return a + b; def subtract(a, b): return a - b;"
+
+### Python API
+
+```python
+from hydra import CodeAgent, execute_workflow
+
+# Create an agent
+agent = CodeAgent("developer")
+
+# Execute a task
+results = execute_workflow(
+    task="Create a REST API endpoint",
+    agent_name="boss",
+    depth=0
+)
 ```
 
-- The boss agent will process the task, potentially spawning employees for subtasks.
-- Output: Aggregated results (e.g., generated code, execution outputs) printed to console.
-- Logs: Appended to `agent_log.txt` for review.
+## Project Structure
 
-To switch to Venice API fallback (if needed), set a config flag in `config.py` (e.g., `USE_VENICE=True`).
+```
+hydra/
+├── src/hydra/              # Main package source code
+│   ├── agents/             # Agent implementations
+│   ├── workflows/          # Workflow engine (LangGraph)
+│   ├── utils/              # Utility modules
+│   └── cli.py              # CLI entry point
+├── tests/                  # Test suite
+│   ├── unit/               # Unit tests
+│   └── integration/        # Integration tests
+├── config/                 # Configuration files
+├── docs/                   # Documentation
+├── scripts/                # Utility scripts
+├── Makefile               # Development commands
+└── pyproject.toml         # Project configuration
+```
+
+## Development
+
+### Setting Up Development Environment
+
+```bash
+# Install development dependencies
+make install-dev
+
+# Run tests
+make test
+
+# Run linting
+make lint
+
+# Format code
+make format
+
+# Build package
+make build
+```
+
+### Running Tests
+
+```bash
+# All tests
+make test
+
+# Unit tests only
+make test-unit
+
+# Integration tests only
+make test-int
+
+# With coverage report
+pytest --cov=hydra --cov-report=html
+```
+
+### Code Quality
+
+The project uses:
+- **Black** for code formatting
+- **Flake8** and **Ruff** for linting
+- **MyPy** for type checking
+- **Pre-commit** hooks for automated checks
 
 ## Configuration
-- **Model Selection**: Defaults to Claude Sonnet 4; switch to Opus 4 for tasks in code (e.g., via SDK params).
-- **Recursion Depth**: Hard-coded to max 2; adjust in `CodeAgent` class if needed.
-- **Sandboxing**: Uses `subprocess` for isolation; ensure no sensitive data in execution paths.
 
-## Development and Maintenance
-- **Project Structure**:
-  - `code_agent.py`: Core `CodeAgent` class.
-  - `workflow.py`: LangGraph workflow definition.
-  - `main.py`: CLI entry point.
-  - `utils.py`: Logging, safeguards, and helpers.
-- **Testing**: Run `pytest` for unit and integration tests.
-- **Extending**: Add new nodes to LangGraph for features like external tool integration.
-- For in-house contributions, follow internal Git workflow and review processes.
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+ANTHROPIC_API_KEY=your_api_key_here
+USE_VENICE=false
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+```
+
+### Configuration File
+
+Edit `config/default.yaml` for system-wide settings:
+
+```yaml
+agent:
+  max_depth: 2
+  timeout: 30
+  retry_attempts: 2
+
+models:
+  primary:
+    provider: "anthropic"
+    model: "claude-3-5-sonnet-20241022"
+```
+
+## Architecture
+
+### Agent Hierarchy
+```
+Boss Agent (depth 0)
+├── Employee 1 (depth 1)
+│   ├── Sub-employee 1.1 (depth 2)
+│   └── Sub-employee 1.2 (depth 2)
+└── Employee 2 (depth 1)
+    └── Sub-employee 2.1 (depth 2)
+```
+
+### Workflow Engine
+
+Built on LangGraph for stateful workflow management:
+- **Plan Node**: Task decomposition and strategy
+- **Spawn Node**: Employee agent creation
+- **Aggregate Node**: Result collection and synthesis
+
+## Safety & Security
+
+- **Recursion Limit**: Hard limit of 2 levels to prevent infinite loops
+- **Execution Timeout**: 30-second timeout for code execution
+- **Sandboxed Environment**: Subprocess isolation for generated code
+- **Input Validation**: AST parsing before execution
+- **Comprehensive Logging**: Full audit trail of all operations
 
 ## Troubleshooting
-- API Errors: Verify keys in `.env` and check Anthropic/Venice quotas.
-- Recursion Issues: If depth exceeded, task will raise an error—simplify input tasks.
-- Execution Failures: Sandbox logs errors; retries are automatic.
 
-This system is for internal use only. Contact the development team for support or enhancements.
+### Common Issues
+
+1. **API Key Errors**
+   - Verify `.env` file exists and contains valid keys
+   - Check API quota and rate limits
+
+2. **Import Errors**
+   - Ensure virtual environment is activated
+   - Run `pip install -e .` to install in development mode
+
+3. **Recursion Limit Exceeded**
+   - Simplify input tasks
+   - Check max_depth configuration
+
+### Debug Mode
+
+Enable detailed logging:
+```bash
+export LOG_LEVEL=DEBUG
+hydra "Your task"
+```
+
+## Internal Development
+
+This is an internal project. For modifications:
+1. Create a feature branch
+2. Make changes with tests
+3. Request code review from team lead
+4. Merge after approval
+
+## Support
+
+For internal support:
+- Open an issue on GitHub
+- Contact the development team
+- Check documentation in `/docs`
+
+---
+
+**⚠️ INTERNAL USE ONLY**: This tool is proprietary and confidential. Do not share outside the organization. Follow company security guidelines when handling API keys and sensitive data.

@@ -1,17 +1,19 @@
 """FastAPI service layer for Hydra REST API."""
 
 import asyncio
+import time
 import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from hydra.agents.base import CodeAgent
 from hydra.api.auth import AuthMiddleware, get_current_api_key
 from hydra.config import get_config
+from hydra.monitoring import monitoring, timed_operation
 from hydra.workflows.engine import execute_workflow
 
 
@@ -66,10 +68,31 @@ app = FastAPI(
 )
 
 app.add_middleware(AuthMiddleware)
+monitoring.instrument_fastapi(app)
+
+@app.middleware("http")
+async def monitoring_middleware(request: Request, call_next):
+    start_time = time.time()
+    correlation_id = request.headers.get("x-correlation-id")
+    monitoring.set_correlation_id(correlation_id)
+
+    response = await call_next(request)
+
+    duration = time.time() - start_time
+    monitoring.record_request(
+        method=request.method,
+        endpoint=request.url.path,
+        status_code=response.status_code,
+        duration=duration
+    )
+
+    response.headers["x-correlation-id"] = monitoring.get_correlation_id()
+    return response
 
 tasks_store: Dict[str, Dict[str, Any]] = {}
 
 
+@timed_operation("code_generation")
 async def process_generate_task(task_id: str, request: GenerateRequest):
     """Background task for code generation."""
     try:
@@ -99,6 +122,7 @@ async def process_generate_task(task_id: str, request: GenerateRequest):
         tasks_store[task_id]["completed_at"] = datetime.utcnow()
 
 
+@timed_operation("workflow")
 async def process_workflow_task(task_id: str, request: WorkflowRequest):
     """Background task for workflow execution."""
     try:

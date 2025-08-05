@@ -192,15 +192,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 security = HTTPBearer(auto_error=False)
 
-async def get_current_api_key(request: Request) -> Tuple[str, Dict]:
-    """Dependency to get current API key and info from request state."""
+async def get_current_api_key(request: Request) -> Tuple[str, bool]:
+    """Dependency to get current API key and priority status from request state."""
     if not hasattr(request.state, 'api_key'):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required"
         )
 
-    return request.state.api_key, request.state.key_info
+    key_info = request.state.key_info
+    is_priority = key_info.get('priority', False) or key_info.get('rate_limit', 0) > 500
+
+    return request.state.api_key, is_priority
 
 def get_usage_stats(api_key: Optional[str] = None) -> Dict:
     """Get usage statistics."""

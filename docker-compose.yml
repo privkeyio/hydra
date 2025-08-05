@@ -41,6 +41,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hydra}:${POSTGRES_PASSWORD:-hydra_secret}@postgres:5432/${POSTGRES_DB:-hydra}
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/1
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       VENICE_API_KEY: ${VENICE_API_KEY}
@@ -58,6 +60,63 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    restart: unless-stopped
+    networks:
+      - hydra
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A hydra.workers.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hydra}:${POSTGRES_PASSWORD:-hydra_secret}@postgres:5432/${POSTGRES_DB:-hydra}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/1
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      VENICE_API_KEY: ${VENICE_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - hydra
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A hydra.workers.celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hydra}:${POSTGRES_PASSWORD:-hydra_secret}@postgres:5432/${POSTGRES_DB:-hydra}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - hydra
+
+  websocket-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m hydra.workers.websocket
+    ports:
+      - "${WS_PORT:-8765}:8765"
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - hydra

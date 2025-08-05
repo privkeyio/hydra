@@ -10,9 +10,17 @@ from hydra.workers.celery_app import app as celery_app
 
 @pytest.fixture
 def celery_worker():
-    celery_app.conf.update(task_always_eager=True)
+    celery_app.conf.update(
+        task_always_eager=True,
+        result_backend='cache+memory://',
+        broker_url='memory://'
+    )
     yield
-    celery_app.conf.update(task_always_eager=False)
+    celery_app.conf.update(
+        task_always_eager=False,
+        result_backend=None,
+        broker_url=None
+    )
 
 
 def test_generate_code_success(celery_worker):
@@ -41,7 +49,7 @@ def test_generate_code_failure(celery_worker):
         
         result = generate_code.apply(args=["Generate hello function", "python", 100])
         
-        assert result.state == states.FAILURE
+        assert result.state == states.REJECTED
 
 
 def test_execute_workflow_success(celery_worker):

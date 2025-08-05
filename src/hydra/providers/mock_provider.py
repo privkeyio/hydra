@@ -21,8 +21,10 @@ class MockProvider(LLMProvider):
                 '{"plan": "Mock plan", '
                 '"subtasks": ["Mock subtask 1", "Mock subtask 2"]}'
             )
-        elif "code" in prompt.lower():
-            return "def mock_function():\n    return 'Hello, World!'"
+        elif ("code" in prompt.lower() or "function" in prompt.lower() or
+              "hello world" in prompt.lower()):
+            return ("def hello_world():\n    print('Hello, World!')\n"
+                    "    return 'Hello, World!'")
         else:
             return "Mock response for: " + prompt[:50]
 

@@ -1,0 +1,54 @@
+replicaCount: 3
+
+image:
+  repository: hydra/api
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: api.hydra.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+config:
+  rateLimitRequests: "100"
+  rateLimitWindow: "3600"
+  logLevel: "INFO"
+  workerTimeout: "300"
+  maxAgents: "10"
+
+secrets:
+  databaseUrl: ""
+  redisUrl: ""
+  veniceApiKey: ""
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

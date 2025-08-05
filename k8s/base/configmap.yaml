@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hydra-config
+  labels:
+    app: hydra
+data:
+  rate-limit-requests: "100"
+  rate-limit-window: "3600"
+  log-level: "INFO"
+  worker-timeout: "300"
+  max-agents: "10"

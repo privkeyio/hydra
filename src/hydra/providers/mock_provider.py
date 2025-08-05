@@ -16,13 +16,15 @@ class MockProvider(LLMProvider):
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a mock response."""
-        if "plan" in prompt.lower() or "subtask" in prompt.lower():
+        prompt_lower = prompt.lower()
+        if ("plan" in prompt_lower and "subtask" in prompt_lower and
+            "code" not in prompt_lower):
             return (
                 '{"plan": "Mock plan", '
                 '"subtasks": ["Mock subtask 1", "Mock subtask 2"]}'
             )
-        elif ("code" in prompt.lower() or "function" in prompt.lower() or
-              "hello world" in prompt.lower()):
+        elif ("generate python code" in prompt_lower or "code" in prompt_lower or
+              "function" in prompt_lower or "hello world" in prompt_lower):
             return ("def hello_world():\n    print('Hello, World!')\n"
                     "    return 'Hello, World!'")
         else:

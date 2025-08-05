@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Optional, Dict, Any
 from logging.handlers import RotatingFileHandler
-from hydra.config import USE_VENICE, anthropic_client
+from hydra.config import USE_VENICE, USE_CLAUDE_CLI, anthropic_client, generate_code_with_claude_cli
 
 
 class CodeAgent:
@@ -70,15 +70,18 @@ class CodeAgent:
         prompt = f"""Analyze this task and create a plan:
 Task: {task}
 
-Respond with JSON containing:
-1. "plan": A clear strategy to accomplish the task
-2. "subtasks": List of specific subtasks (empty if task is atomic)
+You MUST respond with ONLY valid JSON in this exact format:
+{{"plan": "your strategy here", "subtasks": ["subtask1", "subtask2"]}}
 
-Example response:
-{{"plan": "Break down task", "subtasks": ["subtask1", "subtask2"]}}
+If the task is simple and doesn't need subtasks, use an empty array:
+{{"plan": "your strategy here", "subtasks": []}}
+
+Important: Return ONLY the JSON object, no other text or formatting.
 """
 
-        if USE_VENICE:
+        if USE_CLAUDE_CLI:
+            response = generate_code_with_claude_cli(prompt)
+        elif USE_VENICE:
             from hydra.utils.venice import venice_call
             response = venice_call(prompt)
         else:
@@ -114,7 +117,9 @@ Example response:
 
 Return ONLY executable Python code. No explanations or markdown."""
 
-        if USE_VENICE:
+        if USE_CLAUDE_CLI:
+            code = generate_code_with_claude_cli(code_prompt)
+        elif USE_VENICE:
             from hydra.utils.venice import venice_call
             code = venice_call(code_prompt)
         else:

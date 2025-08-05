@@ -6,15 +6,25 @@ from anthropic import Anthropic
 load_dotenv()
 
 USE_VENICE = os.getenv("USE_VENICE", "false").lower() == "true"
+USE_CLAUDE_CLI = os.getenv("USE_CLAUDE_CLI", "true").lower() == "true"
+CLAUDE_CLI_PATH = os.getenv("CLAUDE_CLI_PATH", "claude")  # Default to 'claude'
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", "dummy"))
 
 def generate_code_with_claude_cli(prompt):
     try:
+        # Use CLAUDE_CLI_PATH from environment or default to 'claude'
+        cmd = f'{CLAUDE_CLI_PATH} "{prompt}"'
+        
+        # Debug logging
+        print(f"[DEBUG] Running command: {cmd}")
+            
         result = subprocess.run(
-            ["claude", "code", prompt],
+            cmd,
+            shell=True,
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
+            env=os.environ.copy()
         )
         if result.returncode == 0:
             return result.stdout

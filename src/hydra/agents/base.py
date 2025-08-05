@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Optional, Dict, Any
 from logging.handlers import RotatingFileHandler
-from hydra.config import USE_VENICE, anthropic_client
+from hydra.config import get_config
 
 
 class CodeAgent:
@@ -36,15 +36,19 @@ class CodeAgent:
         self.name = name
         self.parent = parent
         self.depth = depth
-        self.max_depth = 2
+        self.config = get_config()
+        self.agent_config = self.config.get_agent_config()
+        self.max_depth = self.agent_config['max_depth']
+        self.max_retries = self.agent_config['retry_attempts']
         self.employees = []
         self.agent_id = f"{name}_{id(self)}"
         self.logger = self._setup_logger()
+        self.llm_provider = self.config.llm_provider
 
         hierarchy = self._get_hierarchy_path()
         self.logger.info(
             f"Agent created: {self.agent_id} at depth {depth}, "
-            f"hierarchy: {hierarchy}"
+            f"hierarchy: {hierarchy}, provider: {self.llm_provider.name}"
         )
 
     def _get_hierarchy_path(self) -> str:
@@ -70,83 +74,74 @@ class CodeAgent:
         prompt = f"""Analyze this task and create a plan:
 Task: {task}
 
-Respond with JSON containing:
-1. "plan": A clear strategy to accomplish the task
-2. "subtasks": List of specific subtasks (empty if task is atomic)
+You MUST respond with ONLY valid JSON in this exact format:
+{{"plan": "your strategy here", "subtasks": ["subtask1", "subtask2"]}}
 
-Example response:
-{{"plan": "Break down task", "subtasks": ["subtask1", "subtask2"]}}
+If the task is simple and doesn't need subtasks, use an empty array:
+{{"plan": "your strategy here", "subtasks": []}}
+
+Important: Return ONLY the JSON object, no other text or formatting.
 """
 
-        if USE_VENICE:
-            from hydra.utils.venice import venice_call
-            response = venice_call(prompt)
-        else:
-            response = anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            response = response.content[0].text
-
         try:
-            result = json.loads(response)
+            result = self.llm_provider.generate_json(prompt)
             subtask_count = len(result.get('subtasks', []))
             self.logger.info(
                 f"Agent {self.agent_id} generated plan with "
                 f"{subtask_count} subtasks"
             )
             return result
-        except json.JSONDecodeError as e:
+        except Exception as e:
             self.logger.warning(
                 f"Agent {self.agent_id} failed to parse JSON response: {e}"
             )
-            return {"plan": response, "subtasks": []}
+            # Try regular generation and parse
+            try:
+                response = self.llm_provider.generate(prompt)
+                result = json.loads(response)
+                return result
+            except:
+                # Fallback response
+                return {"plan": str(e), "subtasks": []}
 
     def generate_code(self, prompt: str, retry_count: int = 0) -> str:
-        max_retries = 2
         self.logger.info(
             f"Agent {self.agent_id} generating code "
-            f"(attempt {retry_count + 1}/{max_retries})"
+            f"(attempt {retry_count + 1}/{self.max_retries})"
         )
         code_prompt = f"""Generate Python code for this task:
 {prompt}
 
 Return ONLY executable Python code. No explanations or markdown."""
 
-        if USE_VENICE:
-            from hydra.utils.venice import venice_call
-            code = venice_call(code_prompt)
-        else:
-            response = anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=2048,
-                messages=[{"role": "user", "content": code_prompt}]
-            )
-            code = response.content[0].text
-
-        code = code.strip()
-        if code.startswith("```python"):
-            code = code[9:]
-        if code.startswith("```"):
-            code = code[3:]
-        if code.endswith("```"):
-            code = code[:-3]
-        code = code.strip()
-
         try:
+            code = self.llm_provider.generate(code_prompt)
+            
+            # Clean up code formatting
+            code = code.strip()
+            if code.startswith("```python"):
+                code = code[9:]
+            if code.startswith("```"):
+                code = code[3:]
+            if code.endswith("```"):
+                code = code[:-3]
+            code = code.strip()
+
+            # Validate syntax
             ast.parse(code)
             self.logger.info(
                 f"Agent {self.agent_id} generated valid code "
                 f"({len(code)} chars)"
             )
+            return code
+            
         except SyntaxError as e:
             error_msg = f"Generated invalid Python code: {e}"
             self.logger.error(
                 f"Agent {self.agent_id} syntax error: {error_msg}"
             )
 
-            if retry_count < max_retries - 1:
+            if retry_count < self.max_retries - 1:
                 self.logger.info(
                     f"Agent {self.agent_id} retrying code generation"
                 )
@@ -154,22 +149,29 @@ Return ONLY executable Python code. No explanations or markdown."""
 
             raise ValueError(error_msg)
 
-        return code
-
     def execute_code(self, code_str: str, retry_count: int = 0) -> Dict[str, Any]:
-        max_retries = 2
         self.logger.info(
             f"Agent {self.agent_id} executing code "
-            f"(attempt {retry_count + 1}/{max_retries})"
+            f"(attempt {retry_count + 1}/{self.max_retries})"
         )
 
         try:
+            # Set up environment with proper Python path
+            env = os.environ.copy()
+            # Add the src directory to Python path
+            src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            if 'PYTHONPATH' in env:
+                env['PYTHONPATH'] = f"{src_path}:{env['PYTHONPATH']}"
+            else:
+                env['PYTHONPATH'] = src_path
+            
             result = subprocess.run(
                 ["python", "-c", code_str],
                 capture_output=True,
                 text=True,
-                timeout=30,
-                check=False
+                timeout=self.agent_config['timeout'],
+                check=False,
+                env=env
             )
 
             execution_result = {
@@ -190,7 +192,7 @@ Return ONLY executable Python code. No explanations or markdown."""
                 )
                 self.logger.error(f"Agent {self.agent_id} {error_msg}")
 
-                if retry_count < max_retries - 1:
+                if retry_count < self.max_retries - 1:
                     self.logger.info(
                         f"Agent {self.agent_id} retrying code execution"
                     )
@@ -200,8 +202,8 @@ Return ONLY executable Python code. No explanations or markdown."""
 
         except subprocess.TimeoutExpired:
             error_msg = (
-                "Execution timeout (30s exceeded) - Code may contain "
-                "infinite loops or blocking operations"
+                f"Execution timeout ({self.agent_config['timeout']}s exceeded) - "
+                "Code may contain infinite loops or blocking operations"
             )
             self.logger.error(f"Agent {self.agent_id} {error_msg}")
             return {

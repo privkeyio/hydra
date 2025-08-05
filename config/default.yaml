@@ -1,22 +1,24 @@
 # Hydra Configuration File
 
+# LLM Provider Configuration
+llm:
+  # Provider type: venice, anthropic, openai, claude_cli
+  provider: venice
+  
+  # Model name (optional - uses provider default if not specified)
+  # model: qwen-2.5-coder-32b
+  
+  # Generation parameters
+  temperature: 0.2
+  max_tokens: 2048
+  timeout: 30
+
 # Agent Configuration
 agent:
   max_depth: 2
   timeout: 30
   retry_attempts: 2
   default_name: "boss"
-
-# Model Configuration
-models:
-  primary:
-    provider: "anthropic"
-    model: "claude-3-5-sonnet-20241022"
-    max_tokens: 2048
-  fallback:
-    provider: "venice"
-    base_url: "https://api.venice.ai/api/v1"
-    model: "deepseek-coder-v2"
 
 # Logging Configuration
 logging:
@@ -37,8 +39,3 @@ execution:
     - "collections"
     - "itertools"
     - "functools"
-
-# Venice API Configuration (if enabled)
-venice:
-  enabled: false
-  api_key_env: "VENICE_API_KEY"

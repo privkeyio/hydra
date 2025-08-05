@@ -1,0 +1,105 @@
+"""
+OpenAI provider implementation.
+"""
+import json
+from typing import Dict, Any, List
+from openai import OpenAI
+from .base import LLMProvider, LLMConfig
+
+
+class OpenAIProvider(LLMProvider):
+    """OpenAI GPT provider."""
+    
+    def validate_config(self):
+        """Validate OpenAI-specific configuration."""
+        if not self.config.api_key:
+            raise ValueError("OpenAI provider requires api_key")
+        
+        # Default to GPT-4 if not specified
+        if not self.config.model:
+            self.config.model = "gpt-4-turbo-preview"
+    
+    def __init__(self, config: LLMConfig):
+        super().__init__(config)
+        self.client = OpenAI(
+            api_key=self.config.api_key,
+            base_url=self.config.base_url  # Allow custom endpoints
+        )
+    
+    @property
+    def name(self) -> str:
+        return "openai"
+    
+    def generate(self, prompt: str, **kwargs) -> str:
+        """Generate a response from OpenAI."""
+        try:
+            # Merge kwargs with config
+            temperature = kwargs.get('temperature', self.config.temperature)
+            max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+            
+            # Add system message for better code generation
+            messages = [
+                {"role": "system", "content": "You are an expert Python programmer. Always respond with clean, well-structured code."},
+                {"role": "user", "content": prompt}
+            ]
+            
+            response = self.client.chat.completions.create(
+                model=self.config.model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **self.config.extra_params
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            raise Exception(f"OpenAI API error: {str(e)}")
+    
+    def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
+        """Generate a JSON response from OpenAI."""
+        # Use response_format for better JSON generation
+        try:
+            response = self.client.chat.completions.create(
+                model=self.config.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that responds in JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=kwargs.get('max_tokens', self.config.max_tokens),
+                temperature=kwargs.get('temperature', self.config.temperature),
+                **self.config.extra_params
+            )
+            
+            return json.loads(response.choices[0].message.content)
+            
+        except Exception as e:
+            # Fallback to regular generation
+            json_prompt = f"{prompt}\n\nRespond with ONLY valid JSON."
+            response = self.generate(json_prompt, **kwargs)
+            
+            try:
+                return json.loads(response.strip())
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Failed to parse JSON response: {e}")
+    
+    def list_models(self) -> List[str]:
+        """List available OpenAI models."""
+        try:
+            models = self.client.models.list()
+            # Filter for chat models
+            return [
+                model.id for model in models.data 
+                if 'gpt' in model.id.lower() or 'o1' in model.id.lower()
+            ]
+        except Exception:
+            # Return known models if API call fails
+            return [
+                "gpt-4-turbo-preview",
+                "gpt-4-turbo",
+                "gpt-4",
+                "gpt-3.5-turbo",
+                "o1-preview",
+                "o1-mini"
+            ]

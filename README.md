@@ -11,7 +11,8 @@ Hydra is a production-grade hierarchical AI agent system designed for autonomous
 
 - 🤖 **Hierarchical Agent Architecture**: Multi-level agent spawning with parent-child relationships
 - 🧠 **Intelligent Task Decomposition**: Automatic breaking down of complex tasks into manageable subtasks
-- 💻 **Autonomous Code Generation**: AI-powered code creation using Claude/Anthropic models
+- 💻 **Autonomous Code Generation**: AI-powered code creation with multiple LLM providers
+- 🔄 **Provider Flexibility**: Switch between Venice, Anthropic, OpenAI, or Claude CLI
 - 🔒 **Sandboxed Execution**: Safe code execution in isolated subprocess environments
 - 📊 **Comprehensive Logging**: Detailed activity tracking with automatic log rotation
 - 🔄 **Retry Logic**: Automatic retry on failures with configurable attempts
@@ -24,7 +25,7 @@ Hydra is a production-grade hierarchical AI agent system designed for autonomous
 
 - Python 3.11 or higher
 - Virtual environment (recommended)
-- Anthropic API key
+- API key for your chosen LLM provider (Venice, Anthropic, OpenAI, or Claude CLI)
 
 ### Installation
 
@@ -42,7 +43,8 @@ cd hydra
 3. **Configure your API keys:**
 ```bash
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env and add your chosen provider's API key
+# Example: VENICE_API_KEY=your_key_here
 ```
 
 4. **Verify installation:**
@@ -161,8 +163,16 @@ The project uses:
 Create a `.env` file in the project root:
 
 ```env
-ANTHROPIC_API_KEY=your_api_key_here
-USE_VENICE=false
+# LLM Provider Configuration
+LLM_PROVIDER=venice  # Options: venice, anthropic, openai, claude_cli
+LLM_MODEL=qwen-2.5-coder-32b  # Optional: Override default model
+
+# Provider API Keys (add the one for your chosen provider)
+VENICE_API_KEY=your_venice_key_here
+# ANTHROPIC_API_KEY=your_anthropic_key_here
+# OPENAI_API_KEY=your_openai_key_here
+
+# Other Settings
 ENVIRONMENT=development
 LOG_LEVEL=INFO
 ```
@@ -172,15 +182,18 @@ LOG_LEVEL=INFO
 Edit `config/default.yaml` for system-wide settings:
 
 ```yaml
+# LLM Provider Configuration
+llm:
+  provider: venice  # Options: venice, anthropic, openai, claude_cli
+  model: qwen-2.5-coder-32b  # Optional: uses provider default if not set
+  temperature: 0.2
+  max_tokens: 2048
+
+# Agent Configuration
 agent:
   max_depth: 2
   timeout: 30
   retry_attempts: 2
-
-models:
-  primary:
-    provider: "anthropic"
-    model: "claude-3-5-sonnet-20241022"
 ```
 
 ## Architecture

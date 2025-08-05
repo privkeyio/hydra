@@ -27,7 +27,7 @@ Hydra is a hierarchical multi-agent system designed for autonomous code generati
 │                          │                                 │
 │                    ┌─────▼─────┐                          │
 │                    │    LLM    │                          │
-│                    │ (Claude)  │                          │
+│                    │ Provider  │                          │
 │                    └───────────┘                          │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -60,10 +60,17 @@ Hydra is a hierarchical multi-agent system designed for autonomous code generati
   - `execute_code()`: Sandboxed execution
   - `create_employee()`: Spawn child agents
 
-### 4. Utilities (`src/hydra/utils/`)
-- **Venice Client**: Fallback LLM integration
-- **Config Management**: API keys and settings
-- **Logging**: Hierarchical activity tracking
+### 4. LLM Provider System (`src/hydra/providers/`)
+- **Base Provider**: Abstract interface for all LLM providers
+- **Provider Factory**: Dynamic provider instantiation
+- **Implementations**: Venice, Anthropic, OpenAI, Claude CLI
+- **Auto-registration**: Automatic provider discovery
+
+### 5. Configuration System (`src/hydra/config.py`)
+- **Provider Selection**: Runtime provider switching
+- **Environment Override**: ENV vars override YAML config
+- **API Key Management**: Provider-specific credentials
+- **Parameter Configuration**: Temperature, tokens, timeouts
 
 ## Data Flow
 
@@ -125,6 +132,54 @@ WorkflowState = {
     'subtasks': list,      # Decomposed tasks
     'plan': str           # Execution plan
 }
+```
+
+## LLM Provider Architecture
+
+### Provider Class Hierarchy
+```
+LLMProvider (Abstract Base)
+├── Properties
+│   ├── config: LLMConfig
+│   ├── name: str (abstract)
+│   └── model: str
+├── Abstract Methods
+│   ├── validate_config()
+│   ├── generate(prompt) -> str
+│   ├── generate_json(prompt) -> Dict
+│   └── list_models() -> List[str]
+└── Implementations
+    ├── VeniceProvider
+    ├── AnthropicProvider
+    ├── OpenAIProvider
+    └── ClaudeCLIProvider
+```
+
+### Provider Factory Pattern
+```python
+# Auto-registration on import
+providers/
+├── __init__.py      # Imports all providers
+├── base.py          # Abstract base class
+├── factory.py       # Factory with registry
+├── venice.py        # Venice implementation
+├── anthropic.py     # Anthropic implementation
+├── openai.py        # OpenAI implementation
+└── claude_cli.py    # Claude CLI wrapper
+```
+
+### Provider Configuration Flow
+```
+1. Environment Variables
+   └── Override config values
+2. YAML Configuration
+   └── Default provider settings
+3. Provider Factory
+   └── Create provider instance
+4. Validation
+   └── Check API keys, settings
+5. Agent Integration
+   └── Use provider for generation
 ```
 
 ## Technical Design
@@ -208,9 +263,11 @@ subprocess.run(
 ### API Key Management
 ```
 .env (git-ignored)
+├── LLM_PROVIDER (venice|anthropic|openai|claude_cli)
+├── VENICE_API_KEY
 ├── ANTHROPIC_API_KEY
-├── VENICE_API_KEY (optional)
-└── USE_VENICE flag
+├── OPENAI_API_KEY
+└── CLAUDE_CLI_PATH
 ```
 
 ## Deployment Architecture
@@ -253,10 +310,12 @@ logs/
 ## Extension Points
 
 ### Adding New LLM Providers
-1. Create new client in `utils/`
-2. Update config system
-3. Add to fallback chain
-4. Update tests
+1. Create new provider class inheriting from `LLMProvider`
+2. Implement required methods: `validate_config()`, `generate()`, `generate_json()`, `list_models()`, `name`
+3. Place in `src/hydra/providers/` directory
+4. Auto-registration will detect it automatically
+5. Add provider-specific config handling in `HydraConfig._create_llm_provider()`
+6. Update `.env.example` with new provider settings
 
 ### Custom Workflow Nodes
 1. Define node function

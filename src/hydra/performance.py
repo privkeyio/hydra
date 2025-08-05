@@ -39,7 +39,9 @@ class ConnectionPoolManager:
     async def get_database_pool(self, database_url: Optional[str] = None):
         if "database" not in self._pools:
             config = self._pool_configs["database"]
-            url = database_url or os.getenv("DATABASE_URL", "postgresql+asyncpg://hydra:hydra@localhost/hydra")
+            url = database_url or os.getenv(
+                "DATABASE_URL", "postgresql+asyncpg://hydra:hydra@localhost/hydra"
+            )
 
             self._pools["database"] = create_async_engine(
                 url,

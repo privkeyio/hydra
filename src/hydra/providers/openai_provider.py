@@ -1,5 +1,4 @@
-"""OpenAI provider implementation.
-"""
+"""OpenAI provider implementation."""
 import json
 from typing import Any, Dict, List
 
@@ -40,7 +39,13 @@ class OpenAIProvider(LLMProvider):
 
             # Add system message for better code generation
             messages = [
-                {"role": "system", "content": "You are an expert Python programmer. Always respond with clean, well-structured code."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert Python programmer. "
+                        "Always respond with clean, well-structured code."
+                    )
+                },
                 {"role": "user", "content": prompt}
             ]
 
@@ -55,7 +60,7 @@ class OpenAIProvider(LLMProvider):
             return response.choices[0].message.content
 
         except Exception as e:
-            raise Exception(f"OpenAI API error: {str(e)}")
+            raise Exception(f"OpenAI API error: {str(e)}") from e
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from OpenAI."""
@@ -64,7 +69,10 @@ class OpenAIProvider(LLMProvider):
             response = self.client.chat.completions.create(
                 model=self.config.model,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that responds in JSON."},
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that responds in JSON."
+                    },
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"},
@@ -83,7 +91,7 @@ class OpenAIProvider(LLMProvider):
             try:
                 return json.loads(response.strip())
             except json.JSONDecodeError as e:
-                raise ValueError(f"Failed to parse JSON response: {e}")
+                raise ValueError(f"Failed to parse JSON response: {e}") from e
 
     def list_models(self) -> List[str]:
         """List available OpenAI models."""

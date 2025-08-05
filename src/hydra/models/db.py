@@ -97,7 +97,12 @@ Index("ix_api_keys_tenant", APIKey.tenant_id)
 Index("ix_usage_task_id", Usage.task_id)
 Index("ix_usage_model_provider", Usage.model, Usage.provider)
 Index("ix_tasks_tenant_created", Task.tenant_id, Task.created_at.desc())
-Index("ix_usage_cost_timestamp", Usage.cost, Usage.timestamp, postgresql_where=Usage.cost.isnot(None))
+Index(
+    "ix_usage_cost_timestamp",
+    Usage.cost,
+    Usage.timestamp,
+    postgresql_where=Usage.cost.isnot(None)
+)
 Index("ix_api_keys_active", APIKey.is_active, APIKey.key)
 
 

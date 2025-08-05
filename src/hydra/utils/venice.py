@@ -5,6 +5,7 @@ from openai import OpenAI
 
 def venice_call(prompt):
     """Make a call to Venice API using OpenAI-compatible interface.
+
     Venice API is compatible with OpenAI's client library.
     """
     api_key = os.getenv("VENICE_API_KEY")
@@ -25,7 +26,13 @@ def venice_call(prompt):
         response = client.chat.completions.create(
             model="qwen-2.5-coder-32b",  # Venice's coding-optimized model
             messages=[
-                {"role": "system", "content": "You are an expert Python programmer. Always respond with clean, well-structured code."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert Python programmer. "
+                        "Always respond with clean, well-structured code."
+                    )
+                },
                 {"role": "user", "content": prompt}
             ],
             max_tokens=2048,
@@ -34,4 +41,4 @@ def venice_call(prompt):
 
         return response.choices[0].message.content
     except Exception as e:
-        raise Exception(f"Venice API error: {str(e)}")
+        raise Exception(f"Venice API error: {str(e)}") from e

@@ -103,7 +103,9 @@ class HydraMonitoring:
         self.logger = StructuredLogger(__name__)
 
     def instrument_fastapi(self, app):
-        FastAPIInstrumentor.instrument_app(app, tracer_provider=trace.get_tracer_provider())
+        FastAPIInstrumentor.instrument_app(
+            app, tracer_provider=trace.get_tracer_provider()
+        )
 
     def instrument_sqlalchemy(self, engine):
         SQLAlchemyInstrumentor().instrument(engine=engine)
@@ -139,7 +141,9 @@ class HydraMonitoring:
             return async_wrapper if hasattr(func, '__await__') else sync_wrapper
         return decorator
 
-    def record_request(self, method: str, endpoint: str, status_code: int, duration: float):
+    def record_request(
+        self, method: str, endpoint: str, status_code: int, duration: float
+    ):
         labels = {
             "method": method,
             "endpoint": endpoint,

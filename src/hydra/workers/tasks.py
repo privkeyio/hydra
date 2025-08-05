@@ -80,7 +80,7 @@ def generate_code(
             meta={"task_id": task_id, "error": str(exc)}
         )
         send_progress_update(task_id, -1, f"Failed: {str(exc)}")
-        raise Reject(str(exc), requeue=False)
+        raise Reject(str(exc), requeue=False) from exc
 
 
 @app.task(bind=True, base=HydraTask, name="hydra.workers.tasks.generate_code_priority")
@@ -149,10 +149,12 @@ def execute_workflow(
             meta={"task_id": task_id, "error": str(exc)}
         )
         send_progress_update(task_id, -1, f"Failed: {str(exc)}")
-        raise Reject(str(exc), requeue=False)
+        raise Reject(str(exc), requeue=False) from exc
 
 
-@app.task(bind=True, base=HydraTask, name="hydra.workers.tasks.execute_workflow_priority")
+@app.task(
+    bind=True, base=HydraTask, name="hydra.workers.tasks.execute_workflow_priority"
+)
 def execute_workflow_priority(
     self,
     task: str,
@@ -206,7 +208,7 @@ def generate_code_tenant(
 
     try:
         # Route to tenant-specific queue
-        queue_name = get_tenant_queue_name(tenant_id, is_priority)
+        get_tenant_queue_name(tenant_id, is_priority)
         register_tenant_queue(tenant_id, is_priority)
 
         current_task.update_state(
@@ -231,7 +233,9 @@ def generate_code_tenant(
         )
 
         # Update tenant usage
-        update_tenant_usage(tenant_id, tokens=max_tokens, task_id=task_id, completed=True)
+        update_tenant_usage(
+            tenant_id, tokens=max_tokens, task_id=task_id, completed=True
+        )
 
         current_task.update_state(
             state="PROGRESS",
@@ -253,7 +257,7 @@ def generate_code_tenant(
             meta={"task_id": task_id, "tenant_id": tenant_id, "error": str(exc)}
         )
         send_progress_update(task_id, -1, f"Failed: {str(exc)}")
-        raise Reject(str(exc), requeue=False)
+        raise Reject(str(exc), requeue=False) from exc
 
 
 @app.task(bind=True, base=HydraTask, name="hydra.workers.tasks.execute_workflow_tenant")
@@ -279,7 +283,7 @@ def execute_workflow_tenant(
 
     try:
         # Route to tenant-specific queue
-        queue_name = get_tenant_queue_name(tenant_id, is_priority)
+        get_tenant_queue_name(tenant_id, is_priority)
         register_tenant_queue(tenant_id, is_priority)
 
         current_task.update_state(
@@ -304,7 +308,9 @@ def execute_workflow_tenant(
         )
 
         # Update tenant usage with actual tokens
-        update_tenant_usage(tenant_id, tokens=estimated_tokens, task_id=task_id, completed=True)
+        update_tenant_usage(
+            tenant_id, tokens=estimated_tokens, task_id=task_id, completed=True
+        )
 
         current_task.update_state(
             state="PROGRESS",
@@ -326,4 +332,4 @@ def execute_workflow_tenant(
             meta={"task_id": task_id, "tenant_id": tenant_id, "error": str(exc)}
         )
         send_progress_update(task_id, -1, f"Failed: {str(exc)}")
-        raise Reject(str(exc), requeue=False)
+        raise Reject(str(exc), requeue=False) from exc

@@ -1,5 +1,4 @@
-"""LLM Providers module for Hydra.
-"""
+"""LLM Providers module for Hydra."""
 from .anthropic import AnthropicProvider
 from .base import LLMConfig, LLMProvider
 from .claude_cli import ClaudeCLIProvider

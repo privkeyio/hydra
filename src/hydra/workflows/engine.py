@@ -26,7 +26,9 @@ def plan_node(state: WorkflowState) -> WorkflowState:
         reasoning = agent.reason(state["task"])
         state["plan"] = reasoning.get("plan", "")
         state["subtasks"] = reasoning.get("subtasks", [])
-        logger.info(f"Agent {agent.name} created plan with {len(state['subtasks'])} subtasks")
+        logger.info(
+            f"Agent {agent.name} created plan with {len(state['subtasks'])} subtasks"
+        )
     except RecursionError as e:
         logger.warning(f"Depth limit reached: {e}")
         state["subtasks"] = []
@@ -68,7 +70,9 @@ print(result)
                     "error": exec_result["stderr"],
                     "task": subtask
                 }
-                logger.error(f"Failed to spawn {employee_name}: {exec_result['stderr']}")
+                logger.error(
+                    f"Failed to spawn {employee_name}: {exec_result['stderr']}"
+                )
         except Exception as e:
             state["results"][employee_name] = {
                 "error": str(e),
@@ -123,7 +127,9 @@ def create_workflow():
     return workflow.compile()
 
 
-def execute_workflow(task: str, agent_name: str = "boss", depth: int = 0) -> Dict[str, Any]:
+def execute_workflow(
+    task: str, agent_name: str = "boss", depth: int = 0
+) -> Dict[str, Any]:
     workflow = create_workflow()
 
     initial_state = WorkflowState(

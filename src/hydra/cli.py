@@ -48,7 +48,8 @@ def format_results(results: Dict[str, Any], indent: int = 0) -> str:
     return "\n".join(output)
 
 
-def main():
+def create_parser():
+    """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
         description="Hydra: Multi-agent code generation system",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -81,12 +82,15 @@ def main():
         help="Output results as JSON"
     )
 
-    args = parser.parse_args()
+    return parser
 
+
+def get_task_input(args, parser):
+    """Get task input from arguments or stdin."""
     if args.task is None:
         if sys.stdin.isatty():
             parser.print_help()
-            return 1
+            return None, 1
         else:
             task = sys.stdin.read().strip()
     else:
@@ -94,7 +98,40 @@ def main():
 
     if not task:
         print("Error: No task provided", file=sys.stderr)
-        return 1
+        return None, 1
+
+    return task, 0
+
+
+def print_results(results, json_output):
+    """Print execution results in the specified format."""
+    if json_output:
+        print(json.dumps(results, indent=2))
+    else:
+        print("\nPlan:", results.get("plan", "No plan generated"))
+
+        if results.get("subtasks"):
+            print(f"\nSubtasks ({len(results['subtasks'])}):")
+            for i, subtask in enumerate(results["subtasks"], 1):
+                print(f"  {i}. {subtask}")
+
+        if results.get("results"):
+            print("\nExecution Results:")
+            print(format_results(results["results"]))
+
+        agents = results.get("agents", [])
+        if agents:
+            print(f"\nAgents created: {', '.join(agents)}")
+
+
+def main():
+    """Execute the main CLI entry point."""
+    parser = create_parser()
+    args = parser.parse_args()
+
+    task, exit_code = get_task_input(args, parser)
+    if task is None:
+        return exit_code
 
     print(f"Executing task: {task}")
     print(f"Agent: {args.agent_name}, Starting depth: {args.depth}")
@@ -107,24 +144,7 @@ def main():
             print(f"\nExecution failed: {results['error']}", file=sys.stderr)
             return 1
 
-        if args.json:
-            print(json.dumps(results, indent=2))
-        else:
-            print("\nPlan:", results.get("plan", "No plan generated"))
-
-            if results.get("subtasks"):
-                print(f"\nSubtasks ({len(results['subtasks'])}):")
-                for i, subtask in enumerate(results["subtasks"], 1):
-                    print(f"  {i}. {subtask}")
-
-            if results.get("results"):
-                print("\nExecution Results:")
-                print(format_results(results["results"]))
-
-            agents = results.get("agents", [])
-            if agents:
-                print(f"\nAgents created: {', '.join(agents)}")
-
+        print_results(results, args.json)
         return 0
 
     except KeyboardInterrupt:

@@ -1,5 +1,4 @@
-"""Configuration management for Hydra system.
-"""
+"""Configuration management for Hydra system."""
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -86,7 +85,9 @@ class HydraConfig:
             self.config['agent']['max_depth'] = int(os.getenv('AGENT_MAX_DEPTH'))
 
         if os.getenv('AGENT_RETRY_ATTEMPTS'):
-            self.config['agent']['retry_attempts'] = int(os.getenv('AGENT_RETRY_ATTEMPTS'))
+            self.config['agent']['retry_attempts'] = int(
+                os.getenv('AGENT_RETRY_ATTEMPTS')
+            )
 
     def _create_llm_provider(self):
         """Create the LLM provider based on configuration."""
@@ -106,7 +107,9 @@ class HydraConfig:
         # Add provider-specific configuration
         if provider_type == 'venice':
             config.api_key = os.getenv('VENICE_API_KEY')
-            config.base_url = os.getenv('VENICE_BASE_URL', 'https://api.venice.ai/api/v1')
+            config.base_url = os.getenv(
+                'VENICE_BASE_URL', 'https://api.venice.ai/api/v1'
+            )
 
         elif provider_type == 'anthropic':
             config.api_key = os.getenv('ANTHROPIC_API_KEY')

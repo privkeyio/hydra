@@ -1,5 +1,4 @@
-"""Anthropic Claude provider implementation.
-"""
+"""Anthropic Claude provider implementation."""
 import json
 from typing import Any, Dict, List
 
@@ -46,12 +45,14 @@ class AnthropicProvider(LLMProvider):
             return response.content[0].text
 
         except Exception as e:
-            raise Exception(f"Anthropic API error: {str(e)}")
+            raise Exception(f"Anthropic API error: {str(e)}") from e
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from Claude."""
         # Add JSON instruction to prompt
-        json_prompt = f"{prompt}\n\nRespond with ONLY valid JSON, no other text or formatting."
+        json_prompt = (
+            f"{prompt}\n\nRespond with ONLY valid JSON, no other text or formatting."
+        )
 
         response = self.generate(json_prompt, **kwargs)
 
@@ -68,7 +69,9 @@ class AnthropicProvider(LLMProvider):
 
             return json.loads(response.strip())
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON response: {e}\nResponse: {response}")
+            raise ValueError(
+                f"Failed to parse JSON response: {e}\nResponse: {response}"
+            ) from e
 
     def list_models(self) -> List[str]:
         """List available Anthropic models."""

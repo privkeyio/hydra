@@ -1,5 +1,4 @@
-"""Venice AI provider implementation.
-"""
+"""Venice AI provider implementation."""
 import asyncio
 import json
 from typing import Any, Dict, List
@@ -49,7 +48,13 @@ class VeniceProvider(LLMProvider):
 
             # Add system message for better code generation
             messages = [
-                {"role": "system", "content": "You are an expert Python programmer. Always respond with clean, well-structured code."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert Python programmer. "
+                        "Always respond with clean, well-structured code."
+                    )
+                },
                 {"role": "user", "content": prompt}
             ]
 
@@ -64,12 +69,14 @@ class VeniceProvider(LLMProvider):
             return response.choices[0].message.content
 
         except Exception as e:
-            raise Exception(f"Venice API error: {str(e)}")
+            raise Exception(f"Venice API error: {str(e)}") from e
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from Venice AI."""
         # Add JSON instruction to prompt
-        json_prompt = f"{prompt}\n\nIMPORTANT: Respond with ONLY valid JSON, no other text."
+        json_prompt = (
+            f"{prompt}\n\nIMPORTANT: Respond with ONLY valid JSON, no other text."
+        )
 
         response = self.generate(json_prompt, **kwargs)
 
@@ -92,10 +99,12 @@ class VeniceProvider(LLMProvider):
             if json_match:
                 try:
                     return json.loads(json_match.group())
-                except:
+                except json.JSONDecodeError:
                     pass
 
-            raise ValueError(f"Failed to parse JSON response: {e}\nResponse: {response}")
+            raise ValueError(
+                f"Failed to parse JSON response: {e}\nResponse: {response}"
+            ) from e
 
     def list_models(self) -> List[str]:
         """List available Venice models."""
@@ -120,7 +129,13 @@ class VeniceProvider(LLMProvider):
             max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
 
             messages = [
-                {"role": "system", "content": "You are an expert Python programmer. Always respond with clean, well-structured code."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert Python programmer. "
+                        "Always respond with clean, well-structured code."
+                    )
+                },
                 {"role": "user", "content": prompt}
             ]
 
@@ -135,7 +150,7 @@ class VeniceProvider(LLMProvider):
             return response.choices[0].message.content
 
         except Exception as e:
-            raise Exception(f"Venice async API error: {str(e)}")
+            raise Exception(f"Venice async API error: {str(e)}") from e
 
     async def generate_batch_async(self, prompts: List[str], **kwargs) -> List[str]:
         """Generate responses for multiple prompts in batch."""

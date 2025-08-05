@@ -42,7 +42,7 @@ async def handle_client(websocket, path: str):
             task_id = data["task_id"]
             await register_client(websocket, task_id)
 
-            async for message in websocket:
+            async for _message in websocket:
                 pass
 
     except websockets.exceptions.ConnectionClosed:

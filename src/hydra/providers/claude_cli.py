@@ -1,5 +1,4 @@
-"""Claude CLI provider implementation.
-"""
+"""Claude CLI provider implementation."""
 import json
 import os
 import subprocess
@@ -30,7 +29,7 @@ class ClaudeCLIProvider(LLMProvider):
             raise ValueError(
                 "Claude CLI not accessible. Please set 'claude_path' in extra_params "
                 "or ensure 'claude' is in your PATH"
-            )
+            ) from None
 
         self.claude_path = claude_path
 
@@ -63,10 +62,10 @@ class ClaudeCLIProvider(LLMProvider):
             else:
                 raise Exception(f"Claude CLI error: {result.stderr}")
 
-        except subprocess.TimeoutExpired:
-            raise Exception(f"Claude CLI timeout after {self.config.timeout}s")
+        except subprocess.TimeoutExpired as e:
+            raise Exception(f"Claude CLI timeout after {self.config.timeout}s") from e
         except Exception as e:
-            raise Exception(f"Claude CLI error: {str(e)}")
+            raise Exception(f"Claude CLI error: {str(e)}") from e
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from Claude CLI."""
@@ -94,10 +93,10 @@ class ClaudeCLIProvider(LLMProvider):
             if json_match:
                 try:
                     return json.loads(json_match.group())
-                except:
+                except json.JSONDecodeError:
                     pass
 
-            raise ValueError(f"Failed to parse JSON response: {e}")
+            raise ValueError(f"Failed to parse JSON response: {e}") from e
 
     def list_models(self) -> List[str]:
         """List available models (CLI doesn't support multiple models)."""

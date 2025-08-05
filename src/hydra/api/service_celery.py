@@ -170,7 +170,9 @@ async def execute_workflow_endpoint(
 
 
 @app.get("/status/{task_id}", response_model=StatusResponse)
-async def get_task_status_endpoint(task_id: str, api_key_info: tuple = Depends(get_current_api_key)):
+async def get_task_status_endpoint(
+    task_id: str, api_key_info: tuple = Depends(get_current_api_key)
+):
     """Get the status of a specific task."""
     result = AsyncResult(task_id, app=celery_app)
 

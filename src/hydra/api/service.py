@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from io import StringIO
-from typing import Any, Dict, List, Optional, Set
+from typing import Annotated, Any, Dict, List, Optional, Set
 
 from fastapi import (
     BackgroundTasks,
@@ -97,10 +97,12 @@ class HealthResponse(BaseModel):
 
 
 class CacheInvalidateRequest(BaseModel):
-    cache_type: str = Field(...,
-                            description="Cache type: 'code', 'task', 'api', or 'all'")
-    key: Optional[str] = Field(None,
-                               description="Specific key to invalidate (optional)")
+    cache_type: str = Field(
+        ..., description="Cache type: 'code', 'task', 'api', or 'all'"
+    )
+    key: Optional[str] = Field(
+        None, description="Specific key to invalidate (optional)"
+    )
 
 
 class CacheInvalidateResponse(BaseModel):
@@ -331,8 +333,8 @@ async def process_workflow_task(task_id: str, request: WorkflowRequest, api_key:
 async def generate_code(
     request: GenerateRequest,
     background_tasks: BackgroundTasks,
-    api_key_info: tuple = Depends(get_current_api_key),
-    tenant: Tenant = Depends(get_current_tenant),
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    tenant: Annotated[Tenant, Depends(get_current_tenant)],
     req: Request = None
 ):
     """Generate code using a single agent."""
@@ -351,7 +353,9 @@ async def generate_code(
     task_id = str(uuid.uuid4())
 
     # Check tenant quota
-    if not check_tenant_quota(tenant.id, tokens=request.max_tokens, task_id=task_id):
+    if not check_tenant_quota(
+        tenant.id, tokens=request.max_tokens, task_id=task_id
+    ):
         raise HTTPException(
             status_code=429,
             detail="Tenant quota exceeded"
@@ -372,7 +376,7 @@ async def generate_code(
     )
 
     # Queue tenant-specific task
-    result = generate_code_tenant.apply_async(
+    generate_code_tenant.apply_async(
         args=[request.prompt, tenant.id],
         kwargs={
             "language": request.language,
@@ -393,8 +397,8 @@ async def generate_code(
 @app.post("/generate/stream")
 async def generate_code_streaming(
     request: GenerateRequest,
-    api_key_info: tuple = Depends(get_current_api_key),
-    tenant: Tenant = Depends(get_current_tenant),
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    tenant: Annotated[Tenant, Depends(get_current_tenant)],
     req: Request = None
 ):
     """Generate code with streaming response."""
@@ -407,7 +411,9 @@ async def generate_code_streaming(
     task_id = str(uuid.uuid4())
 
     # Check tenant quota
-    if not check_tenant_quota(tenant.id, tokens=request.max_tokens, task_id=task_id):
+    if not check_tenant_quota(
+        tenant.id, tokens=request.max_tokens, task_id=task_id
+    ):
         raise HTTPException(status_code=429, detail="Tenant quota exceeded")
 
     config = get_config()
@@ -444,8 +450,8 @@ async def generate_code_streaming(
 async def execute_workflow_endpoint(
     request: WorkflowRequest,
     background_tasks: BackgroundTasks,
-    api_key_info: tuple = Depends(get_current_api_key),
-    tenant: Tenant = Depends(get_current_tenant),
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    tenant: Annotated[Tenant, Depends(get_current_tenant)],
     req: Request = None
 ):
     """Execute a multi-agent workflow."""
@@ -467,7 +473,9 @@ async def execute_workflow_endpoint(
     estimated_tokens = request.agents * request.max_iterations * 1000
 
     # Check tenant quota
-    if not check_tenant_quota(tenant.id, tokens=estimated_tokens, task_id=task_id):
+    if not check_tenant_quota(
+        tenant.id, tokens=estimated_tokens, task_id=task_id
+    ):
         raise HTTPException(
             status_code=429,
             detail="Tenant quota exceeded"
@@ -488,7 +496,7 @@ async def execute_workflow_endpoint(
     )
 
     # Queue tenant-specific task
-    result = execute_workflow_tenant.apply_async(
+    execute_workflow_tenant.apply_async(
         args=[request.task, tenant.id],
         kwargs={
             "num_agents": request.agents,
@@ -507,8 +515,9 @@ async def execute_workflow_endpoint(
 
 
 @app.get("/status/{task_id}", response_model=StatusResponse)
-async def get_task_status(task_id: str,
-                          api_key_info: tuple = Depends(get_current_api_key)):
+async def get_task_status(
+    task_id: str, api_key_info: Annotated[tuple, Depends(get_current_api_key)]
+):
     """Get the status of a specific task."""
     if task_id not in tasks_store:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -555,7 +564,7 @@ async def health_check():
 @app.post("/cache/invalidate", response_model=CacheInvalidateResponse)
 async def invalidate_cache(
     request: CacheInvalidateRequest,
-    api_key_info: tuple = Depends(get_current_api_key)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)]
 ):
     """Invalidate cache entries."""
     cache = get_cache()
@@ -605,7 +614,7 @@ async def invalidate_cache(
 
 
 @app.get("/cache/stats", response_model=CacheStatsResponse)
-async def get_cache_stats(api_key_info: tuple = Depends(get_current_api_key)):
+async def get_cache_stats(api_key_info: Annotated[tuple, Depends(get_current_api_key)]):
     """Get cache statistics."""
     cache = get_cache()
     stats = cache.get_cache_stats()
@@ -631,7 +640,7 @@ class SignatureResponse(BaseModel):
 @app.post("/security/sign", response_model=SignatureResponse)
 async def generate_signature(
     request: SignatureRequest,
-    api_key_info: tuple = Depends(get_current_api_key)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)]
 ):
     """Generate HMAC signature for API requests."""
     signature = request_signer.sign_request(
@@ -666,7 +675,7 @@ class AuditLogQuery(BaseModel):
 @app.post("/security/audit-logs")
 async def query_audit_logs(
     query: AuditLogQuery,
-    api_key_info: tuple = Depends(get_current_api_key)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)]
 ):
     """Query audit logs (admin only)."""
     # Check if user has admin privileges
@@ -686,8 +695,8 @@ async def query_audit_logs(
 
 @app.get("/admin/metrics/realtime")
 async def get_realtime_metrics(
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Get real-time metrics for admin dashboard."""
     if not api_key_info[1]:
@@ -726,9 +735,9 @@ async def get_realtime_metrics(
 async def get_usage_metrics(
     start: str,
     end: str,
-    api_key: Optional[str] = None,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)],
+    api_key: Optional[str] = None
 ):
     """Get usage metrics with date filtering."""
     if not api_key_info[1]:
@@ -758,8 +767,8 @@ async def get_usage_metrics(
 
 @app.get("/admin/tasks/queue")
 async def get_task_queue(
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Get current task queue status."""
     if not api_key_info[1]:
@@ -784,8 +793,8 @@ async def get_task_queue(
 
 @app.get("/admin/api-keys")
 async def list_api_keys(
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """List all API keys."""
     if not api_key_info[1]:
@@ -807,8 +816,8 @@ async def list_api_keys(
 @app.post("/admin/api-keys")
 async def create_api_key(
     data: dict,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Create new API key."""
     if not api_key_info[1]:
@@ -851,8 +860,8 @@ async def create_api_key(
 async def update_api_key(
     key: str,
     data: dict,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Update API key."""
     if not api_key_info[1]:
@@ -885,8 +894,8 @@ async def update_api_key(
 @app.delete("/admin/api-keys/{key}")
 async def delete_api_key(
     key: str,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Delete API key."""
     if not api_key_info[1]:
@@ -914,8 +923,8 @@ async def delete_api_key(
 async def export_usage_data(
     start: str,
     end: str,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Export usage data as CSV."""
     if not api_key_info[1]:
@@ -949,7 +958,9 @@ async def export_usage_data(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={
-            "Content-Disposition": f"attachment; filename=usage_{start}_to_{end}.csv"
+            "Content-Disposition": (
+                f"attachment; filename=usage_{start}_to_{end}.csv"
+            )
         }
     )
 
@@ -1024,10 +1035,10 @@ async def admin_websocket_endpoint(websocket: WebSocket):
 
 @app.get("/billing/usage", response_model=List[Dict])
 async def get_usage_history(
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)],
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    end_date: Optional[str] = None
 ):
     """Get usage history for the current API key."""
     billing_service = get_billing_service()
@@ -1046,8 +1057,8 @@ async def get_usage_history(
 async def get_monthly_report(
     year: int,
     month: int,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Get monthly usage report for the current API key."""
     billing_service = get_billing_service()
@@ -1059,9 +1070,9 @@ async def get_monthly_report(
 
 @app.get("/billing/limits", response_model=UsageLimitsResponse)
 async def get_usage_limits(
-    monthly_limit: Optional[float] = None,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)],
+    monthly_limit: Optional[float] = None
 ):
     """Check usage limits and get alerts."""
     from decimal import Decimal
@@ -1079,8 +1090,8 @@ async def export_usage_csv(
     api_key: str,
     year: int,
     month: int,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Export usage data as CSV for admin users."""
     if not api_key_info[1]:
@@ -1121,9 +1132,15 @@ async def export_usage_csv(
 class TenantRequest(BaseModel):
     id: str = Field(..., description="Unique tenant identifier")
     name: str = Field(..., description="Tenant name")
-    max_requests_per_minute: Optional[int] = Field(60, description="Max requests per minute")
-    max_tokens_per_month: Optional[int] = Field(1000000, description="Max tokens per month")
-    max_concurrent_tasks: Optional[int] = Field(10, description="Max concurrent tasks")
+    max_requests_per_minute: Optional[int] = Field(
+        60, description="Max requests per minute"
+    )
+    max_tokens_per_month: Optional[int] = Field(
+        1000000, description="Max tokens per month"
+    )
+    max_concurrent_tasks: Optional[int] = Field(
+        10, description="Max concurrent tasks"
+    )
 
 
 class TenantResponse(BaseModel):
@@ -1150,8 +1167,8 @@ class TenantUsageResponse(BaseModel):
 @app.post("/admin/tenants", response_model=TenantResponse)
 async def create_tenant(
     request: TenantRequest,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Create a new tenant (admin only)."""
     if not api_key_info[1]:
@@ -1195,8 +1212,8 @@ async def create_tenant(
 
 @app.get("/admin/tenants", response_model=List[TenantResponse])
 async def list_tenants(
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """List all tenants (admin only)."""
     if not api_key_info[1]:
@@ -1221,8 +1238,8 @@ async def list_tenants(
 @app.get("/admin/tenants/{tenant_id}", response_model=TenantResponse)
 async def get_tenant(
     tenant_id: str,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Get tenant details (admin only)."""
     if not api_key_info[1]:
@@ -1247,8 +1264,8 @@ async def get_tenant(
 async def update_tenant(
     tenant_id: str,
     data: dict,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Update tenant configuration (admin only)."""
     if not api_key_info[1]:
@@ -1294,8 +1311,8 @@ async def update_tenant(
 @app.get("/admin/tenants/{tenant_id}/usage", response_model=TenantUsageResponse)
 async def get_tenant_usage(
     tenant_id: str,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Get tenant usage statistics (admin only)."""
     if not api_key_info[1]:
@@ -1311,8 +1328,8 @@ async def get_tenant_usage(
 @app.delete("/admin/tenants/{tenant_id}")
 async def delete_tenant(
     tenant_id: str,
-    api_key_info: tuple = Depends(get_current_api_key),
-    db: Session = Depends(get_db)
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
+    db: Annotated[Session, Depends(get_db)]
 ):
     """Delete tenant (admin only)."""
     if not api_key_info[1]:
@@ -1346,7 +1363,7 @@ async def delete_tenant(
 
 @app.get("/tenant/usage", response_model=TenantUsageResponse)
 async def get_current_tenant_usage(
-    tenant: Tenant = Depends(get_current_tenant)
+    tenant: Annotated[Tenant, Depends(get_current_tenant)]
 ):
     """Get current tenant's usage statistics."""
     stats = get_tenant_usage_stats(tenant.id)

@@ -101,7 +101,7 @@ Important: Return ONLY the JSON object, no other text or formatting.
                 response = self.llm_provider.generate(prompt)
                 result = json.loads(response)
                 return result
-            except:
+            except Exception:
                 # Fallback response
                 return {"plan": str(e), "subtasks": []}
 
@@ -148,7 +148,7 @@ Return ONLY executable Python code. No explanations or markdown."""
                 )
                 return self.generate_code(prompt, retry_count + 1)
 
-            raise ValueError(error_msg)
+            raise ValueError(error_msg) from e
 
     def execute_code(self, code_str: str, retry_count: int = 0) -> Dict[str, Any]:
         self.logger.info(
@@ -160,7 +160,9 @@ Return ONLY executable Python code. No explanations or markdown."""
             # Set up environment with proper Python path
             env = os.environ.copy()
             # Add the src directory to Python path
-            src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            src_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            )
             if 'PYTHONPATH' in env:
                 env['PYTHONPATH'] = f"{src_path}:{env['PYTHONPATH']}"
             else:

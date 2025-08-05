@@ -1,5 +1,4 @@
-"""Factory for creating LLM providers dynamically.
-"""
+"""Factory for creating LLM providers dynamically."""
 import importlib
 import os
 from typing import Dict, Optional, Type
@@ -41,7 +40,8 @@ def auto_register_providers():
     }
 
     for filename in os.listdir(providers_dir):
-        if filename.endswith('.py') and filename not in ['__init__.py', 'base.py', 'factory.py']:
+        if (filename.endswith('.py') and
+            filename not in ['__init__.py', 'base.py', 'factory.py']):
             module_name = filename[:-3]
             try:
                 module = importlib.import_module(f'hydra.providers.{module_name}')

@@ -1,5 +1,4 @@
-"""Abstract base class for LLM providers.
-"""
+"""Abstract base class for LLM providers."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional

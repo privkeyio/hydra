@@ -72,8 +72,12 @@ app.conf.task_routes = {
     "hydra.workers.tasks.execute_workflow": {"queue": "default"},
     "hydra.workers.tasks.generate_code_priority": {"queue": "high_priority"},
     "hydra.workers.tasks.execute_workflow_priority": {"queue": "high_priority"},
-    "hydra.workers.tasks.generate_code_tenant": {"exchange": "tenant", "routing_key": "tenant.*"},
-    "hydra.workers.tasks.execute_workflow_tenant": {"exchange": "tenant", "routing_key": "tenant.*"},
+    "hydra.workers.tasks.generate_code_tenant": {
+        "exchange": "tenant", "routing_key": "tenant.*"
+    },
+    "hydra.workers.tasks.execute_workflow_tenant": {
+        "exchange": "tenant", "routing_key": "tenant.*"
+    },
 }
 
 app.conf.task_default_queue = "default"

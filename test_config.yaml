@@ -1,0 +1,17 @@
+llm:
+  provider: "anthropic"
+  model: "claude-3-haiku-20240307"
+  api_key: "test_key"
+  timeout: 30
+
+agent:
+  max_depth: 5
+  retry_attempts: 3
+  
+database:
+  url: "sqlite:///test.db"
+  
+redis:
+  url: "redis://localhost:6379/0"
+  
+test_mode: true

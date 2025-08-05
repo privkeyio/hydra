@@ -36,7 +36,8 @@ def auto_register_providers():
         'venice': 'VeniceProvider',
         'anthropic': 'AnthropicProvider',
         'openai': 'OpenAIProvider',
-        'claude_cli': 'ClaudeCLIProvider'
+        'claude_cli': 'ClaudeCLIProvider',
+        'mock': 'MockProvider'
     }
 
     for filename in os.listdir(providers_dir):

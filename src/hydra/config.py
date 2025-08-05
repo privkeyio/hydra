@@ -122,6 +122,9 @@ class HydraConfig:
             config.extra_params['claude_path'] = os.getenv('CLAUDE_CLI_PATH', 'claude')
             config.extra_params['cli_flags'] = os.getenv('CLAUDE_CLI_FLAGS', '')
 
+        elif provider_type == 'mock':
+            config.api_key = 'test_key'  # Mock provider doesn't need real API key
+
         return provider_factory.create(config)
 
     def get_agent_config(self) -> Dict[str, Any]:

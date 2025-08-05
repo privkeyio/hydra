@@ -10,6 +10,17 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
     - uses: actions/checkout@v4
     
@@ -22,8 +33,22 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e .[dev]
+        pip install psutil
     
-    - name: Run tests and linting
+    - name: Set test environment
+      run: |
+        export LLM_PROVIDER=mock
+        export REDIS_URL=redis://localhost:6379/0
+        export DATABASE_URL=sqlite:///test.db
+    
+    - name: Run linting
       run: |
         ruff check src/
-        python -m pytest tests/ -v
+    
+    - name: Run tests
+      env:
+        LLM_PROVIDER: mock
+        REDIS_URL: redis://localhost:6379/0
+        DATABASE_URL: sqlite:///test.db
+      run: |
+        python -m pytest tests/ -v --tb=short

@@ -1,0 +1,44 @@
+# Hydra Configuration File
+
+# Agent Configuration
+agent:
+  max_depth: 2
+  timeout: 30
+  retry_attempts: 2
+  default_name: "boss"
+
+# Model Configuration
+models:
+  primary:
+    provider: "anthropic"
+    model: "claude-3-5-sonnet-20241022"
+    max_tokens: 2048
+  fallback:
+    provider: "venice"
+    base_url: "https://api.venice.ai/api/v1"
+    model: "deepseek-coder-v2"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "logs/agent_activity.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Execution Configuration
+execution:
+  sandbox: true
+  allowed_modules:
+    - "ast"
+    - "json"
+    - "math"
+    - "datetime"
+    - "collections"
+    - "itertools"
+    - "functools"
+
+# Venice API Configuration (if enabled)
+venice:
+  enabled: false
+  api_key_env: "VENICE_API_KEY"

@@ -1,0 +1,55 @@
+# Internal GitLab CI Configuration
+
+stages:
+  - test
+  - security
+  - build
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+before_script:
+  - python -m venv venv
+  - source venv/bin/activate
+  - pip install -e ".[dev]"
+
+test:unit:
+  stage: test
+  script:
+    - pytest tests/unit -v --cov=hydra
+
+test:integration:
+  stage: test
+  script:
+    - pytest tests/integration -v
+
+lint:
+  stage: test
+  script:
+    - flake8 src tests
+    - mypy src
+
+security:scan:
+  stage: security
+  script:
+    - pip install bandit
+    - bandit -r src -f json -o bandit-report.json
+  artifacts:
+    reports:
+      security: bandit-report.json
+
+build:package:
+  stage: build
+  script:
+    - python -m build
+  artifacts:
+    paths:
+      - dist/
+  only:
+    - main
+    - tags

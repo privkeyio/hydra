@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from hydra.agents.base import CodeAgent
@@ -15,6 +15,12 @@ from hydra.api.auth import AuthMiddleware, get_current_api_key
 from hydra.cache import get_cache
 from hydra.config import get_config
 from hydra.monitoring import monitoring, timed_operation
+from hydra.security import (
+    SecurityHeaders,
+    audit_logger,
+    input_sanitizer,
+    request_signer,
+)
 from hydra.workflows.engine import execute_workflow
 
 
@@ -110,6 +116,10 @@ async def monitoring_middleware(request: Request, call_next):
     )
 
     response.headers["x-correlation-id"] = monitoring.get_correlation_id()
+
+    # Apply security headers
+    response = SecurityHeaders.apply_headers(response)
+
     return response
 
 tasks_store: Dict[str, Dict[str, Any]] = {}
@@ -206,10 +216,36 @@ async def process_workflow_task(task_id: str, request: WorkflowRequest):
 async def generate_code(
     request: GenerateRequest,
     background_tasks: BackgroundTasks,
-    api_key_info: tuple = Depends(get_current_api_key)
+    api_key_info: tuple = Depends(get_current_api_key),
+    req: Request = None
 ):
     """Generate code using a single agent."""
+    # Sanitize input
+    is_valid, sanitized = input_sanitizer.sanitize_code_input(request.prompt)
+    if not is_valid:
+        audit_logger.log_security_event(
+            "INPUT_VALIDATION_FAILED",
+            "HIGH",
+            f"Dangerous input detected: {sanitized}",
+            {"user": api_key_info[0], "ip_address": req.client.host}
+        )
+        raise HTTPException(status_code=400, detail=sanitized)
+
+    request.prompt = sanitized
     task_id = str(uuid.uuid4())
+
+    # Audit log
+    audit_logger.log_operation(
+        "CODE_GENERATION",
+        api_key_info[0],
+        f"task/{task_id}",
+        "INITIATED",
+        {
+            "language": request.language,
+            "max_tokens": request.max_tokens,
+            "ip_address": req.client.host if req else None
+        }
+    )
 
     tasks_store[task_id] = {
         "status": TaskStatus.PENDING,
@@ -233,10 +269,36 @@ async def generate_code(
 async def execute_workflow_endpoint(
     request: WorkflowRequest,
     background_tasks: BackgroundTasks,
-    api_key_info: tuple = Depends(get_current_api_key)
+    api_key_info: tuple = Depends(get_current_api_key),
+    req: Request = None
 ):
     """Execute a multi-agent workflow."""
+    # Sanitize input
+    is_valid, sanitized = input_sanitizer.sanitize_code_input(request.task)
+    if not is_valid:
+        audit_logger.log_security_event(
+            "INPUT_VALIDATION_FAILED",
+            "HIGH",
+            f"Dangerous workflow input: {sanitized}",
+            {"user": api_key_info[0], "ip_address": req.client.host}
+        )
+        raise HTTPException(status_code=400, detail=sanitized)
+
+    request.task = sanitized
     task_id = str(uuid.uuid4())
+
+    # Audit log
+    audit_logger.log_operation(
+        "WORKFLOW_EXECUTION",
+        api_key_info[0],
+        f"task/{task_id}",
+        "INITIATED",
+        {
+            "agents": request.agents,
+            "max_iterations": request.max_iterations,
+            "ip_address": req.client.host if req else None
+        }
+    )
 
     tasks_store[task_id] = {
         "status": TaskStatus.PENDING,
@@ -364,6 +426,74 @@ async def get_cache_stats(api_key_info: tuple = Depends(get_current_api_key)):
         raise HTTPException(status_code=500, detail=stats["error"])
 
     return CacheStatsResponse(**stats)
+
+
+class SignatureRequest(BaseModel):
+    method: str = Field(..., description="HTTP method")
+    path: str = Field(..., description="Request path")
+    body: str = Field("", description="Request body")
+    timestamp: int = Field(..., description="Unix timestamp")
+
+
+class SignatureResponse(BaseModel):
+    signature: str = Field(..., description="HMAC signature")
+    timestamp: int = Field(..., description="Unix timestamp used")
+
+
+@app.post("/security/sign", response_model=SignatureResponse)
+async def generate_signature(
+    request: SignatureRequest,
+    api_key_info: tuple = Depends(get_current_api_key)
+):
+    """Generate HMAC signature for API requests."""
+    signature = request_signer.sign_request(
+        request.method,
+        request.path,
+        request.body,
+        request.timestamp
+    )
+
+    audit_logger.log_operation(
+        "SIGNATURE_GENERATION",
+        api_key_info[0],
+        request.path,
+        "SUCCESS",
+        {"method": request.method}
+    )
+
+    return SignatureResponse(
+        signature=signature,
+        timestamp=request.timestamp
+    )
+
+
+class AuditLogQuery(BaseModel):
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    operation: Optional[str] = None
+    user: Optional[str] = None
+    limit: int = Field(100, le=1000)
+
+
+@app.post("/security/audit-logs")
+async def query_audit_logs(
+    query: AuditLogQuery,
+    api_key_info: tuple = Depends(get_current_api_key)
+):
+    """Query audit logs (admin only)."""
+    # Check if user has admin privileges
+    if not api_key_info[1]:  # Not a priority/admin user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+
+    # This would normally query from a database
+    # For now, return a simple response
+    return {
+        "logs": [],
+        "message": "Audit log querying requires database integration"
+    }
 
 
 if __name__ == "__main__":

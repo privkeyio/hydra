@@ -13,6 +13,8 @@ from fastapi import HTTPException, Request, status
 from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from hydra.security import audit_logger, request_signer
+
 logger = logging.getLogger(__name__)
 
 class RateLimiter:
@@ -120,6 +122,43 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if path in self.excluded_paths:
             return await call_next(request)
 
+        # Check for request signature if provided
+        signature = request.headers.get('X-Signature')
+        if signature:
+            timestamp = request.headers.get('X-Timestamp')
+            if not timestamp:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Timestamp required with signature"
+                )
+
+            try:
+                body = await request.body()
+                request._body = body  # Cache body for later use
+
+                if not request_signer.verify_signature(
+                    request.method,
+                    path,
+                    body.decode('utf-8'),
+                    int(timestamp),
+                    signature
+                ):
+                    audit_logger.log_security_event(
+                        "SIGNATURE_VERIFICATION_FAILED",
+                        "HIGH",
+                        "Invalid request signature",
+                        {"path": path, "method": request.method}
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid request signature"
+                    )
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid timestamp format"
+                ) from e
+
         # Extract API key
         api_key = self._extract_api_key(request)
         if not api_key:
@@ -173,6 +212,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Log usage
         rate_limiter.log_usage(api_key, path)
+
+        # Audit successful request
+        audit_logger.log_operation(
+            "API_REQUEST",
+            api_key,
+            path,
+            "SUCCESS",
+            {
+                "method": request.method,
+                "status_code": response.status_code,
+                "ip_address": request.client.host if request.client else None
+            }
+        )
 
         return response
 

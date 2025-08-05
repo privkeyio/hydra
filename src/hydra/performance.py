@@ -10,9 +10,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 from sqlalchemy import select, text
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.pool import QueuePool
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +36,12 @@ class ConnectionPoolManager:
             "http": PoolConfig(min_size=10, max_size=100),
         }
         self._executor = ThreadPoolExecutor(max_workers=20)
-        
+
     async def get_database_pool(self, database_url: Optional[str] = None):
         if "database" not in self._pools:
             config = self._pool_configs["database"]
             url = database_url or os.getenv("DATABASE_URL", "postgresql+asyncpg://hydra:hydra@localhost/hydra")
-            
+
             self._pools["database"] = create_async_engine(
                 url,
                 poolclass=QueuePool,
@@ -52,7 +53,7 @@ class ConnectionPoolManager:
                 echo=False,
             )
         return self._pools["database"]
-    
+
     async def get_http_session(self) -> aiohttp.ClientSession:
         if "http" not in self._pools:
             config = self._pool_configs["http"]
@@ -68,9 +69,9 @@ class ConnectionPoolManager:
                 timeout=timeout,
             )
         return self._pools["http"]
-    
+
     async def close_all(self):
-        for name, pool in self._pools.items():
+        for _, pool in self._pools.items():
             if hasattr(pool, "dispose"):
                 await pool.dispose()
             elif hasattr(pool, "close"):
@@ -88,39 +89,46 @@ class RequestBatcher:
         self.batch_timeout = batch_timeout
         self._queues: Dict[str, asyncio.Queue] = defaultdict(lambda: asyncio.Queue())
         self._batch_tasks: Dict[str, asyncio.Task] = {}
-        
+
     async def add_request(self, provider: str, request: Dict[str, Any]) -> Any:
         queue = self._queues[provider]
         future = asyncio.Future()
         await queue.put((request, future))
-        
+
         if provider not in self._batch_tasks or self._batch_tasks[provider].done():
-            self._batch_tasks[provider] = asyncio.create_task(self._process_batch(provider))
-            
+            self._batch_tasks[provider] = asyncio.create_task(
+                self._process_batch(provider)
+            )
+
         return await future
-    
+
     async def _process_batch(self, provider: str):
         queue = self._queues[provider]
         batch = []
         start_time = time.time()
-        
-        while len(batch) < self.batch_size and (time.time() - start_time) < self.batch_timeout:
+
+        while (len(batch) < self.batch_size and
+               (time.time() - start_time) < self.batch_timeout):
             try:
                 timeout = self.batch_timeout - (time.time() - start_time)
-                request, future = await asyncio.wait_for(queue.get(), timeout=max(0.01, timeout))
+                request, future = await asyncio.wait_for(
+                    queue.get(), timeout=max(0.01, timeout)
+                )
                 batch.append((request, future))
             except asyncio.TimeoutError:
                 break
-                
+
         if batch:
             await self._execute_batch(provider, batch)
-    
-    async def _execute_batch(self, provider: str, batch: List[Tuple[Dict, asyncio.Future]]):
+
+    async def _execute_batch(
+        self, provider: str, batch: List[Tuple[Dict, asyncio.Future]]
+    ):
         try:
             requests = [req for req, _ in batch]
             results = await self._call_provider_batch(provider, requests)
-            
-            for (_, future), result in zip(batch, results):
+
+            for (_, future), result in zip(batch, results, strict=False):
                 if isinstance(result, Exception):
                     future.set_exception(result)
                 else:
@@ -128,12 +136,15 @@ class RequestBatcher:
         except Exception as e:
             for _, future in batch:
                 future.set_exception(e)
-    
-    async def _call_provider_batch(self, provider: str, requests: List[Dict]) -> List[Any]:
+
+    async def _call_provider_batch(
+        self, provider: str, requests: List[Dict]
+    ) -> List[Any]:
         session = await pool_manager.get_http_session()
-        
+
         if provider == "openai":
-            url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1") + "/chat/completions"
+            base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            url = base_url + "/chat/completions"
             headers = {"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"}
         elif provider == "anthropic":
             url = "https://api.anthropic.com/v1/messages"
@@ -142,17 +153,18 @@ class RequestBatcher:
                 "anthropic-version": "2023-06-01"
             }
         else:
-            url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1") + "/chat/completions"
+            base_url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
+            url = base_url + "/chat/completions"
             headers = {"Authorization": f"Bearer {os.getenv('VENICE_API_KEY')}"}
-        
+
         tasks = []
         for request in requests:
             task = session.post(url, json=request, headers=headers)
             tasks.append(task)
-        
+
         responses = await asyncio.gather(*tasks, return_exceptions=True)
         results = []
-        
+
         for response in responses:
             if isinstance(response, Exception):
                 results.append(response)
@@ -162,7 +174,7 @@ class RequestBatcher:
                     results.append(data)
                 except Exception as e:
                     results.append(e)
-                    
+
         return results
 
 
@@ -172,30 +184,31 @@ request_batcher = RequestBatcher()
 class StreamingResponseHandler:
     def __init__(self):
         self._active_streams: Dict[str, asyncio.Queue] = {}
-        
+
     async def create_stream(self, task_id: str) -> asyncio.Queue:
         queue = asyncio.Queue(maxsize=100)
         self._active_streams[task_id] = queue
         return queue
-    
+
     async def write_chunk(self, task_id: str, chunk: str):
         if task_id in self._active_streams:
             await self._active_streams[task_id].put(chunk)
-    
+
     async def close_stream(self, task_id: str):
         if task_id in self._active_streams:
             await self._active_streams[task_id].put(None)
             del self._active_streams[task_id]
-    
+
     async def stream_llm_response(self, provider: str, request: Dict, task_id: str):
         queue = await self.create_stream(task_id)
-        
+
         try:
             session = await pool_manager.get_http_session()
             request["stream"] = True
-            
+
             if provider == "openai":
-                url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1") + "/chat/completions"
+                base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+                url = base_url + "/chat/completions"
                 headers = {"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"}
             elif provider == "anthropic":
                 url = "https://api.anthropic.com/v1/messages"
@@ -204,9 +217,10 @@ class StreamingResponseHandler:
                     "anthropic-version": "2023-06-01"
                 }
             else:
-                url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1") + "/chat/completions"
+                base_url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
+                url = base_url + "/chat/completions"
                 headers = {"Authorization": f"Bearer {os.getenv('VENICE_API_KEY')}"}
-            
+
             async with session.post(url, json=request, headers=headers) as response:
                 async for line in response.content:
                     if line:
@@ -214,13 +228,13 @@ class StreamingResponseHandler:
                         if decoded.startswith("data: ") and decoded != "data: [DONE]":
                             chunk = decoded[6:]
                             await self.write_chunk(task_id, chunk)
-                            
+
         except Exception as e:
             logger.error(f"Streaming error for task {task_id}: {e}")
             await self.write_chunk(task_id, f"ERROR: {str(e)}")
         finally:
             await self.close_stream(task_id)
-            
+
         return queue
 
 
@@ -232,19 +246,18 @@ class QueryOptimizer:
     async def optimize_task_queries(session: AsyncSession):
         await session.execute(
             text("""
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_status_tenant_created 
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_status_tenant_created
             ON tasks(status, tenant_id, created_at DESC);
-            
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_api_key_month 
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_api_key_month
             ON usage(api_key_id, DATE_TRUNC('month', timestamp));
-            
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_cost_tracking 
-            ON usage(provider, model, DATE_TRUNC('day', timestamp)) 
+
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_cost_tracking
+            ON usage(provider, model, DATE_TRUNC('day', timestamp))
             WHERE cost IS NOT NULL;
             """)
         )
         await session.commit()
-    
+
     @staticmethod
     async def get_task_with_usage(session: AsyncSession, task_id: str):
         result = await session.execute(
@@ -255,12 +268,14 @@ class QueryOptimizer:
             )
         )
         return result.scalars().first()
-    
+
     @staticmethod
-    async def get_tenant_usage_summary(session: AsyncSession, tenant_id: str, month: str):
+    async def get_tenant_usage_summary(
+        session: AsyncSession, tenant_id: str, month: str
+    ):
         result = await session.execute(
             text("""
-            SELECT 
+            SELECT
                 COUNT(DISTINCT t.id) as task_count,
                 SUM(u.tokens_used) as total_tokens,
                 SUM(u.cost) as total_cost,
@@ -278,7 +293,7 @@ class QueryOptimizer:
 async def get_optimized_session():
     engine = await pool_manager.get_database_pool()
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
+
     async with async_session() as session:
         try:
             yield session
@@ -292,12 +307,13 @@ async def get_optimized_session():
 
 async def initialize_performance_optimizations():
     logger.info("Initializing performance optimizations")
-    
+
     async with get_optimized_session() as session:
         await QueryOptimizer.optimize_task_queries(session)
-    
+
     logger.info("Performance optimizations initialized")
 
 
 async def cleanup_performance_resources():
     await pool_manager.close_all()
+

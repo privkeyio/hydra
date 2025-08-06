@@ -9,7 +9,7 @@ class LLMConfig:
     """Configuration for an LLM provider."""
 
     provider_type: str
-    model: str
+    model: Optional[str] = None
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     temperature: float = 0.2

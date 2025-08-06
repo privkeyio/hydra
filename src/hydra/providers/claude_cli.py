@@ -15,13 +15,13 @@ class ClaudeCLIProvider(LLMProvider):
         # Check if claude_path is provided or claude is in PATH
         claude_path = self.config.extra_params.get('claude_path', 'claude')
 
-        # Test if claude is accessible
+        # Test if claude is accessible by checking if it exists
         try:
+            # For Claude Code CLI, we just check if the command exists
             result = subprocess.run(
-                [claude_path, "--version"],
+                ["which", claude_path],
                 capture_output=True,
-                timeout=5,
-                shell=True if ' ' in claude_path else False
+                timeout=5
             )
             if result.returncode != 0:
                 raise ValueError(f"Claude CLI not found at: {claude_path}")
@@ -40,17 +40,13 @@ class ClaudeCLIProvider(LLMProvider):
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response using Claude CLI."""
         try:
-            # Build command
-            cmd = f'{self.claude_path} "{prompt}"'
-
-            # Add any CLI flags from extra_params
-            cli_flags = self.config.extra_params.get('cli_flags', '')
-            if cli_flags:
-                cmd = f'{self.claude_path} {cli_flags} "{prompt}"'
+            # Claude Code CLI is interactive, so we pipe the prompt via stdin
+            # and use /exit to quit after getting response
+            full_prompt = f"{prompt}\n/exit\n"
 
             result = subprocess.run(
-                cmd,
-                shell=True,
+                [self.claude_path],
+                input=full_prompt,
                 capture_output=True,
                 text=True,
                 timeout=self.config.timeout,
@@ -58,7 +54,33 @@ class ClaudeCLIProvider(LLMProvider):
             )
 
             if result.returncode == 0:
-                return result.stdout
+                # Clean up the output - remove the welcome message and prompt artifacts
+                output = result.stdout
+                lines = output.split('\n')
+
+                # Find where the actual response starts (after the welcome box)
+                response_lines = []
+                in_response = False
+
+                for line in lines:
+                    # Skip welcome box and prompts
+                    if '┃' in line or '╭' in line or '╰' in line or '│' in line:
+                        continue
+                    if line.strip().startswith('cwd:'):
+                        continue
+                    if line.strip() == '':
+                        if in_response:
+                            response_lines.append(line)
+                        continue
+
+                    # Start collecting response after welcome
+                    if not in_response and not line.startswith('Welcome'):
+                        in_response = True
+
+                    if in_response:
+                        response_lines.append(line)
+
+                return '\n'.join(response_lines).strip()
             else:
                 raise Exception(f"Claude CLI error: {result.stderr}")
 

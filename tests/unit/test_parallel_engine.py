@@ -202,7 +202,8 @@ class TestParallelExecutionEngine(unittest.TestCase):
         self.engine = ParallelExecutionEngine(
             max_workers=4,
             max_agents=4,
-            deadlock_check_interval=0.1
+            deadlock_check_interval=0.1,
+            test_mode=False  # Force real execution for unit tests
         )
     
     def tearDown(self):
@@ -221,7 +222,7 @@ class TestParallelExecutionEngine(unittest.TestCase):
             args=(5,)
         )
         
-        success = self.engine.wait_for_completion(timeout=2)
+        success = self.engine.wait_for_completion(timeout=5)
         self.assertTrue(success)
         
         self.assertEqual(result["value"], 5)

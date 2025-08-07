@@ -43,7 +43,7 @@ jobs:
     
     - name: Run linting
       run: |
-        ruff check src/
+        ruff check src/ --exclude="src/hydra/templates/templates"
     
     - name: Run tests
       env:

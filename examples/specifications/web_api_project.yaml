@@ -1,0 +1,127 @@
+name: "FastAPI Web Service"
+version: "1.0.0"
+description: "Create a complete FastAPI web service with database integration"
+metadata:
+  author: "Hydra"
+  tags: ["web", "api", "python", "fastapi"]
+
+variables:
+  project_name: "user_service"
+  database_type: "postgresql"
+  api_version: "v1"
+
+execution_mode: "strict"
+max_parallel: 5
+
+tasks:
+  - id: "create_project_structure"
+    type: "file_create"
+    name: "Create Project Directory Structure"
+    description: "Set up the basic project directory structure"
+    inputs:
+      directories:
+        - "{{ project_name }}/app"
+        - "{{ project_name }}/tests"
+        - "{{ project_name }}/migrations"
+        - "{{ project_name }}/docs"
+    
+  - id: "create_requirements"
+    type: "file_create"
+    name: "Generate Requirements File"
+    description: "Create requirements.txt with necessary dependencies"
+    inputs:
+      filename: "{{ project_name }}/requirements.txt"
+      dependencies:
+        - "fastapi>=0.68.0"
+        - "uvicorn[standard]>=0.15.0"
+        - "sqlalchemy>=1.4.0"
+        - "psycopg2-binary>=2.9.0"
+        - "pydantic>=1.8.0"
+        - "python-multipart>=0.0.5"
+    dependencies: ["create_project_structure"]
+    
+  - id: "create_models"
+    type: "code_generation"
+    name: "Generate Database Models"
+    description: "Create SQLAlchemy models for the user service"
+    inputs:
+      filename: "{{ project_name }}/app/models.py"
+      models:
+        - name: "User"
+          fields:
+            - "id: int (primary key)"
+            - "username: str (unique)"
+            - "email: str (unique)"
+            - "created_at: datetime"
+            - "is_active: bool"
+    dependencies: ["create_requirements"]
+    
+  - id: "create_database"
+    type: "code_generation"
+    name: "Generate Database Configuration"
+    description: "Create database connection and session management"
+    inputs:
+      filename: "{{ project_name }}/app/database.py"
+      database_url: "postgresql://user:pass@localhost/{{ project_name }}"
+    dependencies: ["create_models"]
+    
+  - id: "create_api_routes"
+    type: "code_generation"
+    name: "Generate API Routes"
+    description: "Create REST API endpoints for user management"
+    inputs:
+      filename: "{{ project_name }}/app/routes.py"
+      endpoints:
+        - "GET /users - List all users"
+        - "POST /users - Create new user"
+        - "GET /users/{id} - Get user by ID"
+        - "PUT /users/{id} - Update user"
+        - "DELETE /users/{id} - Delete user"
+    dependencies: ["create_database"]
+    
+  - id: "create_main_app"
+    type: "code_generation"
+    name: "Generate Main Application"
+    description: "Create the main FastAPI application file"
+    inputs:
+      filename: "{{ project_name }}/app/main.py"
+      title: "{{ project_name | title }} API"
+      version: "{{ api_version }}"
+    dependencies: ["create_api_routes"]
+    
+  - id: "create_tests"
+    type: "test"
+    name: "Generate Test Suite"
+    description: "Create comprehensive tests for the API"
+    inputs:
+      test_framework: "pytest"
+      test_files:
+        - "{{ project_name }}/tests/test_models.py"
+        - "{{ project_name }}/tests/test_routes.py"
+        - "{{ project_name }}/tests/test_main.py"
+      coverage_threshold: 85
+    dependencies: ["create_main_app"]
+    
+  - id: "create_docker"
+    type: "file_create"
+    name: "Generate Docker Configuration"
+    description: "Create Dockerfile and docker-compose.yml"
+    inputs:
+      dockerfile: "{{ project_name }}/Dockerfile"
+      compose_file: "{{ project_name }}/docker-compose.yml"
+      base_image: "python:3.9-slim"
+      port: 8000
+    dependencies: ["create_main_app"]
+    
+  - id: "validate_setup"
+    type: "command"
+    name: "Validate Project Setup"
+    description: "Run basic validation checks"
+    inputs:
+      commands:
+        - "cd {{ project_name }} && python -m py_compile app/*.py"
+        - "cd {{ project_name }} && python -c 'import app.main'"
+    dependencies: ["create_tests", "create_docker"]
+    conditions:
+      - type: "file_exists"
+        expression: "{{ project_name }}/app/main.py"

@@ -1,0 +1,144 @@
+name: "Machine Learning Model Training"
+version: "2.0.0"
+description: "Complete ML pipeline from data preparation to model deployment"
+metadata:
+  framework: "scikit-learn"
+  model_type: "classification"
+
+variables:
+  dataset_path: "data/customer_churn.csv"
+  model_name: "churn_predictor"
+  target_accuracy: 0.85
+
+execution_mode: "fail_fast"
+max_parallel: 2
+
+tasks:
+  - id: "setup_environment"
+    type: "command"
+    name: "Setup ML Environment"
+    description: "Install required packages and setup environment"
+    inputs:
+      commands:
+        - "pip install -r ml_requirements.txt"
+        - "python -c 'import sklearn, pandas, numpy'"
+    timeout: 300
+    
+  - id: "data_exploration"
+    type: "code_generation"
+    name: "Generate EDA Script"
+    description: "Create exploratory data analysis notebook"
+    inputs:
+      filename: "notebooks/data_exploration.py"
+      analyses:
+        - "Dataset overview and statistics"
+        - "Feature correlation analysis"
+        - "Target variable distribution"
+        - "Missing value analysis"
+    dependencies: ["setup_environment"]
+    
+  - id: "feature_engineering"
+    type: "code_generation"
+    name: "Feature Engineering Pipeline"
+    description: "Create feature preprocessing and engineering pipeline"
+    inputs:
+      filename: "src/feature_pipeline.py"
+      transformations:
+        - "Categorical encoding"
+        - "Numerical scaling"
+        - "Feature selection"
+        - "New feature creation"
+    dependencies: ["data_exploration"]
+    
+  - id: "model_training"
+    type: "code_generation"
+    name: "Model Training Script"
+    description: "Create model training and hyperparameter tuning script"
+    inputs:
+      filename: "src/train_model.py"
+      algorithms:
+        - "RandomForestClassifier"
+        - "GradientBoostingClassifier"
+        - "LogisticRegression"
+      hyperparameter_tuning: "GridSearchCV"
+      cross_validation_folds: 5
+    dependencies: ["feature_engineering"]
+    
+  - id: "model_evaluation"
+    type: "test"
+    name: "Model Performance Evaluation"
+    description: "Comprehensive model evaluation and testing"
+    inputs:
+      test_framework: "unittest"
+      evaluation_metrics:
+        - "Accuracy"
+        - "Precision"
+        - "Recall" 
+        - "F1-score"
+        - "ROC-AUC"
+      test_files:
+        - "tests/test_model_performance.py"
+        - "tests/test_feature_pipeline.py"
+    dependencies: ["model_training"]
+    conditions:
+      - type: "variable_equals"
+        expression: "model_accuracy >= {{ target_accuracy }}"
+        variables:
+          model_accuracy: 0.87
+    
+  - id: "model_serialization"
+    type: "code_generation"
+    name: "Model Serialization"
+    description: "Save trained model and preprocessing pipeline"
+    inputs:
+      filename: "src/save_model.py"
+      model_format: "joblib"
+      artifacts:
+        - "trained_model.joblib"
+        - "feature_pipeline.joblib" 
+        - "model_metadata.json"
+    dependencies: ["model_evaluation"]
+    
+  - id: "create_api"
+    type: "code_generation"
+    name: "Create Prediction API"
+    description: "Generate REST API for model predictions"
+    inputs:
+      filename: "api/prediction_service.py"
+      framework: "FastAPI"
+      endpoints:
+        - "POST /predict - Single prediction"
+        - "POST /predict/batch - Batch predictions"
+        - "GET /health - Health check"
+        - "GET /model/info - Model information"
+    dependencies: ["model_serialization"]
+    
+  - id: "deployment_config"
+    type: "file_create"
+    name: "Create Deployment Configuration"
+    description: "Generate deployment configurations"
+    inputs:
+      files:
+        - filename: "Dockerfile"
+          content: "Multi-stage Docker build for ML service"
+        - filename: "k8s-deployment.yaml"
+          content: "Kubernetes deployment configuration"
+        - filename: ".github/workflows/deploy.yml"
+          content: "CI/CD pipeline for automated deployment"
+    dependencies: ["create_api"]
+    
+  - id: "integration_test"
+    type: "test"
+    name: "End-to-End Integration Test"
+    description: "Test complete pipeline from API to predictions"
+    inputs:
+      test_framework: "pytest"
+      test_scenarios:
+        - "API endpoint functionality"
+        - "Model loading and prediction"
+        - "Error handling"
+        - "Performance benchmarks"
+      test_files:
+        - "tests/test_integration.py"
+    dependencies: ["deployment_config"]
+    timeout: 600

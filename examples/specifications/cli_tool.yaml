@@ -1,0 +1,177 @@
+name: "CLI Tool Development"
+version: "1.0.0"
+description: "Create a modern CLI tool with comprehensive features"
+metadata:
+  language: "python"
+  framework: "click"
+  
+variables:
+  tool_name: "dataviz"
+  package_name: "dataviz_cli"
+  python_version: "3.8"
+
+execution_mode: "strict"
+max_parallel: 3
+
+tasks:
+  - id: "project_scaffold"
+    type: "file_create"
+    name: "Create Project Structure"
+    description: "Initialize project directory structure and configuration files"
+    inputs:
+      directories:
+        - "{{ package_name }}"
+        - "{{ package_name }}/commands"
+        - "{{ package_name }}/utils"
+        - "tests"
+        - "docs"
+      files:
+        - filename: "setup.py"
+          description: "Package setup configuration"
+        - filename: "pyproject.toml"
+          description: "Modern Python project configuration"
+        - filename: "requirements.txt"
+          description: "Project dependencies"
+        - filename: "requirements-dev.txt"
+          description: "Development dependencies"
+    
+  - id: "cli_framework"
+    type: "code_generation"
+    name: "CLI Framework Setup"
+    description: "Create the main CLI application structure using Click"
+    inputs:
+      filename: "{{ package_name }}/cli.py"
+      framework: "click"
+      features:
+        - "Command groups"
+        - "Option validation"
+        - "Help generation"
+        - "Plugin system"
+        - "Configuration file support"
+    dependencies: ["project_scaffold"]
+    
+  - id: "core_commands"
+    type: "loop"
+    name: "Generate Core Commands"
+    description: "Create individual command modules"
+    inputs:
+      variable: "command"
+      iterable: ["visualize", "analyze", "export", "config"]
+      tasks:
+        - type: "code_generation"
+          name: "Generate {{ command }} Command"
+          inputs:
+            filename: "{{ package_name }}/commands/{{ command }}.py"
+            command_name: "{{ command }}"
+            description: "Implementation for {{ command }} command"
+    dependencies: ["cli_framework"]
+    
+  - id: "utility_modules"
+    type: "code_generation"
+    name: "Utility Modules"
+    description: "Create utility functions and helpers"
+    inputs:
+      modules:
+        - filename: "{{ package_name }}/utils/file_handler.py"
+          description: "File reading and writing utilities"
+        - filename: "{{ package_name }}/utils/data_processor.py"
+          description: "Data processing and transformation"
+        - filename: "{{ package_name }}/utils/validators.py"
+          description: "Input validation functions"
+        - filename: "{{ package_name }}/utils/config.py"
+          description: "Configuration management"
+    dependencies: ["cli_framework"]
+    
+  - id: "configuration_system"
+    type: "code_generation"
+    name: "Configuration System"
+    description: "Implement configuration file handling"
+    inputs:
+      filename: "{{ package_name }}/config.py"
+      config_formats: ["yaml", "json", "toml"]
+      default_config_file: "~/.{{ tool_name }}/config.yaml"
+      environment_variables: true
+    dependencies: ["utility_modules"]
+    
+  - id: "testing_suite"
+    type: "test"
+    name: "Comprehensive Test Suite"
+    description: "Create tests for all CLI functionality"
+    inputs:
+      test_framework: "pytest"
+      test_types:
+        - "Unit tests for each command"
+        - "Integration tests for CLI workflows"
+        - "Configuration file tests"
+        - "Error handling tests"
+      test_files:
+        - "tests/test_cli.py"
+        - "tests/test_commands.py"
+        - "tests/test_utils.py"
+        - "tests/conftest.py"
+      coverage_threshold: 90
+    dependencies: ["core_commands", "configuration_system"]
+    
+  - id: "documentation"
+    type: "file_create"
+    name: "Documentation Generation"
+    description: "Create comprehensive documentation"
+    inputs:
+      docs:
+        - filename: "README.md"
+          description: "Main project README with usage examples"
+        - filename: "docs/installation.md"
+          description: "Installation instructions"
+        - filename: "docs/commands.md"
+          description: "Detailed command reference"
+        - filename: "docs/configuration.md"
+          description: "Configuration options and examples"
+        - filename: "CHANGELOG.md"
+          description: "Version history and changes"
+    dependencies: ["testing_suite"]
+    
+  - id: "packaging_setup"
+    type: "code_generation"
+    name: "Package Configuration"
+    description: "Configure package for distribution"
+    inputs:
+      setup_file: "setup.py"
+      entry_points:
+        console_scripts:
+          - "{{ tool_name }} = {{ package_name }}.cli:main"
+      classifiers:
+        - "Development Status :: 4 - Beta"
+        - "Environment :: Console"
+        - "Intended Audience :: Developers"
+        - "Programming Language :: Python :: {{ python_version }}"
+    dependencies: ["documentation"]
+    
+  - id: "ci_cd_setup"
+    type: "file_create"
+    name: "CI/CD Pipeline"
+    description: "Setup automated testing and deployment"
+    inputs:
+      files:
+        - filename: ".github/workflows/test.yml"
+          description: "GitHub Actions testing workflow"
+        - filename: ".github/workflows/release.yml"
+          description: "Automated release and PyPI publishing"
+        - filename: "tox.ini"
+          description: "Multi-environment testing configuration"
+    dependencies: ["packaging_setup"]
+    
+  - id: "validation_tests"
+    type: "command"
+    name: "End-to-End Validation"
+    description: "Test complete CLI installation and functionality"
+    inputs:
+      commands:
+        - "pip install -e ."
+        - "{{ tool_name }} --help"
+        - "{{ tool_name }} config --help"
+        - "python -m pytest tests/ -v --cov={{ package_name }}"
+    dependencies: ["ci_cd_setup"]
+    conditions:
+      - type: "file_exists"
+        expression: "setup.py"
+    timeout: 600

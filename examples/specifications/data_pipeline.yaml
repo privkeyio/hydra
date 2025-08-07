@@ -1,0 +1,126 @@
+name: "Data Processing Pipeline"
+version: "1.2.0"
+description: "ETL pipeline for processing CSV data with validation and transformation"
+metadata:
+  category: "data"
+  complexity: "moderate"
+
+variables:
+  input_file: "data/raw/sales_data.csv"
+  output_dir: "data/processed"
+  batch_size: 1000
+
+execution_mode: "best_effort"
+max_parallel: 3
+timeout: 3600
+
+tasks:
+  - id: "validate_input"
+    type: "analysis"
+    name: "Validate Input Data"
+    description: "Check if input file exists and has correct format"
+    inputs:
+      file_path: "{{ input_file }}"
+      expected_columns: ["date", "product", "amount", "customer_id"]
+    conditions:
+      - type: "file_exists"
+        expression: "{{ input_file }}"
+    retry_policy:
+      max_attempts: 3
+      backoff_factor: 2
+    
+  - id: "create_output_dirs"
+    type: "command"
+    name: "Create Output Directories"
+    description: "Ensure output directory structure exists"
+    inputs:
+      commands:
+        - "mkdir -p {{ output_dir }}/staging"
+        - "mkdir -p {{ output_dir }}/final"
+        - "mkdir -p logs"
+    
+  - id: "data_cleaning"
+    type: "code_generation"
+    name: "Generate Data Cleaning Script"
+    description: "Create script to clean and validate data"
+    inputs:
+      filename: "scripts/clean_data.py"
+      operations:
+        - "Remove duplicate records"
+        - "Handle missing values"
+        - "Validate date formats"
+        - "Normalize product names"
+    dependencies: ["validate_input", "create_output_dirs"]
+    
+  - id: "data_transformation"
+    type: "code_generation"
+    name: "Generate Transformation Logic"
+    description: "Create data transformation and aggregation logic"
+    inputs:
+      filename: "scripts/transform_data.py"
+      transformations:
+        - "Calculate monthly totals"
+        - "Group by customer segments"
+        - "Apply business rules"
+    dependencies: ["data_cleaning"]
+    
+  - id: "process_batches"
+    type: "loop"
+    name: "Process Data in Batches"
+    description: "Process large dataset in configurable batches"
+    inputs:
+      variable: "batch"
+      iterable: "{{ input_file | batch_iterator(batch_size) }}"
+      tasks:
+        - type: "command"
+          name: "Process Batch"
+          inputs:
+            command: "python scripts/clean_data.py --batch {{ batch }}"
+    dependencies: ["data_transformation"]
+    conditions:
+      - type: "variable_equals"
+        expression: "batch_processing == 'enabled'"
+        variables:
+          batch_processing: "enabled"
+    
+  - id: "quality_checks"
+    type: "test"
+    name: "Data Quality Validation"
+    description: "Run comprehensive data quality checks"
+    inputs:
+      test_framework: "pytest"
+      test_files:
+        - "tests/test_data_quality.py"
+      checks:
+        - "Row count validation"
+        - "Column completeness"
+        - "Data type validation"
+        - "Business rule compliance"
+    dependencies: ["process_batches"]
+    
+  - id: "generate_report"
+    type: "code_generation"
+    name: "Generate Processing Report"
+    description: "Create summary report of processing results"
+    inputs:
+      filename: "{{ output_dir }}/processing_report.html"
+      template: "report_template.html"
+      metrics:
+        - "Records processed"
+        - "Errors encountered"
+        - "Processing time"
+        - "Data quality scores"
+    dependencies: ["quality_checks"]
+    
+  - id: "cleanup"
+    type: "command"
+    name: "Cleanup Temporary Files"
+    description: "Remove temporary and staging files"
+    inputs:
+      commands:
+        - "rm -rf {{ output_dir }}/staging/*"
+        - "find logs -name '*.tmp' -delete"
+    dependencies: ["generate_report"]
+    conditions:
+      - type: "command_success"
+        expression: "test -d {{ output_dir }}/staging"

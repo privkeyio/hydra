@@ -25,16 +25,16 @@ def plan_node(state: WorkflowState) -> WorkflowState:
     try:
         # For simple tasks, complete directly instead of planning
         task = state["task"]
-        
+
         # Check if task is simple (doesn't need decomposition)
         is_simple_task = (
             len(task.split()) < 20 or
             any(keyword in task.lower() for keyword in [
-                "write a function", "create a function", "implement", 
+                "write a function", "create a function", "implement",
                 "calculate", "compute", "generate code"
             ])
         )
-        
+
         if is_simple_task or state["depth"] >= 1:
             # Complete the task directly
             result = agent.complete_task(task)
@@ -75,22 +75,22 @@ def spawn_node(state: WorkflowState) -> WorkflowState:
     for i, subtask in enumerate(state["subtasks"]):
         employee_name = f"{state['current_agent']}_employee_{i}"
         state["agents"].append(employee_name)
-        
+
         logger.info(f"Spawning employee {employee_name} for subtask: {subtask[:50]}...")
 
         try:
             # Create employee agent directly
             employee = CodeAgent(employee_name, parent=parent_agent, depth=state["depth"] + 1)
-            
+
             # Complete the subtask
             result = employee.complete_task(subtask)
             state["results"][employee_name] = result
-            
+
             if result["success"]:
                 logger.info(f"Successfully completed subtask with {employee_name}")
             else:
                 logger.error(f"Employee {employee_name} failed: {result.get('error', 'Unknown error')}")
-                
+
         except RecursionError as e:
             state["results"][employee_name] = {
                 "error": f"Recursion limit exceeded: {str(e)}",
@@ -98,7 +98,7 @@ def spawn_node(state: WorkflowState) -> WorkflowState:
                 "success": False
             }
             logger.error(f"Recursion limit exceeded for {employee_name}: {e}")
-            
+
         except Exception as e:
             state["results"][employee_name] = {
                 "error": f"Employee creation failed: {str(e)}",
@@ -118,7 +118,7 @@ def aggregate_node(state: WorkflowState) -> WorkflowState:
     all_outputs = []
     successful_results = []
     failed_results = []
-    
+
     for agent_name, result in state["results"].items():
         if isinstance(result, dict):
             if result.get("success", True) and "error" not in result:
@@ -129,14 +129,14 @@ def aggregate_node(state: WorkflowState) -> WorkflowState:
                     all_outputs.append(f"# Output from {agent_name}\n{result['output']}")
             else:
                 failed_results.append(result)
-    
+
     # Combine all generated code
     if all_code:
         state["final_code"] = "\n\n".join(all_code)
-    
+
     if all_outputs:
         state["execution_outputs"] = "\n\n".join(all_outputs)
-    
+
     state["results"]["summary"] = {
         "total_agents": len(state["agents"]),
         "successful": len(successful_results),

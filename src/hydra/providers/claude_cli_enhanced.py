@@ -113,7 +113,7 @@ class SlashCommandProcessor:
 
     def process(self, command: str, args: str = "") -> Tuple[str, bool]:
         command = command.lower()
-        
+
         handlers = {
             '/add-dir': lambda: self._handle_add_dir(args),
             '/agents': lambda: self._handle_agents(args),
@@ -138,18 +138,18 @@ class SlashCommandProcessor:
             '/vim': lambda: self._handle_vim(args),
             '/exit': lambda: ("Exiting session", True)
         }
-        
+
         handler = handlers.get(command)
         if handler:
             return handler()
         return f"Unknown command: {command}", False
-    
+
     def _handle_clear(self) -> Tuple[str, bool]:
         self.session.context_files.clear()
         self.session.variables.clear()
         return "Context cleared", False
-    
-    
+
+
     def _handle_add_dir(self, args: str) -> Tuple[str, bool]:
         if not args:
             return "Usage: /add-dir <directory_path>", False
@@ -157,7 +157,7 @@ class SlashCommandProcessor:
         dirs.append(args.strip())
         self.session.variables['working_dirs'] = dirs
         return f"Added working directory: {args}", False
-    
+
     def _handle_agents(self, args: str) -> Tuple[str, bool]:
         if not args:
             agents = self.session.variables.get('agents', {})
@@ -165,7 +165,7 @@ class SlashCommandProcessor:
                 return f"Active agents: {list(agents.keys())}", False
             return "No custom agents configured", False
         return "Agent management: Use 'list', 'add <name>', or 'remove <name>'", False
-    
+
     def _handle_bug(self, args: str) -> Tuple[str, bool]:
         if not args:
             return "Usage: /bug <description of issue>", False
@@ -174,14 +174,14 @@ class SlashCommandProcessor:
             'timestamp': time.time()
         })
         return "Bug report recorded. Thank you for your feedback!", False
-    
+
     def _handle_compact(self, args: str) -> Tuple[str, bool]:
         focus = args.strip() if args else "general"
         old_count = len(self.session.history)
         if old_count > 10:
             self.session.history = self.session.history[-5:]
         return f"Compacted conversation (kept {len(self.session.history)}/{old_count} items, focus: {focus})", False
-    
+
     def _handle_config(self, args: str) -> Tuple[str, bool]:
         if not args:
             config = {
@@ -190,14 +190,14 @@ class SlashCommandProcessor:
                 'max_tokens': self.session.variables.get('max_tokens', 4096)
             }
             return json.dumps(config, indent=2), False
-        
+
         parts = args.split('=', 1)
         if len(parts) == 2:
             key, value = parts
             self.session.variables[key.strip()] = value.strip()
             return f"Config updated: {key} = {value}", False
         return "Usage: /config or /config <key>=<value>", False
-    
+
     def _handle_cost(self) -> Tuple[str, bool]:
         stats = self.session.variables.get('token_stats', {
             'input_tokens': 0,
@@ -205,7 +205,7 @@ class SlashCommandProcessor:
             'total_cost': 0.0
         })
         return f"Token usage:\n  Input: {stats['input_tokens']}\n  Output: {stats['output_tokens']}\n  Est. cost: ${stats['total_cost']:.4f}", False
-    
+
     def _handle_doctor(self) -> Tuple[str, bool]:
         checks = []
         checks.append(f"✓ Session active: {self.session.session_id}")
@@ -213,14 +213,14 @@ class SlashCommandProcessor:
         checks.append(f"✓ Files in context: {len(self.session.context_files)}")
         checks.append(f"✓ History items: {len(self.session.history)}")
         return "Claude Code Health Check:\n" + "\n".join(checks), False
-    
+
     def _handle_init(self, args: str) -> Tuple[str, bool]:
         project_dir = Path(args.strip()) if args else self.session.working_dir
         claude_md = project_dir / "CLAUDE.md"
-        
+
         if claude_md.exists():
             return f"CLAUDE.md already exists in {project_dir}", False
-        
+
         template = """# Project Context for Claude
 
 ## Project Overview
@@ -240,24 +240,24 @@ Describe your project here...
 """
         claude_md.write_text(template)
         return f"Created CLAUDE.md in {project_dir}", False
-    
+
     def _handle_login(self, args: str) -> Tuple[str, bool]:
         if not args:
             return "Usage: /login <account_email>", False
         self.session.variables['account'] = args.strip()
         return f"Switched to account: {args}", False
-    
+
     def _handle_logout(self) -> Tuple[str, bool]:
         self.session.variables.pop('account', None)
         return "Logged out successfully", False
-    
+
     def _handle_mcp(self, args: str) -> Tuple[str, bool]:
         if not args:
             servers = self.session.variables.get('mcp_servers', [])
             if servers:
                 return f"Connected MCP servers: {servers}", False
             return "No MCP servers connected", False
-        
+
         cmd = args.split()[0] if args else ""
         if cmd == "connect":
             server = args[8:].strip()
@@ -266,24 +266,24 @@ Describe your project here...
         elif cmd == "disconnect":
             return "MCP server disconnected", False
         return "Usage: /mcp [connect <server>|disconnect|list]", False
-    
+
     def _handle_memory(self, args: str) -> Tuple[str, bool]:
         claude_md = self.session.working_dir / "CLAUDE.md"
-        
+
         if args == "edit":
             if claude_md.exists():
                 content = claude_md.read_text()
                 self.session.context_files['CLAUDE.md'] = content
                 return f"Loaded CLAUDE.md into context ({len(content)} bytes)", False
             return "CLAUDE.md not found. Use /init to create it", False
-        
+
         if args == "show":
             if claude_md.exists():
                 return claude_md.read_text()[:500] + "...", False
             return "CLAUDE.md not found", False
-        
+
         return "Usage: /memory [edit|show]", False
-    
+
     def _handle_model(self, args: str) -> Tuple[str, bool]:
         available_models = [
             'claude-opus-4-1-20250805',
@@ -296,17 +296,17 @@ Describe your project here...
             'claude-3-sonnet-20240229',
             'claude-3-haiku-20240307'
         ]
-        
+
         if not args:
             current = self.session.variables.get('model', 'claude-opus-4-1-20250805')
             return f"Current model: {current}\nAvailable: {', '.join(available_models)}", False
-        
+
         model = args.strip()
         if model in available_models or 'claude' in model:
             self.session.variables['model'] = model
             return f"Switched to model: {model}", False
         return f"Unknown model. Available: {', '.join(available_models)}", False
-    
+
     def _handle_permissions(self, args: str) -> Tuple[str, bool]:
         perms = self.session.variables.get('permissions', {
             'file_read': True,
@@ -314,14 +314,14 @@ Describe your project here...
             'command_execute': True,
             'network_access': False
         })
-        
+
         if not args:
             lines = ["Current permissions:"]
             for perm, enabled in perms.items():
                 status = "✓" if enabled else "✗"
                 lines.append(f"  {status} {perm}")
             return "\n".join(lines), False
-        
+
         parts = args.split('=', 1)
         if len(parts) == 2:
             perm, value = parts
@@ -329,12 +329,12 @@ Describe your project here...
             self.session.variables['permissions'] = perms
             return f"Updated permission: {perm}", False
         return "Usage: /permissions or /permissions <perm>=<true|false>", False
-    
+
     def _handle_pr_comments(self, args: str) -> Tuple[str, bool]:
         pr_number = args.strip() if args else ""
         if not pr_number:
             return "Usage: /pr_comments <pr_number>", False
-        
+
         try:
             result = subprocess.run(
                 f"gh pr view {pr_number} --comments",
@@ -346,13 +346,13 @@ Describe your project here...
             return f"Failed to fetch PR comments: {result.stderr}", False
         except Exception as e:
             return f"Error fetching PR comments: {e}", False
-    
+
     def _handle_review(self, args: str) -> Tuple[str, bool]:
         files = list(self.session.context_files.keys()) if not args else [args.strip()]
-        
+
         if not files:
             return "No files to review. Use /read to add files to context", False
-        
+
         review_notes = []
         review_notes.append(f"Code Review for {len(files)} file(s):")
         for file in files:
@@ -361,14 +361,14 @@ Describe your project here...
             review_notes.append("  - Review logic and algorithms")
             review_notes.append("  - Assess error handling")
             review_notes.append("  - Verify test coverage")
-        
+
         self.session.variables.setdefault('reviews', []).append({
             'files': files,
             'timestamp': time.time()
         })
-        
+
         return "\n".join(review_notes), False
-    
+
     def _handle_status(self) -> Tuple[str, bool]:
         status_info = [
             "Claude Code Status:",
@@ -381,7 +381,7 @@ Describe your project here...
             f"  Session age: {int(time.time() - self.session.created_at)}s"
         ]
         return "\n".join(status_info), False
-    
+
     def _handle_terminal_setup(self) -> Tuple[str, bool]:
         setup_script = """
 # Add this to your shell configuration:
@@ -397,16 +397,16 @@ claude_shift_enter() {
 bind -x '"\\e[13;2u": claude_shift_enter'
 """
         return f"Terminal setup instructions:{setup_script}", False
-    
+
     def _handle_vim(self, args: str) -> Tuple[str, bool]:
         if not args:
             self.session.variables['vim_mode'] = True
             return "Vim mode enabled. Use :q to exit, :w to save", False
-        
+
         if args == "off":
             self.session.variables['vim_mode'] = False
             return "Vim mode disabled", False
-        
+
         return "Usage: /vim or /vim off", False
 
     def _format_help(self) -> str:

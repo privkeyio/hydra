@@ -256,7 +256,7 @@ class ClaudeCodeAgent:
                 return False, error
 
             updated_content = current_content.replace(old_content, new_content)
-            
+
             # Record the edit operation specifically
             success, result = self.write_file(path, updated_content)
             if success:

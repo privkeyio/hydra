@@ -188,8 +188,8 @@ class StateStorage:
             cursor = conn.execute("""
                 SELECT checkpoint_id, checkpoint_type, state_hash, description,
                        operations_count, metadata, timestamp
-                FROM checkpoints 
-                WHERE project_id = ? 
+                FROM checkpoints
+                WHERE project_id = ?
                 ORDER BY timestamp DESC
             """, (project_id,))
 
@@ -230,7 +230,7 @@ class StateStorage:
             cursor = conn.execute("""
                 SELECT operation_id, operation_type, details, success,
                        duration_ms, error_message, timestamp
-                FROM operations 
+                FROM operations
                 WHERE project_id = ?
                 ORDER BY timestamp DESC
                 LIMIT ?

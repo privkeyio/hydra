@@ -567,3 +567,4 @@ def agent_trace(operation_name: str):
 
 def health_check() -> Dict[str, Any]:
     return monitoring.get_health_status()
+

@@ -9,10 +9,12 @@ from typing import Any, Dict, Optional
 
 from hydra.config import get_config
 from hydra.exceptions import (
-    AgentError, CodeGenerationError, ExecutionTimeoutError, 
-    RecursionLimitError, ValidationError
+    CodeGenerationError,
+    ExecutionTimeoutError,
+    RecursionLimitError,
+    ValidationError,
 )
-from hydra.validators import CodeValidator, TaskValidator, InputSanitizer
+from hydra.validators import CodeValidator, InputSanitizer, TaskValidator
 
 
 class CodeAgent:
@@ -44,7 +46,7 @@ class CodeAgent:
         self.name = InputSanitizer.sanitize_agent_name(name)
         if not self.name:
             raise ValidationError("Invalid agent name")
-            
+
         self.parent = parent
         self.depth = depth
         self.safe_mode = safe_mode
@@ -79,16 +81,16 @@ class CodeAgent:
             )
             self.logger.error(error_msg)
             raise RecursionLimitError(error_msg)
-        
+
         # Validate task input
         validation_result = TaskValidator.validate_task(task)
         if not validation_result["valid"]:
             raise ValidationError(f"Invalid task: {validation_result['errors']}")
-        
+
         if validation_result["warnings"]:
             for warning in validation_result["warnings"]:
                 self.logger.warning(f"Agent {self.agent_id}: {warning}")
-        
+
         task = validation_result["sanitized_task"]
         hierarchy = self._get_hierarchy_path()
         self.logger.info(
@@ -134,19 +136,20 @@ Important: Return ONLY the JSON object, no other text or formatting.
             f"Agent {self.agent_id} generating code "
             f"(attempt {retry_count + 1}/{self.max_retries})"
         )
-        
+
         # Validate prompt
         validation_result = TaskValidator.validate_task(prompt)
         if not validation_result["valid"]:
             raise ValidationError(f"Invalid prompt: {validation_result['errors']}")
-        
+
         code_prompt = f"""Generate Python code for this task:
 {validation_result['sanitized_task']}
 
 Return ONLY executable Python code. No explanations or markdown.
 
 IMPORTANT: Do not include any imports of os, subprocess, sys, or other system modules.
-Only use safe built-in functions and standard library modules like math, datetime, json."""
+Only use safe built-in functions and standard library modules like math, datetime, json.
+"""
 
         try:
             self.code_generations += 1
@@ -166,8 +169,10 @@ Only use safe built-in functions and standard library modules like math, datetim
             if self.safe_mode:
                 validation = CodeValidator.validate_code(code, allow_imports=False)
                 if not validation["valid"]:
-                    raise ValidationError(f"Code validation failed: {validation['errors']}")
-                
+                    raise ValidationError(
+                        f"Code validation failed: {validation['errors']}"
+                    )
+
                 if validation["dangerous_patterns"]:
                     self.logger.warning(
                         f"Agent {self.agent_id} generated code with warnings: "
@@ -377,7 +382,7 @@ Return ONLY executable Python code."""
     def explain_code(self, code: str) -> str:
         """Explain what the given code does."""
         self.logger.info(f"Agent {self.agent_id} explaining code")
-        
+
         explain_prompt = f"""Explain what this code does in clear, simple terms:
 
 ```python
@@ -390,7 +395,7 @@ Provide a concise explanation of:
 3. Key algorithms or techniques used
 
 Return ONLY the explanation text, no markdown formatting."""
-        
+
         try:
             explanation = self.llm_provider.generate(explain_prompt)
             self.logger.info(f"Agent {self.agent_id} generated code explanation")
@@ -403,11 +408,11 @@ Return ONLY the explanation text, no markdown formatting."""
     def complete_task(self, task: str) -> Dict[str, Any]:
         """Complete a task by generating and optionally executing code."""
         self.logger.info(f"Agent {self.agent_id} completing task: {task[:100]}...")
-        
+
         try:
             # Generate code for the task
             code = self.generate_code(task)
-            
+
             result = {
                 "success": True,
                 "task": task,
@@ -415,7 +420,7 @@ Return ONLY the explanation text, no markdown formatting."""
                 "agent": self.agent_id,
                 "hierarchy": self._get_hierarchy_path()
             }
-            
+
             # Try to execute if it's a simple task
             if len(code.split('\n')) < 50:  # Only execute smaller code blocks
                 try:
@@ -424,12 +429,14 @@ Return ONLY the explanation text, no markdown formatting."""
                     if execution["success"] and execution["stdout"]:
                         result["output"] = execution["stdout"]
                 except Exception as exec_e:
-                    self.logger.warning(f"Agent {self.agent_id} execution failed: {exec_e}")
+                    self.logger.warning(
+                        f"Agent {self.agent_id} execution failed: {exec_e}"
+                    )
                     result["execution_error"] = str(exec_e)
-            
+
             self.logger.info(f"Agent {self.agent_id} task completed successfully")
             return result
-            
+
         except Exception as e:
             error_msg = f"Task completion failed: {str(e)}"
             self.logger.error(f"Agent {self.agent_id} {error_msg}")
@@ -440,7 +447,7 @@ Return ONLY the explanation text, no markdown formatting."""
                 "agent": self.agent_id,
                 "hierarchy": self._get_hierarchy_path()
             }
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get agent performance statistics."""
         runtime = time.time() - self.start_time

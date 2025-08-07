@@ -28,7 +28,7 @@ class DashboardWebSocket:
             for connection in self.connections:
                 try:
                     await connection.send_text(json.dumps(message))
-                except:
+                except Exception:
                     disconnected.append(connection)
 
             for connection in disconnected:
@@ -51,8 +51,11 @@ async def dashboard():
         body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
         .container { max-width: 1200px; margin: 0 auto; }
         .header { text-align: center; margin-bottom: 30px; }
-        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-        .metric-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .metrics-grid { display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px; }
+        .metric-card { background: white; padding: 20px; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .metric-card h3 { margin-top: 0; color: #333; }
         .metric-value { font-size: 2em; font-weight: bold; color: #2196F3; }
         .metric-label { color: #666; font-size: 0.9em; }
@@ -61,7 +64,8 @@ async def dashboard():
         .alert-high { background: #fff3e0; border-left: 4px solid #ff9800; }
         .alert-warning { background: #f3e5f5; border-left: 4px solid #9c27b0; }
         .chart-container { height: 300px; margin: 20px 0; }
-        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+        .status-indicator { display: inline-block; width: 12px; height: 12px;
+            border-radius: 50%; margin-right: 8px; }
         .status-healthy { background: #4caf50; }
         .status-unhealthy { background: #f44336; }
         .bottlenecks { max-height: 300px; overflow-y: auto; }
@@ -72,7 +76,8 @@ async def dashboard():
         <div class="header">
             <h1>Hydra Monitoring Dashboard</h1>
             <div id="status">
-                <span id="status-indicator" class="status-indicator status-healthy"></span>
+                <span id="status-indicator"
+                      class="status-indicator status-healthy"></span>
                 <span id="status-text">System Healthy</span>
                 <span id="last-update" style="margin-left: 20px; color: #666;"></span>
             </div>
@@ -144,7 +149,7 @@ async def dashboard():
 
     <script>
         const ws = new WebSocket('ws://localhost:8001/ws');
-        
+
         const operationsChart = new Chart(document.getElementById('operations-chart'), {
             type: 'line',
             data: {
@@ -165,7 +170,8 @@ async def dashboard():
             }
         });
 
-        const responseTimeChart = new Chart(document.getElementById('response-time-chart'), {
+        const responseTimeChart = new Chart(
+            document.getElementById('response-time-chart'), {
             type: 'bar',
             data: {
                 labels: ['< 100ms', '100-500ms', '500ms-1s', '1-5s', '> 5s'],
@@ -185,38 +191,41 @@ async def dashboard():
         });
 
         function updateDashboard(data) {
-            document.getElementById('last-update').textContent = 
+            document.getElementById('last-update').textContent =
                 'Last updated: ' + new Date().toLocaleTimeString();
 
             if (data.status === 'healthy') {
-                document.getElementById('status-indicator').className = 'status-indicator status-healthy';
+                document.getElementById('status-indicator').className =
+                    'status-indicator status-healthy';
                 document.getElementById('status-text').textContent = 'System Healthy';
             } else {
-                document.getElementById('status-indicator').className = 'status-indicator status-unhealthy';
-                document.getElementById('status-text').textContent = 'System Issues Detected';
+                document.getElementById('status-indicator').className =
+                    'status-indicator status-unhealthy';
+                document.getElementById('status-text').textContent =
+                    'System Issues Detected';
             }
 
             const metrics = data.metrics || {};
-            
-            document.getElementById('active-agents').textContent = 
+
+            document.getElementById('active-agents').textContent =
                 metrics.agent_started?.current || 0;
-            
-            document.getElementById('total-operations').textContent = 
+
+            document.getElementById('total-operations').textContent =
                 metrics.agent_operations_total?.current || 0;
-            
+
             const successRate = metrics.workflow_success_rate?.current || 0;
-            document.getElementById('success-rate').textContent = 
+            document.getElementById('success-rate').textContent =
                 (successRate * 100).toFixed(1) + '%';
-            
+
             const avgResponseTime = metrics.agent_execution_time?.average || 0;
-            document.getElementById('avg-response-time').textContent = 
+            document.getElementById('avg-response-time').textContent =
                 (avgResponseTime * 1000).toFixed(0) + 'ms';
-            
+
             const memoryGB = (metrics.memory_usage?.current || 0) / (1024 ** 3);
-            document.getElementById('memory-usage').textContent = 
+            document.getElementById('memory-usage').textContent =
                 memoryGB.toFixed(2) + 'GB';
-            
-            document.getElementById('cpu-usage').textContent = 
+
+            document.getElementById('cpu-usage').textContent =
                 (metrics.cpu_usage?.current || 0).toFixed(1) + '%';
 
             updateAlerts(data.alerts);
@@ -224,16 +233,17 @@ async def dashboard():
 
         function updateAlerts(alerts) {
             const alertsSection = document.getElementById('alerts-section');
-            
+
             if (alerts && alerts.active && alerts.active.length > 0) {
                 alertsSection.innerHTML = '<h3>Active Alerts</h3>';
-                
+
                 alerts.active.forEach(alert => {
                     const alertDiv = document.createElement('div');
                     alertDiv.className = `alert alert-${alert.severity}`;
                     alertDiv.innerHTML = `
-                        <strong>${alert.metric}</strong>: ${alert.value.toFixed(2)} 
-                        (threshold: ${alert.threshold}) - ${alert.severity.toUpperCase()}
+                        <strong>${alert.metric}</strong>: ${alert.value.toFixed(2)}
+                        (threshold: ${alert.threshold}) -
+                        ${alert.severity.toUpperCase()}
                     `;
                     alertsSection.appendChild(alertDiv);
                 });
@@ -244,10 +254,10 @@ async def dashboard():
 
         function updateBottlenecks(bottlenecks) {
             const bottlenecksList = document.getElementById('bottlenecks-list');
-            
+
             if (bottlenecks && bottlenecks.length > 0) {
                 bottlenecksList.innerHTML = '';
-                
+
                 bottlenecks.forEach((bottleneck, index) => {
                     const item = document.createElement('div');
                     item.innerHTML = `
@@ -258,13 +268,14 @@ async def dashboard():
                     bottlenecksList.appendChild(item);
                 });
             } else {
-                bottlenecksList.innerHTML = '<div class="metric-label">No bottlenecks detected</div>';
+                bottlenecksList.innerHTML =
+                    '<div class="metric-label">No bottlenecks detected</div>';
             }
         }
 
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            
+
             if (data.type === 'health_update') {
                 updateDashboard(data.data);
             } else if (data.type === 'bottlenecks_update') {

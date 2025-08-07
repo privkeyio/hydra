@@ -1,0 +1,21 @@
+{
+  "routing_rules": {
+    "simple": "claude-sonnet-4-20250514",
+    "moderate": "claude-sonnet-4-20250514", 
+    "complex": "claude-3-opus-20240229",
+    "critical": "claude-3-opus-20240229"
+  },
+  "confidence_threshold": 0.7,
+  "cost_optimization_enabled": true,
+  "fallback_model": "claude-sonnet-4-20250514",
+  "complexity_weights": {
+    "keyword_match": 0.4,
+    "pattern_match": 0.4,
+    "context_factors": 0.2
+  },
+  "cost_tracking": {
+    "enabled": true,
+    "export_interval_hours": 24,
+    "budget_alerts_enabled": false
+  }
+}

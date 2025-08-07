@@ -69,29 +69,52 @@ class CodeValidator:
         return result
 
     @classmethod
+    def _check_import_node(cls, node: ast.Import, result: Dict[str, Any]):
+        """Check import node for dangerous imports."""
+        for alias in node.names:
+            result["imports"].append(alias.name)
+            if alias.name in cls.DANGEROUS_IMPORTS:
+                result["dangerous_patterns"].append(
+                    f"Dangerous import: {alias.name}"
+                )
+
+    @classmethod
+    def _check_import_from_node(cls, node: ast.ImportFrom, result: Dict[str, Any]):
+        """Check import from node for dangerous imports."""
+        if node.module:
+            result["imports"].append(node.module)
+            if node.module in cls.DANGEROUS_IMPORTS:
+                result["dangerous_patterns"].append(
+                    f"Dangerous import: {node.module}"
+                )
+
+    @classmethod
+    def _check_call_node(cls, node: ast.Call, result: Dict[str, Any]):
+        """Check call node for dangerous functions."""
+        if isinstance(node.func, ast.Name):
+            if node.func.id in cls.DANGEROUS_BUILTINS:
+                result["dangerous_patterns"].append(
+                    f"Dangerous function: {node.func.id}"
+                )
+
+    @classmethod
+    def _check_attribute_node(cls, node: ast.Attribute, result: Dict[str, Any]):
+        """Check attribute node for dangerous methods."""
+        dangerous_attrs = ['system', 'popen', 'spawn']
+        if isinstance(node.value, ast.Name) and node.attr in dangerous_attrs:
+            result["dangerous_patterns"].append(f"Dangerous method: {node.attr}")
+
+    @classmethod
     def _check_node_security(cls, node: ast.AST, result: Dict[str, Any]):
         """Check AST node for security issues."""
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                result["imports"].append(alias.name)
-                if alias.name in cls.DANGEROUS_IMPORTS:
-                    result["dangerous_patterns"].append(f"Dangerous import: {alias.name}")
-
+            cls._check_import_node(node, result)
         elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                result["imports"].append(node.module)
-                if node.module in cls.DANGEROUS_IMPORTS:
-                    result["dangerous_patterns"].append(f"Dangerous import: {node.module}")
-
+            cls._check_import_from_node(node, result)
         elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name):
-                if node.func.id in cls.DANGEROUS_BUILTINS:
-                    result["dangerous_patterns"].append(f"Dangerous function: {node.func.id}")
-
+            cls._check_call_node(node, result)
         elif isinstance(node, ast.Attribute):
-            # Check for dangerous attribute access
-            if isinstance(node.value, ast.Name) and node.attr in ['system', 'popen', 'spawn']:
-                result["dangerous_patterns"].append(f"Dangerous method: {node.attr}")
+            cls._check_attribute_node(node, result)
 
     @classmethod
     def _check_string_patterns(cls, code: str, result: Dict[str, Any]):

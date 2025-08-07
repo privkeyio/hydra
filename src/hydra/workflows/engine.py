@@ -47,8 +47,9 @@ def plan_node(state: WorkflowState) -> WorkflowState:
             reasoning = agent.reason(task)
             state["plan"] = reasoning.get("plan", "")
             state["subtasks"] = reasoning.get("subtasks", [])
+            subtask_count = len(state['subtasks'])
             logger.info(
-                f"Agent {agent.name} created plan with {len(state['subtasks'])} subtasks"
+                f"Agent {agent.name} created plan with {subtask_count} subtasks"
             )
     except RecursionError as e:
         logger.warning(f"Depth limit reached: {e}")
@@ -60,7 +61,8 @@ def plan_node(state: WorkflowState) -> WorkflowState:
         try:
             result = agent.complete_task(task)
             state["results"][agent.agent_id] = result
-            state["plan"] = result.get("generated_code", f"Fallback execution: {str(e)}")
+            fallback = f"Fallback execution: {str(e)}"
+            state["plan"] = result.get("generated_code", fallback)
             state["subtasks"] = []
         except Exception as fallback_e:
             state["plan"] = f"Task failed: {fallback_e}"
@@ -80,7 +82,9 @@ def spawn_node(state: WorkflowState) -> WorkflowState:
 
         try:
             # Create employee agent directly
-            employee = CodeAgent(employee_name, parent=parent_agent, depth=state["depth"] + 1)
+            employee = CodeAgent(
+                employee_name, parent=parent_agent, depth=state["depth"] + 1
+            )
 
             # Complete the subtask
             result = employee.complete_task(subtask)
@@ -89,7 +93,8 @@ def spawn_node(state: WorkflowState) -> WorkflowState:
             if result["success"]:
                 logger.info(f"Successfully completed subtask with {employee_name}")
             else:
-                logger.error(f"Employee {employee_name} failed: {result.get('error', 'Unknown error')}")
+                error = result.get('error', 'Unknown error')
+                logger.error(f"Employee {employee_name} failed: {error}")
 
         except RecursionError as e:
             state["results"][employee_name] = {
@@ -126,7 +131,8 @@ def aggregate_node(state: WorkflowState) -> WorkflowState:
                 if "generated_code" in result:
                     all_code.append(f"# {agent_name}\n{result['generated_code']}")
                 if "output" in result:
-                    all_outputs.append(f"# Output from {agent_name}\n{result['output']}")
+                    output = f"# Output from {agent_name}\n{result['output']}"
+                    all_outputs.append(output)
             else:
                 failed_results.append(result)
 

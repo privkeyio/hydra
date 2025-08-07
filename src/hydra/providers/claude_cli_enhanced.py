@@ -180,12 +180,18 @@ class SlashCommandProcessor:
         old_count = len(self.session.history)
         if old_count > 10:
             self.session.history = self.session.history[-5:]
-        return f"Compacted conversation (kept {len(self.session.history)}/{old_count} items, focus: {focus})", False
+        kept_count = len(self.session.history)
+        return (
+            f"Compacted conversation (kept {kept_count}/{old_count} items, "
+            f"focus: {focus})", False
+        )
 
     def _handle_config(self, args: str) -> Tuple[str, bool]:
         if not args:
             config = {
-                'model': self.session.variables.get('model', 'claude-opus-4-1-20250805'),
+                'model': self.session.variables.get(
+                    'model', 'claude-opus-4-1-20250805'
+                ),
                 'temperature': self.session.variables.get('temperature', 0.7),
                 'max_tokens': self.session.variables.get('max_tokens', 4096)
             }
@@ -204,7 +210,11 @@ class SlashCommandProcessor:
             'output_tokens': 0,
             'total_cost': 0.0
         })
-        return f"Token usage:\n  Input: {stats['input_tokens']}\n  Output: {stats['output_tokens']}\n  Est. cost: ${stats['total_cost']:.4f}", False
+        return (
+            f"Token usage:\n  Input: {stats['input_tokens']}\n  "
+            f"Output: {stats['output_tokens']}\n  "
+            f"Est. cost: ${stats['total_cost']:.4f}", False
+        )
 
     def _handle_doctor(self) -> Tuple[str, bool]:
         checks = []
@@ -299,7 +309,8 @@ Describe your project here...
 
         if not args:
             current = self.session.variables.get('model', 'claude-opus-4-1-20250805')
-            return f"Current model: {current}\nAvailable: {', '.join(available_models)}", False
+            available = ', '.join(available_models)
+            return f"Current model: {current}\nAvailable: {available}", False
 
         model = args.strip()
         if model in available_models or 'claude' in model:
@@ -370,10 +381,11 @@ Describe your project here...
         return "\n".join(review_notes), False
 
     def _handle_status(self) -> Tuple[str, bool]:
+        model = self.session.variables.get('model', 'claude-opus-4-1-20250805')
         status_info = [
             "Claude Code Status:",
             f"  Session: {self.session.session_id}",
-            f"  Model: {self.session.variables.get('model', 'claude-opus-4-1-20250805')}",
+            f"  Model: {model}",
             f"  Account: {self.session.variables.get('account', 'anonymous')}",
             f"  Working dir: {self.session.working_dir}",
             f"  Files loaded: {len(self.session.context_files)}",

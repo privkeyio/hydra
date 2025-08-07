@@ -131,6 +131,36 @@ Important: Return ONLY the JSON object, no other text or formatting.
                 # Fallback response
                 return {"plan": str(e), "subtasks": []}
 
+    def _clean_code_format(self, code: str) -> str:
+        """Clean up code formatting."""
+        code = code.strip()
+        if code.startswith("```python"):
+            code = code[9:]
+        if code.startswith("```"):
+            code = code[3:]
+        if code.endswith("```"):
+            code = code[:-3]
+        return code.strip()
+
+    def _validate_generated_code(self, code: str) -> None:
+        """Validate generated code for security and syntax."""
+        # Security validation if in safe mode
+        if self.safe_mode:
+            validation = CodeValidator.validate_code(code, allow_imports=False)
+            if not validation["valid"]:
+                raise ValidationError(
+                    f"Code validation failed: {validation['errors']}"
+                )
+
+            if validation["dangerous_patterns"]:
+                self.logger.warning(
+                    f"Agent {self.agent_id} generated code with warnings: "
+                    f"{validation['dangerous_patterns']}"
+                )
+
+        # Validate syntax
+        ast.parse(code)
+
     def generate_code(self, prompt: str, retry_count: int = 0) -> str:
         self.logger.info(
             f"Agent {self.agent_id} generating code "
@@ -154,33 +184,9 @@ Only use safe built-in functions and standard library modules like math, datetim
         try:
             self.code_generations += 1
             code = self.llm_provider.generate(code_prompt)
+            code = self._clean_code_format(code)
+            self._validate_generated_code(code)
 
-            # Clean up code formatting
-            code = code.strip()
-            if code.startswith("```python"):
-                code = code[9:]
-            if code.startswith("```"):
-                code = code[3:]
-            if code.endswith("```"):
-                code = code[:-3]
-            code = code.strip()
-
-            # Security validation if in safe mode
-            if self.safe_mode:
-                validation = CodeValidator.validate_code(code, allow_imports=False)
-                if not validation["valid"]:
-                    raise ValidationError(
-                        f"Code validation failed: {validation['errors']}"
-                    )
-
-                if validation["dangerous_patterns"]:
-                    self.logger.warning(
-                        f"Agent {self.agent_id} generated code with warnings: "
-                        f"{validation['dangerous_patterns']}"
-                    )
-
-            # Validate syntax
-            ast.parse(code)
             self.logger.info(
                 f"Agent {self.agent_id} generated valid code "
                 f"({len(code)} chars, generation #{self.code_generations})"
@@ -188,24 +194,14 @@ Only use safe built-in functions and standard library modules like math, datetim
             return code
 
         except (SyntaxError, ValidationError) as e:
-            error_msg = f"Generated invalid Python code: {e}"
-            self.logger.error(
-                f"Agent {self.agent_id} syntax/validation error: {error_msg}"
-            )
-
             if retry_count < self.max_retries - 1:
-                self.logger.info(
-                    f"Agent {self.agent_id} retrying code generation"
-                )
+                self.logger.info(f"Agent {self.agent_id} retrying code generation")
                 return self.generate_code(prompt, retry_count + 1)
-
-            raise CodeGenerationError(error_msg) from e
+            raise CodeGenerationError(f"Generated invalid Python code: {e}") from e
         except Exception as e:
-            error_msg = f"Code generation failed: {str(e)}"
-            self.logger.error(f"Agent {self.agent_id} {error_msg}")
             if retry_count < self.max_retries - 1:
                 return self.generate_code(prompt, retry_count + 1)
-            raise CodeGenerationError(error_msg) from e
+            raise CodeGenerationError(f"Code generation failed: {str(e)}") from e
 
     def execute_code(self, code_str: str, retry_count: int = 0) -> Dict[str, Any]:
         self.logger.info(
@@ -266,7 +262,7 @@ Only use safe built-in functions and standard library modules like math, datetim
                 "Code may contain infinite loops or blocking operations"
             )
             self.logger.error(f"Agent {self.agent_id} {error_msg}")
-            raise ExecutionTimeoutError(error_msg)
+            raise ExecutionTimeoutError(error_msg) from None
         except Exception as e:
             error_msg = (
                 f"Unexpected execution error: {str(e)} - Check system "

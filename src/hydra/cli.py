@@ -33,17 +33,20 @@ def format_results(results: Dict[str, Any], indent: int = 0) -> str:
             output.append(f"{prefix}  Successful: {value.get('successful', 0)}")
             output.append(f"{prefix}  Failed: {value.get('failed', 0)}")
             output.append(f"{prefix}  Max depth: {value.get('max_depth', 0)}")
-            output.append(f"{prefix}  Code generated: {value.get('code_generated', False)}")
+            code_gen = value.get('code_generated', False)
+            output.append(f"{prefix}  Code generated: {code_gen}")
         elif isinstance(value, dict):
             if "error" in value:
                 output.append(f"{prefix}{key}: ❌ {value['error']}")
             elif value.get("success", True):
                 output.append(f"{prefix}{key}: ✅ Completed")
                 if "task" in value:
-                    task_preview = value['task'][:50] + "..." if len(value['task']) > 50 else value['task']
+                    task = value['task']
+                    task_preview = task[:50] + "..." if len(task) > 50 else task
                     output.append(f"{prefix}  Task: {task_preview}")
                 if value.get("generated_code") and len(value['generated_code']) < 200:
-                    output.append(f"{prefix}  Generated: {len(value['generated_code'])} chars of code")
+                    code_len = len(value['generated_code'])
+                    output.append(f"{prefix}  Generated: {code_len} chars of code")
             else:
                 output.append(f"{prefix}{key}: ❌ Failed")
                 if "task" in value:
@@ -59,7 +62,8 @@ def create_parser():
     parser = argparse.ArgumentParser(
         description="Hydra: Multi-agent code generation system with project templates",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Examples:\n  hydra \"Calculate fibonacci numbers\"\n  hydra template create flask_web_app ./my-app --project_name=MyApp"
+        epilog="Examples:\n  hydra \"Calculate fibonacci numbers\"\n  "
+               "hydra template create flask_web_app ./my-app --project_name=MyApp"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -88,20 +92,31 @@ def create_parser():
     )
 
     # Template subcommand
-    template_parser = subparsers.add_parser("template", help="Project template operations")
-    template_subparsers = template_parser.add_subparsers(dest="template_action", help="Template actions")
+    template_parser = subparsers.add_parser(
+        "template", help="Project template operations"
+    )
+    template_subparsers = template_parser.add_subparsers(
+        dest="template_action", help="Template actions"
+    )
 
     # Template list
     template_subparsers.add_parser("list", help="List available templates")
 
     # Template create
-    create_parser = template_subparsers.add_parser("create", help="Create project from template")
+    create_parser = template_subparsers.add_parser(
+        "create", help="Create project from template"
+    )
     create_parser.add_argument("template_name", help="Template to use")
     create_parser.add_argument("output_dir", help="Output directory")
-    create_parser.add_argument("--param", action="append", help="Template parameter (format: key=value)")
+    create_parser.add_argument(
+        "--param", action="append",
+        help="Template parameter (format: key=value)"
+    )
 
     # Template validate
-    validate_parser = template_subparsers.add_parser("validate", help="Validate templates")
+    validate_parser = template_subparsers.add_parser(
+        "validate", help="Validate templates"
+    )
     validate_parser.add_argument("--template", help="Specific template to validate")
 
     # Backward compatibility - direct task as positional argument
@@ -191,99 +206,119 @@ def print_results(results, json_output):
             print(f"\nAgents created: {', '.join(agents)}")
 
 
+def _handle_list_templates(engine):
+    """Handle template list command."""
+    templates = engine.list_templates()
+    if not templates:
+        print("No templates available.")
+        return 0
+
+    print("Available templates:")
+    for template_name in templates:
+        try:
+            template = engine.load_template(template_name)
+            print(f"  {template_name}: {template.description}")
+            print(f"    Tags: {', '.join(template.tags)}")
+        except Exception as e:
+            print(f"  {template_name}: Error loading template ({e})")
+    return 0
+
+
+def _parse_template_params(param_list):
+    """Parse template parameters from command line."""
+    params = {}
+    if param_list:
+        for param_str in param_list:
+            if '=' not in param_str:
+                print(f"Invalid parameter format: {param_str}. Use key=value")
+                return None
+            key, value = param_str.split('=', 1)
+            try:
+                params[key] = json.loads(value)
+            except Exception:
+                params[key] = value
+    return params
+
+
+def _handle_create_template(engine, args):
+    """Handle template create command."""
+    try:
+        engine.load_template(args.template_name)
+        params = _parse_template_params(args.param)
+        if params is None:
+            return 1
+
+        result = engine.generate_project(
+            args.template_name, Path(args.output_dir), params
+        )
+
+        print(f"Project created successfully in {result['output_dir']}")
+        print(f"Generated {len(result['generated_files'])} files")
+
+        if result['post_generation_commands']:
+            print("\nRecommended next steps:")
+            for i, cmd in enumerate(result['post_generation_commands'], 1):
+                print(f"  {i}. {cmd}")
+        return 0
+
+    except ValueError as e:
+        print(f"Error: {e}")
+        return 1
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return 1
+
+
+def _handle_validate_templates(args):
+    """Handle template validation command."""
+    if args.template:
+        # Validate specific template
+        template_dir = (
+            Path(__file__).parent / 'templates' / 'templates' / args.template
+        )
+        is_valid, errors = TemplateValidator.validate_template_structure(
+            template_dir
+        )
+
+        if is_valid:
+            print(f"Template '{args.template}' is valid ✅")
+        else:
+            print(f"Template '{args.template}' has errors ❌")
+            for error in errors:
+                print(f"  - {error}")
+        return 0 if is_valid else 1
+    else:
+        # Validate all templates
+        templates_dir = Path(__file__).parent / 'templates' / 'templates'
+        results = TemplateValidator.validate_all_templates(templates_dir)
+
+        valid_count = sum(1 for is_valid, _ in results.values() if is_valid)
+        total_count = len(results)
+
+        print(f"Template validation results: {valid_count}/{total_count} valid")
+
+        for template_name, (is_valid, errors) in results.items():
+            status = "✅" if is_valid else "❌"
+            print(f"  {template_name}: {status}")
+            if not is_valid:
+                for error in errors[:3]:  # Show first 3 errors
+                    print(f"    - {error}")
+                if len(errors) > 3:
+                    print(f"    ... and {len(errors) - 3} more errors")
+
+        return 0 if valid_count == total_count else 1
+
+
 def handle_template_command(args):
     """Handle template subcommands."""
     engine = TemplateEngine()
 
     if args.template_action == "list":
-        templates = engine.list_templates()
-        if not templates:
-            print("No templates available.")
-            return 0
-
-        print("Available templates:")
-        for template_name in templates:
-            try:
-                template = engine.load_template(template_name)
-                print(f"  {template_name}: {template.description}")
-                print(f"    Tags: {', '.join(template.tags)}")
-            except Exception as e:
-                print(f"  {template_name}: Error loading template ({e})")
-        return 0
-
+        return _handle_list_templates(engine)
     elif args.template_action == "create":
-        try:
-            template = engine.load_template(args.template_name)
-
-            # Parse parameters
-            params = {}
-            if args.param:
-                for param_str in args.param:
-                    if '=' not in param_str:
-                        print(f"Invalid parameter format: {param_str}. Use key=value")
-                        return 1
-                    key, value = param_str.split('=', 1)
-                    # Try to parse as JSON for complex types
-                    try:
-                        params[key] = json.loads(value)
-                    except:
-                        params[key] = value
-
-            # Generate project
-            result = engine.generate_project(args.template_name, Path(args.output_dir), params)
-
-            print(f"Project created successfully in {result['output_dir']}")
-            print(f"Generated {len(result['generated_files'])} files")
-
-            if result['post_generation_commands']:
-                print("\nRecommended next steps:")
-                for i, cmd in enumerate(result['post_generation_commands'], 1):
-                    print(f"  {i}. {cmd}")
-
-            return 0
-
-        except ValueError as e:
-            print(f"Error: {e}")
-            return 1
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            return 1
-
+        return _handle_create_template(engine, args)
     elif args.template_action == "validate":
-        if args.template:
-            # Validate specific template
-            template_dir = Path(__file__).parent / 'templates' / 'templates' / args.template
-            is_valid, errors = TemplateValidator.validate_template_structure(template_dir)
-
-            if is_valid:
-                print(f"Template '{args.template}' is valid ✅")
-            else:
-                print(f"Template '{args.template}' has errors ❌")
-                for error in errors:
-                    print(f"  - {error}")
-
-            return 0 if is_valid else 1
-        else:
-            # Validate all templates
-            templates_dir = Path(__file__).parent / 'templates' / 'templates'
-            results = TemplateValidator.validate_all_templates(templates_dir)
-
-            valid_count = sum(1 for is_valid, _ in results.values() if is_valid)
-            total_count = len(results)
-
-            print(f"Template validation results: {valid_count}/{total_count} valid")
-
-            for template_name, (is_valid, errors) in results.items():
-                status = "✅" if is_valid else "❌"
-                print(f"  {template_name}: {status}")
-                if not is_valid:
-                    for error in errors[:3]:  # Show first 3 errors
-                        print(f"    - {error}")
-                    if len(errors) > 3:
-                        print(f"    ... and {len(errors) - 3} more errors")
-
-            return 0 if valid_count == total_count else 1
-
+        return _handle_validate_templates(args)
     else:
         print("Unknown template action")
         return 1

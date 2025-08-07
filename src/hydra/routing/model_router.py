@@ -100,6 +100,32 @@ class TaskComplexityAnalyzer:
             }
         }
 
+    def _score_keywords(self, text: str, scores: Dict[ComplexityLevel, int]):
+        """Score based on keyword matches."""
+        for level, rules in self.complexity_keywords.items():
+            for keyword in rules['keywords']:
+                if keyword in text:
+                    scores[level] += 2
+
+    def _score_patterns(self, text: str, scores: Dict[ComplexityLevel, int]):
+        """Score based on pattern matches."""
+        for level, rules in self.complexity_keywords.items():
+            for pattern in rules['patterns']:
+                if re.search(pattern, text):
+                    scores[level] += 3
+
+    def _score_context(self, context: Dict, scores: Dict[ComplexityLevel, int]):
+        """Score based on context information."""
+        if not context:
+            return
+
+        if context.get('file_count', 0) > 10:
+            scores[ComplexityLevel.COMPLEX] += 2
+        if context.get('has_tests', False):
+            scores[ComplexityLevel.MODERATE] += 1
+        if context.get('involves_database', False):
+            scores[ComplexityLevel.COMPLEX] += 2
+
     def analyze_task(
         self, task_description: str, context: Dict = None
     ) -> ComplexityLevel:
@@ -109,22 +135,9 @@ class TaskComplexityAnalyzer:
         text = task_description.lower()
         scores = {level: 0 for level in ComplexityLevel}
 
-        for level, rules in self.complexity_keywords.items():
-            for keyword in rules['keywords']:
-                if keyword in text:
-                    scores[level] += 2
-
-            for pattern in rules['patterns']:
-                if re.search(pattern, text):
-                    scores[level] += 3
-
-        if context:
-            if context.get('file_count', 0) > 10:
-                scores[ComplexityLevel.COMPLEX] += 2
-            if context.get('has_tests', False):
-                scores[ComplexityLevel.MODERATE] += 1
-            if context.get('involves_database', False):
-                scores[ComplexityLevel.COMPLEX] += 2
+        self._score_keywords(text, scores)
+        self._score_patterns(text, scores)
+        self._score_context(context, scores)
 
         max_score = max(scores.values())
         if max_score == 0:

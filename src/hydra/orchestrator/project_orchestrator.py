@@ -319,6 +319,44 @@ class ProjectOrchestrator:
 
         return "\n\n".join(context_parts)
 
+    async def _execute_task_with_retry(self, task) -> bool:
+        """Execute a task with retry logic."""
+        for attempt in range(task.retry_count + 1):
+            try:
+                await self._execute_task(task)
+                return True
+            except Exception:
+                if attempt == task.retry_count:
+                    self._log_event(
+                        f"Task {task.id} failed after {attempt + 1} attempts"
+                    )
+                    return False
+                else:
+                    self._log_event(
+                        f"Retrying task {task.id} (attempt {attempt + 2})"
+                    )
+                    await asyncio.sleep(2 ** attempt)
+        return False
+
+    async def _execute_level(self, level_idx: int, level_tasks: list):
+        """Execute all tasks in a specific level."""
+        self._log_event(
+            f"Executing level {level_idx + 1} with {len(level_tasks)} tasks"
+        )
+
+        tasks_to_run = [task for task in level_tasks
+                       if task.status == TaskStatus.PENDING]
+
+        if not tasks_to_run:
+            return
+
+        batch_size = min(len(tasks_to_run), self.spec.max_parallel)
+        for i in range(0, len(tasks_to_run), batch_size):
+            batch = tasks_to_run[i:i + batch_size]
+            coroutines = [self._execute_task_with_retry(task) for task in batch]
+            if coroutines:
+                await asyncio.gather(*coroutines, return_exceptions=True)
+
     async def execute(self) -> Dict[str, Any]:
         self.start_time = time.time()
         valid, errors = self.spec.validate()
@@ -331,44 +369,9 @@ class ProjectOrchestrator:
         execution_levels = self.spec.get_execution_order()
 
         for level_idx, level_tasks in enumerate(execution_levels):
-            self._log_event(
-                f"Executing level {level_idx + 1} with {len(level_tasks)} tasks"
-            )
-
-            tasks_to_run = []
-            for task in level_tasks:
-                if task.status == TaskStatus.PENDING:
-                    tasks_to_run.append(task)
-
-            if tasks_to_run:
-                batch_size = min(len(tasks_to_run), self.spec.max_parallel)
-                for i in range(0, len(tasks_to_run), batch_size):
-                    batch = tasks_to_run[i:i + batch_size]
-
-                    coroutines = []
-                    for task in batch:
-                        for attempt in range(task.retry_count + 1):
-                            try:
-                                coroutines.append(self._execute_task(task))
-                                break
-                            except Exception:
-                                if attempt == task.retry_count:
-                                    self._log_event(
-                                        f"Task {task.id} failed after "
-                                        f"{attempt + 1} attempts"
-                                    )
-                                else:
-                                    self._log_event(
-                                        f"Retrying task {task.id} "
-                                        f"(attempt {attempt + 2})"
-                                    )
-                                    await asyncio.sleep(2 ** attempt)
-
-                    if coroutines:
-                        await asyncio.gather(*coroutines, return_exceptions=True)
+            await self._execute_level(level_idx, level_tasks)
 
         self.end_time = time.time()
-
         return self._generate_report()
 
     def _generate_report(self) -> Dict[str, Any]:

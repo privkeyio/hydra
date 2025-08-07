@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+{% if include_database %}      - database{% endif %}
+    volumes:
+      - ./logs:/app/logs
+
+{% if include_database %}
+  database:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: {{app_name}}
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
+{% endif %}

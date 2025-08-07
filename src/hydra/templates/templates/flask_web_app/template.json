@@ -1,0 +1,38 @@
+{
+  "name": "flask_web_app",
+  "description": "A complete Flask web application with database, authentication, and API endpoints",
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "description": "Name of the project",
+      "required": true
+    },
+    {
+      "name": "author",
+      "type": "string", 
+      "description": "Author name",
+      "default": "Developer"
+    },
+    {
+      "name": "database",
+      "type": "string",
+      "description": "Database to use",
+      "choices": ["sqlite", "postgresql", "mysql"],
+      "default": "sqlite"
+    },
+    {
+      "name": "auth_enabled",
+      "type": "boolean",
+      "description": "Enable user authentication",
+      "default": true
+    }
+  ],
+  "post_generation_commands": [
+    "pip install -r requirements.txt",
+    "flask db init",
+    "flask db migrate -m 'Initial migration'",
+    "flask db upgrade"
+  ],
+  "tags": ["web", "flask", "python", "api"]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "rust_cli",
+  "description": "Fast Rust CLI application with clap and error handling",
+  "parameters": [
+    {
+      "name": "crate_name",
+      "type": "string",
+      "description": "Rust crate name",
+      "required": true
+    },
+    {
+      "name": "author",
+      "type": "string",
+      "description": "Author name",
+      "default": "Developer"
+    },
+    {
+      "name": "include_config",
+      "type": "boolean",
+      "description": "Include configuration file support",
+      "default": true
+    },
+    {
+      "name": "async_runtime",
+      "type": "boolean",
+      "description": "Include async runtime (tokio)",
+      "default": false
+    }
+  ],
+  "post_generation_commands": [
+    "cargo build",
+    "cargo test",
+    "cargo clippy"
+  ],
+  "tags": ["rust", "cli", "systems", "performance"]
+}

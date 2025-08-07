@@ -1,0 +1,37 @@
+{
+  "name": "machine_learning",
+  "description": "Machine learning project with data pipeline, model training, and evaluation",
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "description": "ML project name",
+      "required": true
+    },
+    {
+      "name": "ml_framework",
+      "type": "string",
+      "description": "ML framework to use",
+      "choices": ["scikit-learn", "tensorflow", "pytorch"],
+      "default": "scikit-learn"
+    },
+    {
+      "name": "experiment_tracking",
+      "type": "string",
+      "description": "Experiment tracking tool",
+      "choices": ["mlflow", "wandb", "tensorboard"],
+      "default": "mlflow"
+    },
+    {
+      "name": "include_jupyter",
+      "type": "boolean",
+      "description": "Include Jupyter notebooks",
+      "default": true
+    }
+  ],
+  "post_generation_commands": [
+    "pip install -r requirements.txt",
+    "jupyter notebook"
+  ],
+  "tags": ["ml", "data-science", "python", "analytics"]
+}

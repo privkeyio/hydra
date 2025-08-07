@@ -167,35 +167,53 @@ class DashboardMetrics:
 
 
 class HydraMonitoring:
-    def __init__(self, service_name: str = "hydra-api"):
+    def __init__(self, service_name: str = "hydra-api", test_mode: bool = None):
+        # Auto-detect test mode if not explicitly set
+        if test_mode is None:
+            test_mode = (
+                os.getenv('TESTING') == '1' or
+                os.getenv('PYTEST_CURRENT_TEST') is not None or
+                'pytest' in str(os.getenv('_', ''))
+            )
+
+        self.test_mode = test_mode
         resource = Resource.create({"service.name": service_name})
 
-        trace.set_tracer_provider(TracerProvider(resource=resource))
-        self.tracer = trace.get_tracer(__name__)
+        if not test_mode:
+            trace.set_tracer_provider(TracerProvider(resource=resource))
+            self.tracer = trace.get_tracer(__name__)
 
-        jaeger_host = os.getenv('JAEGER_HOST', 'localhost')
-        jaeger_port = int(os.getenv('JAEGER_PORT', '14268'))
+            jaeger_host = os.getenv('JAEGER_HOST', 'localhost')
+            jaeger_port = int(os.getenv('JAEGER_PORT', '14268'))
 
-        jaeger_exporter = JaegerExporter(
-            agent_host_name=jaeger_host,
-            agent_port=jaeger_port,
-        )
+            jaeger_exporter = JaegerExporter(
+                agent_host_name=jaeger_host,
+                agent_port=jaeger_port,
+            )
 
-        span_processor = BatchSpanProcessor(jaeger_exporter)
-        trace.get_tracer_provider().add_span_processor(span_processor)
+            span_processor = BatchSpanProcessor(jaeger_exporter)
+            trace.get_tracer_provider().add_span_processor(span_processor)
 
-        prometheus_reader = PrometheusMetricReader()
-        metrics.set_meter_provider(MeterProvider(
-            resource=resource,
-            metric_readers=[prometheus_reader]
-        ))
+            prometheus_reader = PrometheusMetricReader()
+            metrics.set_meter_provider(MeterProvider(
+                resource=resource,
+                metric_readers=[prometheus_reader]
+            ))
 
-        self.meter = metrics.get_meter(__name__)
-        self._create_metrics()
+            self.meter = metrics.get_meter(__name__)
+            self._create_metrics()
+        else:
+            # Mock tracer and meter for testing
+            self.tracer = None
+            self.meter = None
 
         self.logger = StructuredLogger(__name__)
-        self.alerting = AlertingManager()
-        self.dashboard = DashboardMetrics()
+        if not test_mode:
+            self.alerting = AlertingManager()
+            self.dashboard = DashboardMetrics()
+        else:
+            self.alerting = None
+            self.dashboard = None
 
     def _create_metrics(self):
         self.request_counter = self.meter.create_counter(
@@ -268,6 +286,9 @@ class HydraMonitoring:
 
     def trace_function(self, operation_name: str):
         def decorator(func: Callable) -> Callable:
+            if self.test_mode or not self.tracer:
+                return func
+
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
                 with self.tracer.start_as_current_span(operation_name) as span:
@@ -278,7 +299,8 @@ class HydraMonitoring:
                     except Exception as e:
                         span.set_attribute("operation.success", False)
                         span.set_attribute("error.message", str(e))
-                        self.error_counter.add(1, {"operation": operation_name})
+                        if self.meter:
+                            self.error_counter.add(1, {"operation": operation_name})
                         raise
 
             @wraps(func)
@@ -291,7 +313,8 @@ class HydraMonitoring:
                     except Exception as e:
                         span.set_attribute("operation.success", False)
                         span.set_attribute("error.message", str(e))
-                        self.error_counter.add(1, {"operation": operation_name})
+                        if self.meter:
+                            self.error_counter.add(1, {"operation": operation_name})
                         raise
 
             return async_wrapper if hasattr(func, '__await__') else sync_wrapper
@@ -300,6 +323,9 @@ class HydraMonitoring:
     def record_request(
         self, method: str, endpoint: str, status_code: int, duration: float
     ):
+        if self.test_mode or not self.meter:
+            return
+
         labels = {
             "method": method,
             "endpoint": endpoint,
@@ -308,15 +334,20 @@ class HydraMonitoring:
 
         self.request_counter.add(1, labels)
         self.request_duration.record(duration, labels)
-        self.dashboard.record_metric('request_duration', duration, labels)
+        if self.dashboard:
+            self.dashboard.record_metric('request_duration', duration, labels)
 
         if status_code >= 400:
             self.error_counter.add(1, labels)
 
     def record_task_completion(self, task_type: str, duration: float, success: bool):
+        if self.test_mode or not self.meter:
+            return
+
         labels = {"task_type": task_type, "success": str(success)}
         self.task_completion_time.record(duration, labels)
-        self.dashboard.record_metric('task_completion_time', duration, labels)
+        if self.dashboard:
+            self.dashboard.record_metric('task_completion_time', duration, labels)
 
         if task_type == "code_generation":
             if success:

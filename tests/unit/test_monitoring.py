@@ -182,7 +182,7 @@ class TestHydraMonitoring:
     def test_init(self):
         with patch('hydra.monitoring.trace.set_tracer_provider'):
             with patch('hydra.monitoring.metrics.set_meter_provider'):
-                monitoring = HydraMonitoring("test-service")
+                monitoring = HydraMonitoring("test-service", test_mode=False)
                 assert monitoring.tracer is not None
                 assert monitoring.meter is not None
                 assert monitoring.logger is not None

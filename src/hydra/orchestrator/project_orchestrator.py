@@ -203,14 +203,14 @@ class ProjectOrchestrator:
     def _select_model_for_task(self, task: TaskNode) -> str:
         if task.model != ModelType.AUTO:
             model_map = {
-                ModelType.SONNET: "claude-3-5-sonnet-20241022",
+                ModelType.SONNET: "claude-sonnet-4-20250514",
                 ModelType.OPUS: "claude-3-opus-20240229"
             }
             return model_map.get(task.model, self.config.llm_provider.model)
 
         complexity_model_map = {
-            TaskComplexity.SIMPLE: "claude-3-5-sonnet-20241022",
-            TaskComplexity.MODERATE: "claude-3-5-sonnet-20241022",
+            TaskComplexity.SIMPLE: "claude-sonnet-4-20250514",
+            TaskComplexity.MODERATE: "claude-sonnet-4-20250514",
             TaskComplexity.COMPLEX: "claude-3-opus-20240229",
             TaskComplexity.CRITICAL: "claude-3-opus-20240229"
         }

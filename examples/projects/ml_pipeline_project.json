@@ -1,0 +1,120 @@
+{
+  "name": "Machine Learning Pipeline",
+  "description": "Build end-to-end ML pipeline for predictive analytics",
+  "tasks": [
+    {
+      "id": "setup_environment",
+      "name": "Setup ML Environment",
+      "description": "Create Python environment with necessary ML libraries",
+      "complexity": "simple",
+      "model": "sonnet",
+      "parameters": {
+        "python_version": "3.11",
+        "libraries": ["pandas", "numpy", "scikit-learn", "tensorflow", "mlflow"]
+      }
+    },
+    {
+      "id": "data_collection",
+      "name": "Implement Data Collection",
+      "description": "Create data collection scripts from multiple sources",
+      "complexity": "moderate",
+      "model": "sonnet",
+      "parameters": {
+        "sources": ["api", "database", "csv", "streaming"],
+        "format": "parquet"
+      }
+    },
+    {
+      "id": "data_validation",
+      "name": "Data Validation Pipeline",
+      "description": "Implement data quality checks and validation rules",
+      "dependencies": ["data_collection"],
+      "complexity": "moderate",
+      "model": "sonnet",
+      "parameters": {
+        "validation_rules": ["schema", "range", "uniqueness", "completeness"]
+      }
+    },
+    {
+      "id": "feature_engineering",
+      "name": "Feature Engineering",
+      "description": "Create feature extraction and transformation pipeline",
+      "dependencies": ["data_validation"],
+      "complexity": "complex",
+      "model": "opus",
+      "parameters": {
+        "techniques": ["scaling", "encoding", "polynomial", "interaction"]
+      }
+    },
+    {
+      "id": "model_training",
+      "name": "Model Training Pipeline",
+      "description": "Implement model training with hyperparameter tuning",
+      "dependencies": ["feature_engineering"],
+      "complexity": "complex",
+      "model": "opus",
+      "parameters": {
+        "algorithms": ["random_forest", "xgboost", "neural_network"],
+        "optimization": "optuna",
+        "cross_validation": true
+      }
+    },
+    {
+      "id": "model_evaluation",
+      "name": "Model Evaluation",
+      "description": "Comprehensive model evaluation and comparison",
+      "dependencies": ["model_training"],
+      "complexity": "moderate",
+      "model": "sonnet",
+      "parameters": {
+        "metrics": ["accuracy", "precision", "recall", "f1", "auc_roc"],
+        "visualization": true
+      }
+    },
+    {
+      "id": "model_deployment",
+      "name": "Model Deployment",
+      "description": "Deploy model as REST API with versioning",
+      "dependencies": ["model_evaluation"],
+      "complexity": "complex",
+      "model": "opus",
+      "parameters": {
+        "framework": "fastapi",
+        "containerization": "docker",
+        "model_registry": "mlflow"
+      }
+    },
+    {
+      "id": "monitoring_setup",
+      "name": "Setup Model Monitoring",
+      "description": "Implement model performance monitoring and drift detection",
+      "dependencies": ["model_deployment"],
+      "complexity": "critical",
+      "model": "opus",
+      "parameters": {
+        "monitoring_types": ["data_drift", "concept_drift", "performance"],
+        "alerting": true
+      }
+    },
+    {
+      "id": "automated_retraining",
+      "name": "Automated Retraining",
+      "description": "Create automated model retraining pipeline",
+      "dependencies": ["monitoring_setup"],
+      "complexity": "critical",
+      "model": "opus",
+      "parameters": {
+        "trigger": "performance_degradation",
+        "schedule": "weekly",
+        "validation": "shadow_mode"
+      }
+    }
+  ],
+  "max_parallel": 3,
+  "global_timeout": 2400,
+  "model_preferences": {
+    "default": "sonnet",
+    "ml_tasks": "opus"
+  },
+  "output_directory": "./generated/ml_pipeline"
+}

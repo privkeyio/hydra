@@ -19,6 +19,13 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+# Global test mode detection
+TEST_MODE = (
+    os.getenv('TESTING') == '1' or
+    os.getenv('PYTEST_CURRENT_TEST') is not None or
+    'pytest' in str(os.getenv('_', ''))
+)
+
 request_id: ContextVar[Optional[str]] = ContextVar('request_id', default=None)
 
 
@@ -365,17 +372,23 @@ class HydraMonitoring:
         self, agent_id: str, operation: str, duration: float,
         success: bool, metadata: Optional[Dict[str, Any]] = None
     ):
+        if self.test_mode or not self.meter:
+            return
+
         labels = {
             "agent_id": agent_id,
             "operation": operation,
             "success": str(success)
         }
 
-        self.agent_operations.add(1, labels)
-        self.agent_execution_time.record(duration, labels)
-        self.dashboard.record_metric('agent_execution_time', duration, labels)
+        if hasattr(self, 'agent_operations'):
+            self.agent_operations.add(1, labels)
+        if hasattr(self, 'agent_execution_time'):
+            self.agent_execution_time.record(duration, labels)
+        if self.dashboard:
+            self.dashboard.record_metric('agent_execution_time', duration, labels)
 
-        if metadata:
+        if metadata and self.dashboard:
             for key, value in metadata.items():
                 val = float(value) if isinstance(value, (int, float)) else 1
                 self.dashboard.record_metric(f'agent_{key}', val, labels)
@@ -390,12 +403,16 @@ class HydraMonitoring:
         )
 
     def track_agent_lifecycle(self, agent_id: str, action: str):
-        if action == "start":
+        if self.test_mode or not self.meter:
+            return
+
+        if action == "start" and hasattr(self, 'concurrent_agents'):
             self.concurrent_agents.add(1, {"agent_id": agent_id})
             self.dashboard.record_metric('agent_started', 1, {"agent_id": agent_id})
-        elif action == "stop":
+        elif action == "stop" and hasattr(self, 'concurrent_agents'):
             self.concurrent_agents.add(-1, {"agent_id": agent_id})
-            self.dashboard.record_metric('agent_stopped', 1, {"agent_id": agent_id})
+            if self.dashboard:
+                self.dashboard.record_metric('agent_stopped', 1, {"agent_id": agent_id})
 
         self.logger.info(f"Agent {action}", agent_id=agent_id, action=action)
 

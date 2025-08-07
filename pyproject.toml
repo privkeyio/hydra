@@ -58,6 +58,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.1.0",
     "flake8>=6.0.0",
     "black>=23.0.0",
     "mypy>=1.0.0",
@@ -100,7 +101,7 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
-addopts = "-v --cov=hydra --cov-report=html --cov-report=term"
+addopts = "-v --cov=hydra --cov-report=html --cov-report=term --timeout=300"
 
 [tool.coverage.run]
 source = ["src/hydra"]

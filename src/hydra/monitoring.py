@@ -184,9 +184,9 @@ class HydraMonitoring:
             )
 
         self.test_mode = test_mode
-        resource = Resource.create({"service.name": service_name})
 
         if not test_mode:
+            resource = Resource.create({"service.name": service_name})
             trace.set_tracer_provider(TracerProvider(resource=resource))
             self.tracer = trace.get_tracer(__name__)
 
@@ -408,7 +408,8 @@ class HydraMonitoring:
 
         if action == "start" and hasattr(self, 'concurrent_agents'):
             self.concurrent_agents.add(1, {"agent_id": agent_id})
-            self.dashboard.record_metric('agent_started', 1, {"agent_id": agent_id})
+            if self.dashboard:
+                self.dashboard.record_metric('agent_started', 1, {"agent_id": agent_id})
         elif action == "stop" and hasattr(self, 'concurrent_agents'):
             self.concurrent_agents.add(-1, {"agent_id": agent_id})
             if self.dashboard:
@@ -420,18 +421,22 @@ class HydraMonitoring:
         self, workflow_id: str, duration: float,
         tasks_completed: int, tasks_failed: int
     ):
+        if self.test_mode or not hasattr(self, 'workflow_execution'):
+            return
+
         labels = {"workflow_id": workflow_id}
 
         self.workflow_execution.record(duration, labels)
-        self.dashboard.record_metric('workflow_duration', duration, labels)
-        self.dashboard.record_metric(
-            'workflow_tasks_completed', tasks_completed, labels
-        )
-        self.dashboard.record_metric('workflow_tasks_failed', tasks_failed, labels)
+        if self.dashboard:
+            self.dashboard.record_metric('workflow_duration', duration, labels)
+            self.dashboard.record_metric(
+                'workflow_tasks_completed', tasks_completed, labels
+            )
+            self.dashboard.record_metric('workflow_tasks_failed', tasks_failed, labels)
 
-        total_tasks = tasks_completed + tasks_failed
-        success_rate = tasks_completed / total_tasks if total_tasks > 0 else 1.0
-        self.dashboard.record_metric('workflow_success_rate', success_rate, labels)
+            total_tasks = tasks_completed + tasks_failed
+            success_rate = tasks_completed / total_tasks if total_tasks > 0 else 1.0
+            self.dashboard.record_metric('workflow_success_rate', success_rate, labels)
 
         self.logger.info(
             "Workflow completed",
@@ -443,30 +448,48 @@ class HydraMonitoring:
         )
 
     def record_system_metrics(self, memory_bytes: int, cpu_percent: float):
+        if self.test_mode or not hasattr(self, 'memory_usage'):
+            return
+
         self.memory_usage.set(memory_bytes)
         self.cpu_usage.set(cpu_percent)
 
-        self.dashboard.record_metric('memory_usage', memory_bytes)
-        self.dashboard.record_metric('cpu_usage', cpu_percent)
+        if self.dashboard:
+            self.dashboard.record_metric('memory_usage', memory_bytes)
+            self.dashboard.record_metric('cpu_usage', cpu_percent)
 
-        metrics = {
-            'memory_usage': memory_bytes / (1024 ** 3),
-            'cpu_usage': cpu_percent / 100.0
-        }
+        if self.alerting:
+            metrics = {
+                'memory_usage': memory_bytes / (1024 ** 3),
+                'cpu_usage': cpu_percent / 100.0
+            }
 
-        alerts = self.alerting.check_alerts(metrics)
-        if alerts:
-            for alert in alerts:
-                self.logger.warning(
-                    f"Alert triggered: {alert['metric']}",
-                    alert_id=alert['id'],
-                    metric=alert['metric'],
-                    value=alert['value'],
-                    threshold=alert['threshold'],
-                    severity=alert['severity']
-                )
+            alerts = self.alerting.check_alerts(metrics)
+            if alerts:
+                for alert in alerts:
+                    self.logger.warning(
+                        f"Alert triggered: {alert['metric']}",
+                        alert_id=alert['id'],
+                        metric=alert['metric'],
+                        value=alert['value'],
+                        threshold=alert['threshold'],
+                        severity=alert['severity']
+                    )
 
     def get_health_status(self) -> Dict[str, Any]:
+        if self.test_mode or not self.dashboard or not self.alerting:
+            return {
+                'status': 'healthy',
+                'timestamp': datetime.now().isoformat(),
+                'metrics': {},
+                'alerts': {
+                    'total': 0,
+                    'critical': 0,
+                    'active': []
+                },
+                'correlation_id': self.get_correlation_id()
+            }
+
         dashboard_data = self.dashboard.get_dashboard_data()
         active_alerts = self.alerting.get_active_alerts()
 

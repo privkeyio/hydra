@@ -3,7 +3,7 @@
 # LLM Provider Configuration
 llm:
   # Provider type: venice, anthropic, openai, claude_cli
-  provider: venice
+  provider: claude_cli
   
   # Model name (optional - uses provider default if not specified)
   # model: qwen-2.5-coder-32b
@@ -12,6 +12,11 @@ llm:
   temperature: 0.2
   max_tokens: 2048
   timeout: 30
+  
+  # Claude CLI specific configuration
+  extra_params:
+    claude_path: "/home/kyle/.claude/local/claude"
+    cli_flags: ""  # Additional CLI flags if needed
 
 # Agent Configuration
 agent:

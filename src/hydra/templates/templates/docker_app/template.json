@@ -1,0 +1,30 @@
+{
+  "name": "docker_app",
+  "description": "Dockerized application with multi-stage builds and compose",
+  "parameters": [
+    {
+      "name": "app_name",
+      "type": "string",
+      "description": "Application name",
+      "required": true
+    },
+    {
+      "name": "base_image",
+      "type": "string",
+      "description": "Base Docker image",
+      "choices": ["node", "python", "golang", "nginx"],
+      "default": "python"
+    },
+    {
+      "name": "include_database",
+      "type": "boolean",
+      "description": "Include database service",
+      "default": true
+    }
+  ],
+  "post_generation_commands": [
+    "docker-compose build",
+    "docker-compose up -d"
+  ],
+  "tags": ["docker", "containerization", "devops"]
+}

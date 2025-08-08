@@ -1,0 +1,224 @@
+{
+  "name": "Microservices Architecture Setup",
+  "version": "1.0.0",
+  "description": "Bootstrap a complete microservices architecture with service mesh",
+  "metadata": {
+    "architecture": "microservices",
+    "orchestration": "kubernetes",
+    "service_mesh": "istio"
+  },
+  "variables": {
+    "namespace": "production",
+    "cluster_name": "main-cluster",
+    "domain": "api.company.com"
+  },
+  "execution_mode": "strict",
+  "max_parallel": 4,
+  "tasks": [
+    {
+      "id": "infrastructure_setup",
+      "type": "parallel",
+      "name": "Setup Infrastructure Components",
+      "description": "Initialize core infrastructure components in parallel",
+      "inputs": {
+        "components": [
+          "namespace_creation",
+          "service_accounts",
+          "secrets_management",
+          "ingress_controller"
+        ]
+      }
+    },
+    {
+      "id": "database_setup",
+      "type": "code_generation",
+      "name": "Database Configuration",
+      "description": "Setup databases for each microservice",
+      "inputs": {
+        "databases": [
+          {
+            "service": "user-service",
+            "type": "postgresql",
+            "replicas": 2
+          },
+          {
+            "service": "order-service", 
+            "type": "mysql",
+            "replicas": 1
+          },
+          {
+            "service": "inventory-service",
+            "type": "mongodb",
+            "replicas": 3
+          }
+        ],
+        "filename": "k8s/databases.yaml"
+      },
+      "dependencies": ["infrastructure_setup"],
+      "timeout": 300
+    },
+    {
+      "id": "message_queue",
+      "type": "code_generation",
+      "name": "Message Queue Setup",
+      "description": "Configure message queues for inter-service communication",
+      "inputs": {
+        "queue_type": "rabbitmq",
+        "filename": "k8s/message-queue.yaml",
+        "exchanges": [
+          "user.events",
+          "order.events", 
+          "inventory.events"
+        ]
+      },
+      "dependencies": ["infrastructure_setup"]
+    },
+    {
+      "id": "api_gateway",
+      "type": "code_generation",
+      "name": "API Gateway Configuration",
+      "description": "Setup API gateway with routing and authentication",
+      "inputs": {
+        "gateway_type": "kong",
+        "filename": "k8s/api-gateway.yaml",
+        "routes": [
+          {
+            "path": "/api/users/*",
+            "service": "user-service",
+            "auth_required": true
+          },
+          {
+            "path": "/api/orders/*",
+            "service": "order-service", 
+            "auth_required": true
+          },
+          {
+            "path": "/api/inventory/*",
+            "service": "inventory-service",
+            "auth_required": false
+          }
+        ]
+      },
+      "dependencies": ["database_setup", "message_queue"]
+    },
+    {
+      "id": "service_mesh",
+      "type": "file_create",
+      "name": "Service Mesh Configuration",
+      "description": "Configure Istio service mesh for traffic management",
+      "inputs": {
+        "files": [
+          {
+            "filename": "istio/virtual-services.yaml",
+            "description": "Virtual service definitions"
+          },
+          {
+            "filename": "istio/destination-rules.yaml",
+            "description": "Destination rules for load balancing"
+          },
+          {
+            "filename": "istio/gateways.yaml", 
+            "description": "Ingress gateway configuration"
+          }
+        ]
+      },
+      "dependencies": ["api_gateway"]
+    },
+    {
+      "id": "monitoring_setup",
+      "type": "sequential",
+      "name": "Monitoring and Observability",
+      "description": "Setup comprehensive monitoring stack",
+      "inputs": {
+        "tasks": [
+          {
+            "type": "file_create",
+            "name": "Prometheus Configuration",
+            "inputs": {
+              "filename": "monitoring/prometheus.yaml"
+            }
+          },
+          {
+            "type": "file_create",
+            "name": "Grafana Dashboards",
+            "inputs": {
+              "filename": "monitoring/grafana-dashboards.yaml"
+            }
+          },
+          {
+            "type": "file_create",
+            "name": "Jaeger Tracing",
+            "inputs": {
+              "filename": "monitoring/jaeger.yaml"
+            }
+          }
+        ]
+      },
+      "dependencies": ["service_mesh"]
+    },
+    {
+      "id": "security_policies",
+      "type": "file_create",
+      "name": "Security Policies",
+      "description": "Create security policies and RBAC configurations",
+      "inputs": {
+        "policies": [
+          {
+            "filename": "security/network-policies.yaml",
+            "description": "Network segmentation policies"
+          },
+          {
+            "filename": "security/pod-security-policies.yaml",
+            "description": "Pod security constraints"
+          },
+          {
+            "filename": "security/rbac.yaml",
+            "description": "Role-based access control"
+          }
+        ]
+      },
+      "dependencies": ["monitoring_setup"]
+    },
+    {
+      "id": "deployment_scripts",
+      "type": "code_generation", 
+      "name": "Deployment Automation",
+      "description": "Create deployment and rollback scripts",
+      "inputs": {
+        "filename": "scripts/deploy.sh",
+        "deployment_strategy": "blue-green",
+        "health_checks": true,
+        "rollback_capability": true
+      },
+      "dependencies": ["security_policies"]
+    },
+    {
+      "id": "validation_tests",
+      "type": "test",
+      "name": "Infrastructure Validation",
+      "description": "Comprehensive testing of the microservices setup",
+      "inputs": {
+        "test_framework": "pytest",
+        "test_categories": [
+          "connectivity_tests",
+          "security_tests", 
+          "performance_tests",
+          "failover_tests"
+        ],
+        "test_files": [
+          "tests/test_connectivity.py",
+          "tests/test_security.py",
+          "tests/test_performance.py",
+          "tests/test_failover.py"
+        ]
+      },
+      "dependencies": ["deployment_scripts"],
+      "conditions": [
+        {
+          "type": "command_success",
+          "expression": "kubectl cluster-info"
+        }
+      ]
+    }
+  ]
+}

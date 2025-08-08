@@ -4,6 +4,7 @@ from typing import Any, Dict, List, TypedDict
 from langgraph.graph import END, StateGraph
 
 from hydra.agents.base import CodeAgent
+from hydra.exceptions import RecursionLimitError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,19 +21,59 @@ class WorkflowState(TypedDict):
 
 
 def plan_node(state: WorkflowState) -> WorkflowState:
-    agent = CodeAgent(state["current_agent"], depth=state["depth"])
+    try:
+        agent = CodeAgent(state["current_agent"], depth=state["depth"])
+    except RecursionLimitError as e:
+        logger.warning(f"Depth limit reached during agent creation: {e}")
+        state["subtasks"] = []
+        state["plan"] = f"Depth limit reached at level {state['depth']}"
+        return state
 
     try:
-        reasoning = agent.reason(state["task"])
-        state["plan"] = reasoning.get("plan", "")
-        state["subtasks"] = reasoning.get("subtasks", [])
-        logger.info(
-            f"Agent {agent.name} created plan with {len(state['subtasks'])} subtasks"
+        # For simple tasks, complete directly instead of planning
+        task = state["task"]
+
+        # Check if task is simple (doesn't need decomposition)
+        is_simple_task = (
+            len(task.split()) < 10 and
+            any(keyword in task.lower() for keyword in [
+                "write a function", "create a function", "implement",
+                "calculate", "compute", "generate code"
+            ])
         )
-    except RecursionError as e:
+
+        if is_simple_task or state["depth"] >= 1:
+            # Complete the task directly
+            result = agent.complete_task(task)
+            state["results"][agent.agent_id] = result
+            state["plan"] = result.get("generated_code", "No code generated")
+            state["subtasks"] = []
+            logger.info(f"Agent {agent.name} completed task directly (simple task)")
+        else:
+            # Complex task - create plan and subtasks
+            reasoning = agent.reason(task)
+            state["plan"] = reasoning.get("plan", "")
+            state["subtasks"] = reasoning.get("subtasks", [])
+            subtask_count = len(state['subtasks'])
+            logger.info(
+                f"Agent {agent.name} created plan with {subtask_count} subtasks"
+            )
+    except (RecursionError, RecursionLimitError) as e:
         logger.warning(f"Depth limit reached: {e}")
         state["subtasks"] = []
         state["plan"] = f"Depth limit reached at level {state['depth']}"
+    except Exception as e:
+        logger.error(f"Planning failed: {e}")
+        # Fallback: try to complete task directly
+        try:
+            result = agent.complete_task(task)
+            state["results"][agent.agent_id] = result
+            fallback = f"Fallback execution: {str(e)}"
+            state["plan"] = result.get("generated_code", fallback)
+            state["subtasks"] = []
+        except Exception as fallback_e:
+            state["plan"] = f"Task failed: {fallback_e}"
+            state["subtasks"] = []
 
     return state
 
@@ -44,39 +85,37 @@ def spawn_node(state: WorkflowState) -> WorkflowState:
         employee_name = f"{state['current_agent']}_employee_{i}"
         state["agents"].append(employee_name)
 
-        spawn_code = f"""
-from hydra.agents.base import CodeAgent
-
-employee = CodeAgent("{employee_name}", depth={state['depth'] + 1})
-reasoning = employee.reason("{subtask}")
-result = {{
-    "agent": "{employee_name}",
-    "task": "{subtask}",
-    "plan": reasoning.get("plan", ""),
-    "subtasks": reasoning.get("subtasks", [])
-}}
-print(result)
-"""
+        logger.info(f"Spawning employee {employee_name} for subtask: {subtask[:50]}...")
 
         try:
-            exec_result = parent_agent.execute_code(spawn_code)
-            if exec_result["success"]:
-                import ast
-                result_data = ast.literal_eval(exec_result["stdout"].strip())
-                state["results"][employee_name] = result_data
-                logger.info(f"Successfully spawned {employee_name}")
+            # Create employee agent directly
+            employee = CodeAgent(
+                employee_name, parent=parent_agent, depth=state["depth"] + 1
+            )
+
+            # Complete the subtask
+            result = employee.complete_task(subtask)
+            state["results"][employee_name] = result
+
+            if result["success"]:
+                logger.info(f"Successfully completed subtask with {employee_name}")
             else:
-                state["results"][employee_name] = {
-                    "error": exec_result["stderr"],
-                    "task": subtask
-                }
-                logger.error(
-                    f"Failed to spawn {employee_name}: {exec_result['stderr']}"
-                )
+                error = result.get('error', 'Unknown error')
+                logger.error(f"Employee {employee_name} failed: {error}")
+
+        except RecursionError as e:
+            state["results"][employee_name] = {
+                "error": f"Recursion limit exceeded: {str(e)}",
+                "task": subtask,
+                "success": False
+            }
+            logger.error(f"Recursion limit exceeded for {employee_name}: {e}")
+
         except Exception as e:
             state["results"][employee_name] = {
-                "error": str(e),
-                "task": subtask
+                "error": f"Employee creation failed: {str(e)}",
+                "task": subtask,
+                "success": False
             }
             logger.error(f"Exception spawning {employee_name}: {e}")
 
@@ -86,11 +125,38 @@ print(result)
 def aggregate_node(state: WorkflowState) -> WorkflowState:
     logger.info(f"Aggregating results from {len(state['agents'])} agents")
 
+    # Collect all generated code and results
+    all_code = []
+    all_outputs = []
+    successful_results = []
+    failed_results = []
+
+    for agent_name, result in state["results"].items():
+        if isinstance(result, dict):
+            if result.get("success", True) and "error" not in result:
+                successful_results.append(result)
+                if "generated_code" in result:
+                    all_code.append(f"# {agent_name}\n{result['generated_code']}")
+                if "output" in result:
+                    output = f"# Output from {agent_name}\n{result['output']}"
+                    all_outputs.append(output)
+            else:
+                failed_results.append(result)
+
+    # Combine all generated code
+    if all_code:
+        state["final_code"] = "\n\n".join(all_code)
+
+    if all_outputs:
+        state["execution_outputs"] = "\n\n".join(all_outputs)
+
     state["results"]["summary"] = {
         "total_agents": len(state["agents"]),
-        "successful": len([r for r in state["results"].values() if "error" not in r]),
-        "failed": len([r for r in state["results"].values() if "error" in r]),
-        "depth_reached": state["depth"]
+        "successful": len(successful_results),
+        "failed": len(failed_results),
+        "max_depth": state["depth"],
+        "code_generated": len(all_code) > 0,
+        "has_outputs": len(all_outputs) > 0
     }
 
     return state

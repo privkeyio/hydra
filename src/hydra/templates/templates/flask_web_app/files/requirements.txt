@@ -1,0 +1,6 @@
+Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
+{% if auth_enabled %}Flask-Login==0.6.2{% endif %}
+{% if database == 'postgresql' %}psycopg2-binary==2.9.7{% endif %}
+{% if database == 'mysql' %}PyMySQL==1.1.0{% endif %}
+python-dotenv==1.0.0

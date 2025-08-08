@@ -1,0 +1,135 @@
+name: Full Stack Web Application
+description: Build a complete web application with authentication, API, and frontend
+tasks:
+  - id: setup_backend
+    name: Setup Backend Project
+    description: Create Express.js project structure with TypeScript
+    complexity: simple
+    model: sonnet
+    parameters:
+      framework: express
+      language: typescript
+      
+  - id: setup_database
+    name: Setup Database Schema
+    description: Create PostgreSQL database schema with migrations
+    complexity: simple
+    model: sonnet
+    parameters:
+      database: postgresql
+      orm: prisma
+      
+  - id: design_api
+    name: Design API Specification
+    description: Create comprehensive OpenAPI 3.0 specification
+    complexity: moderate
+    model: sonnet
+    
+  - id: implement_auth
+    name: Implement Authentication
+    description: Implement JWT-based authentication with refresh tokens
+    dependencies: [setup_backend, setup_database]
+    complexity: complex
+    model: opus
+    parameters:
+      auth_type: jwt
+      features: [login, logout, refresh, password_reset]
+      
+  - id: implement_api
+    name: Implement REST API
+    description: Build all API endpoints according to specification
+    dependencies: [design_api, implement_auth]
+    complexity: moderate
+    model: sonnet
+    
+  - id: setup_frontend
+    name: Setup Frontend Project
+    description: Create React application with TypeScript and Vite
+    complexity: simple
+    model: sonnet
+    parameters:
+      framework: react
+      bundler: vite
+      styling: tailwind
+      
+  - id: implement_ui
+    name: Implement UI Components
+    description: Build reusable UI component library
+    dependencies: [setup_frontend]
+    complexity: moderate
+    model: sonnet
+    
+  - id: implement_pages
+    name: Implement Application Pages
+    description: Create all application pages and routing
+    dependencies: [implement_ui]
+    complexity: moderate
+    model: sonnet
+    
+  - id: integrate_api
+    name: Integrate Frontend with API
+    description: Connect React application to backend API with proper error handling
+    dependencies: [implement_api, implement_pages]
+    complexity: complex
+    model: opus
+    
+  - id: add_realtime
+    name: Add Real-time Features
+    description: Implement WebSocket for real-time updates
+    dependencies: [integrate_api]
+    complexity: complex
+    model: opus
+    parameters:
+      technology: socket.io
+      features: [notifications, live_updates]
+      
+  - id: implement_tests
+    name: Implement Test Suite
+    description: Create comprehensive unit and integration tests
+    dependencies: [add_realtime]
+    complexity: moderate
+    model: sonnet
+    parameters:
+      backend_testing: jest
+      frontend_testing: vitest
+      e2e_testing: playwright
+      
+  - id: add_monitoring
+    name: Add Monitoring and Logging
+    description: Implement application monitoring, logging, and error tracking
+    dependencies: [implement_tests]
+    complexity: complex
+    model: opus
+    parameters:
+      monitoring: [prometheus, grafana]
+      logging: winston
+      error_tracking: sentry
+      
+  - id: optimize_performance
+    name: Optimize Performance
+    description: Optimize application for production with caching and CDN
+    dependencies: [add_monitoring]
+    complexity: critical
+    model: opus
+    parameters:
+      caching: [redis, cdn]
+      optimization: [code_splitting, lazy_loading, compression]
+      
+  - id: setup_deployment
+    name: Setup Deployment Pipeline
+    description: Create CI/CD pipeline with Docker and Kubernetes
+    dependencies: [optimize_performance]
+    complexity: complex
+    model: opus
+    parameters:
+      containerization: docker
+      orchestration: kubernetes
+      ci_cd: github_actions
+
+max_parallel: 4
+global_timeout: 3600
+model_preferences:
+  default: sonnet
+  security_tasks: opus
+  performance_tasks: opus
+output_directory: ./generated/web_app

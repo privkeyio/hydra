@@ -119,8 +119,16 @@ class HydraConfig:
             config.base_url = os.getenv('OPENAI_BASE_URL')  # For custom endpoints
 
         elif provider_type == 'claude_cli':
-            config.extra_params['claude_path'] = os.getenv('CLAUDE_CLI_PATH', 'claude')
-            config.extra_params['cli_flags'] = os.getenv('CLAUDE_CLI_FLAGS', '')
+            # Use config file values first, then env vars, then defaults
+            extra_params = llm_config.get('extra_params', {})
+            config.extra_params['claude_path'] = (
+                extra_params.get('claude_path') or
+                os.getenv('CLAUDE_CLI_PATH', 'claude')
+            )
+            config.extra_params['cli_flags'] = (
+                extra_params.get('cli_flags') or
+                os.getenv('CLAUDE_CLI_FLAGS', '')
+            )
 
         elif provider_type == 'mock':
             config.api_key = 'test_key'  # Mock provider doesn't need real API key

@@ -1,0 +1,9 @@
+fastapi==0.103.1
+uvicorn[standard]==0.23.2
+sqlalchemy==2.0.21
+alembic==1.12.0
+pydantic==2.3.0
+{% if include_auth %}python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4{% endif %}
+{% if database == 'postgresql' %}psycopg2-binary==2.9.7{% endif %}
+python-dotenv==1.0.0

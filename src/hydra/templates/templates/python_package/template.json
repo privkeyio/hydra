@@ -1,0 +1,38 @@
+{
+  "name": "python_package",
+  "description": "Professional Python package with testing, documentation, and CI",
+  "parameters": [
+    {
+      "name": "package_name",
+      "type": "string",
+      "description": "Package name",
+      "required": true
+    },
+    {
+      "name": "author",
+      "type": "string",
+      "description": "Author name",
+      "default": "Developer"
+    },
+    {
+      "name": "license",
+      "type": "string",
+      "description": "License type",
+      "choices": ["MIT", "Apache-2.0", "GPL-3.0"],
+      "default": "MIT"
+    },
+    {
+      "name": "include_cli",
+      "type": "boolean",
+      "description": "Include CLI interface",
+      "default": false
+    }
+  ],
+  "post_generation_commands": [
+    "pip install -e .[dev]",
+    "pytest",
+    "black .",
+    "flake8"
+  ],
+  "tags": ["python", "package", "library"]
+}

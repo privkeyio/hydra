@@ -1,0 +1,37 @@
+{
+  "name": "microservice",
+  "description": "Production microservice with health checks, metrics, and distributed tracing",
+  "parameters": [
+    {
+      "name": "service_name",
+      "type": "string",
+      "description": "Microservice name",
+      "required": true
+    },
+    {
+      "name": "language",
+      "type": "string",
+      "description": "Programming language",
+      "choices": ["python", "nodejs", "golang", "java"],
+      "default": "python"
+    },
+    {
+      "name": "message_broker",
+      "type": "string",
+      "description": "Message broker",
+      "choices": ["rabbitmq", "kafka", "redis"],
+      "default": "redis"
+    },
+    {
+      "name": "include_grpc",
+      "type": "boolean",
+      "description": "Include gRPC support",
+      "default": false
+    }
+  ],
+  "post_generation_commands": [
+    "docker-compose build",
+    "docker-compose up -d"
+  ],
+  "tags": ["microservice", "distributed", "docker"]
+}

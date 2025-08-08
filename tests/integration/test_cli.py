@@ -19,7 +19,7 @@ def test_cli_help():
     result = run_cli(["--help"])
     assert result.returncode == 0
     assert "Hydra: Multi-agent code generation system" in result.stdout
-    assert "Example:" in result.stdout
+    assert "Examples:" in result.stdout
 
 
 def test_cli_no_task():
@@ -28,7 +28,7 @@ def test_cli_no_task():
 
 
 def test_cli_simple_task():
-    result = run_cli(["Create a hello world function"])
+    result = run_cli(["run", "Create a hello world function"])
     assert result.returncode == 0
     assert "Executing task:" in result.stdout
     assert "Agent: boss" in result.stdout
@@ -39,13 +39,13 @@ def test_cli_multi_line_stdin():
 1. add(a, b) that returns sum
 2. subtract(a, b) that returns difference"""
 
-    result = run_cli([], input_text=task)
+    result = run_cli(["run", "dummy"], input_text=task)
     assert result.returncode == 0
     assert "Executing task:" in result.stdout
 
 
 def test_cli_json_output():
-    result = run_cli(["Simple task", "--json"])
+    result = run_cli(["run", "Simple task", "--json"])
     assert result.returncode == 0
 
     try:
@@ -57,25 +57,22 @@ def test_cli_json_output():
 
 
 def test_cli_custom_agent_name():
-    result = run_cli(["Task", "--agent-name", "manager"])
+    result = run_cli(["run", "Task", "--agent-name", "manager"])
     assert result.returncode == 0
     assert "Agent: manager" in result.stdout
 
 
 def test_cli_refactor_functions():
     task = "Refactor add/subtract functions"
-    result = run_cli([task])
+    result = run_cli(["run", task])
 
     assert result.returncode == 0
     assert "Executing task:" in result.stdout
-    assert "Plan:" in result.stdout
-
-    if "Subtasks" in result.stdout:
-        assert "Execution Results:" in result.stdout
+    assert "Generated Code:" in result.stdout
 
 
 def test_cli_error_handling():
-    result = run_cli(["", "--depth", "10"])
+    result = run_cli(["run", "", "--depth", "10"])
     assert result.returncode == 1
 
 
@@ -90,7 +87,7 @@ def test_cli_interrupt_simulation():
         os.kill(pid, signal.SIGINT)
 
     proc = subprocess.Popen(
-        [sys.executable, "main.py", "Long running task"],
+        [sys.executable, "-m", "hydra.cli", "run", "Long running task"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True

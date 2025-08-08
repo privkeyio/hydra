@@ -1,0 +1,31 @@
+{
+  "name": "express_api",
+  "description": "Node.js Express REST API with middleware and database",
+  "parameters": [
+    {
+      "name": "api_name",
+      "type": "string",
+      "description": "Name of the API",
+      "required": true
+    },
+    {
+      "name": "database",
+      "type": "string",
+      "description": "Database to use",
+      "choices": ["mongodb", "postgresql", "mysql"],
+      "default": "mongodb"
+    },
+    {
+      "name": "use_typescript",
+      "type": "boolean",
+      "description": "Use TypeScript",
+      "default": true
+    }
+  ],
+  "post_generation_commands": [
+    "npm install",
+    "npm run build",
+    "npm test"
+  ],
+  "tags": ["api", "nodejs", "express", "backend"]
+}

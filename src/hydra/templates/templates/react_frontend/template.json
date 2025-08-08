@@ -1,0 +1,37 @@
+{
+  "name": "react_frontend",
+  "description": "Modern React frontend with TypeScript, routing, and state management",
+  "parameters": [
+    {
+      "name": "app_name",
+      "type": "string",
+      "description": "Name of the React application",
+      "required": true
+    },
+    {
+      "name": "use_typescript",
+      "type": "boolean",
+      "description": "Use TypeScript instead of JavaScript",
+      "default": true
+    },
+    {
+      "name": "state_management",
+      "type": "string",
+      "description": "State management solution",
+      "choices": ["redux", "zustand", "context"],
+      "default": "zustand"
+    },
+    {
+      "name": "ui_framework",
+      "type": "string",
+      "description": "UI component framework",
+      "choices": ["material-ui", "chakra-ui", "tailwind"],
+      "default": "tailwind"
+    }
+  ],
+  "post_generation_commands": [
+    "npm install",
+    "npm run build"
+  ],
+  "tags": ["frontend", "react", "typescript", "web"]
+}

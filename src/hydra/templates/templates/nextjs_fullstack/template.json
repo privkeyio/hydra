@@ -1,0 +1,31 @@
+{
+  "name": "nextjs_fullstack",
+  "description": "Full-stack Next.js application with API routes and database",
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "description": "Project name",
+      "required": true
+    },
+    {
+      "name": "styling",
+      "type": "string",
+      "description": "Styling solution",
+      "choices": ["tailwind", "styled-components", "css-modules"],
+      "default": "tailwind"
+    },
+    {
+      "name": "auth_provider",
+      "type": "string",
+      "description": "Authentication provider",
+      "choices": ["nextauth", "auth0", "firebase"],
+      "default": "nextauth"
+    }
+  ],
+  "post_generation_commands": [
+    "npm install",
+    "npm run build"
+  ],
+  "tags": ["fullstack", "nextjs", "react", "ssr"]
+}

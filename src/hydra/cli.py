@@ -2,8 +2,10 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any, Dict
 
+from hydra.templates import TemplateEngine, TemplateValidator
 from hydra.workflows.engine import execute_workflow
 
 
@@ -30,19 +32,26 @@ def format_results(results: Dict[str, Any], indent: int = 0) -> str:
             output.append(f"{prefix}  Total agents: {value.get('total_agents', 0)}")
             output.append(f"{prefix}  Successful: {value.get('successful', 0)}")
             output.append(f"{prefix}  Failed: {value.get('failed', 0)}")
-            output.append(f"{prefix}  Max depth: {value.get('depth_reached', 0)}")
+            output.append(f"{prefix}  Max depth: {value.get('max_depth', 0)}")
+            code_gen = value.get('code_generated', False)
+            output.append(f"{prefix}  Code generated: {code_gen}")
         elif isinstance(value, dict):
-            output.append(f"{prefix}{key}:")
             if "error" in value:
-                output.append(f"{prefix}  ERROR: {value['error']}")
-            else:
-                if "plan" in value:
-                    output.append(f"{prefix}  Plan: {value['plan']}")
+                output.append(f"{prefix}{key}: ❌ {value['error']}")
+            elif value.get("success", True):
+                output.append(f"{prefix}{key}: ✅ Completed")
                 if "task" in value:
-                    output.append(f"{prefix}  Task: {value['task']}")
-                if "subtasks" in value and value["subtasks"]:
-                    output.append(f"{prefix}  Subtasks: {len(value['subtasks'])}")
-        elif isinstance(value, str):
+                    task = value['task']
+                    task_preview = task[:50] + "..." if len(task) > 50 else task
+                    output.append(f"{prefix}  Task: {task_preview}")
+                if value.get("generated_code") and len(value['generated_code']) < 200:
+                    code_len = len(value['generated_code'])
+                    output.append(f"{prefix}  Generated: {code_len} chars of code")
+            else:
+                output.append(f"{prefix}{key}: ❌ Failed")
+                if "task" in value:
+                    output.append(f"{prefix}  Task: {value['task'][:50]}...")
+        elif isinstance(value, str) and len(value) < 100:
             output.append(f"{prefix}{key}: {value}")
 
     return "\n".join(output)
@@ -51,31 +60,77 @@ def format_results(results: Dict[str, Any], indent: int = 0) -> str:
 def create_parser():
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
-        description="Hydra: Multi-agent code generation system",
+        description="Hydra: Multi-agent code generation system with project templates",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Example:\n  python main.py \"Calculate fibonacci numbers\""
+        epilog="Examples:\n  hydra \"Calculate fibonacci numbers\"\n  "
+               "hydra template create flask_web_app ./my-app --project_name=MyApp"
     )
 
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Task execution subcommand (default behavior)
+    task_parser = subparsers.add_parser("run", help="Execute a task")
+    task_parser.add_argument(
         "task",
-        help="Task description for the agent system",
-        nargs="?",
-        default=None
+        help="Task description for the agent system"
+    )
+    task_parser.add_argument(
+        "--agent-name",
+        default="boss",
+        help="Name of the root agent (default: boss)"
+    )
+    task_parser.add_argument(
+        "--depth",
+        type=int,
+        default=0,
+        help="Starting depth (default: 0)"
+    )
+    task_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results as JSON"
     )
 
+    # Template subcommand
+    template_parser = subparsers.add_parser(
+        "template", help="Project template operations"
+    )
+    template_subparsers = template_parser.add_subparsers(
+        dest="template_action", help="Template actions"
+    )
+
+    # Template list
+    template_subparsers.add_parser("list", help="List available templates")
+
+    # Template create
+    create_parser = template_subparsers.add_parser(
+        "create", help="Create project from template"
+    )
+    create_parser.add_argument("template_name", help="Template to use")
+    create_parser.add_argument("output_dir", help="Output directory")
+    create_parser.add_argument(
+        "--param", action="append",
+        help="Template parameter (format: key=value)"
+    )
+
+    # Template validate
+    validate_parser = template_subparsers.add_parser(
+        "validate", help="Validate templates"
+    )
+    validate_parser.add_argument("--template", help="Specific template to validate")
+
+    # Main parser arguments (not including task - that's in subparsers)
     parser.add_argument(
         "--agent-name",
         default="boss",
         help="Name of the root agent (default: boss)"
     )
-
     parser.add_argument(
         "--depth",
         type=int,
         default=0,
         help="Starting depth (default: 0)"
     )
-
     parser.add_argument(
         "--json",
         action="store_true",
@@ -106,9 +161,30 @@ def get_task_input(args, parser):
 def print_results(results, json_output):
     """Print execution results in the specified format."""
     if json_output:
-        print(json.dumps(results, indent=2))
+        print(json.dumps(results, indent=2, default=str))
     else:
-        print("\nPlan:", results.get("plan", "No plan generated"))
+        # Show final generated code prominently
+        if results.get("final_code"):
+            print("\n" + "="*60)
+            print("GENERATED CODE:")
+            print("="*60)
+            print(results["final_code"])
+            print("="*60)
+
+        # Show execution outputs if any
+        if results.get("execution_outputs"):
+            print("\nEXECUTION OUTPUTS:")
+            print("-"*40)
+            print(results["execution_outputs"])
+            print("-"*40)
+
+        # Show plan if it's not code
+        plan = results.get("plan", "")
+        if plan and not results.get("final_code"):
+            print("\nGenerated Code:")
+            print("-"*40)
+            print(plan)
+            print("-"*40)
 
         if results.get("subtasks"):
             print(f"\nSubtasks ({len(results['subtasks'])}):")
@@ -116,7 +192,7 @@ def print_results(results, json_output):
                 print(f"  {i}. {subtask}")
 
         if results.get("results"):
-            print("\nExecution Results:")
+            print("\nDetailed Results:")
             print(format_results(results["results"]))
 
         agents = results.get("agents", [])
@@ -124,14 +200,145 @@ def print_results(results, json_output):
             print(f"\nAgents created: {', '.join(agents)}")
 
 
+def _handle_list_templates(engine):
+    """Handle template list command."""
+    templates = engine.list_templates()
+    if not templates:
+        print("No templates available.")
+        return 0
+
+    print("Available templates:")
+    for template_name in templates:
+        try:
+            template = engine.load_template(template_name)
+            print(f"  {template_name}: {template.description}")
+            print(f"    Tags: {', '.join(template.tags)}")
+        except Exception as e:
+            print(f"  {template_name}: Error loading template ({e})")
+    return 0
+
+
+def _parse_template_params(param_list):
+    """Parse template parameters from command line."""
+    params = {}
+    if param_list:
+        for param_str in param_list:
+            if '=' not in param_str:
+                print(f"Invalid parameter format: {param_str}. Use key=value")
+                return None
+            key, value = param_str.split('=', 1)
+            try:
+                params[key] = json.loads(value)
+            except Exception:
+                params[key] = value
+    return params
+
+
+def _handle_create_template(engine, args):
+    """Handle template create command."""
+    try:
+        engine.load_template(args.template_name)
+        params = _parse_template_params(args.param)
+        if params is None:
+            return 1
+
+        result = engine.generate_project(
+            args.template_name, Path(args.output_dir), params
+        )
+
+        print(f"Project created successfully in {result['output_dir']}")
+        print(f"Generated {len(result['generated_files'])} files")
+
+        if result['post_generation_commands']:
+            print("\nRecommended next steps:")
+            for i, cmd in enumerate(result['post_generation_commands'], 1):
+                print(f"  {i}. {cmd}")
+        return 0
+
+    except ValueError as e:
+        print(f"Error: {e}")
+        return 1
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return 1
+
+
+def _handle_validate_templates(args):
+    """Handle template validation command."""
+    if args.template:
+        # Validate specific template
+        template_dir = (
+            Path(__file__).parent / 'templates' / 'templates' / args.template
+        )
+        is_valid, errors = TemplateValidator.validate_template_structure(
+            template_dir
+        )
+
+        if is_valid:
+            print(f"Template '{args.template}' is valid ✅")
+        else:
+            print(f"Template '{args.template}' has errors ❌")
+            for error in errors:
+                print(f"  - {error}")
+        return 0 if is_valid else 1
+    else:
+        # Validate all templates
+        templates_dir = Path(__file__).parent / 'templates' / 'templates'
+        results = TemplateValidator.validate_all_templates(templates_dir)
+
+        valid_count = sum(1 for is_valid, _ in results.values() if is_valid)
+        total_count = len(results)
+
+        print(f"Template validation results: {valid_count}/{total_count} valid")
+
+        for template_name, (is_valid, errors) in results.items():
+            status = "✅" if is_valid else "❌"
+            print(f"  {template_name}: {status}")
+            if not is_valid:
+                for error in errors[:3]:  # Show first 3 errors
+                    print(f"    - {error}")
+                if len(errors) > 3:
+                    print(f"    ... and {len(errors) - 3} more errors")
+
+        return 0 if valid_count == total_count else 1
+
+
+def handle_template_command(args):
+    """Handle template subcommands."""
+    engine = TemplateEngine()
+
+    if args.template_action == "list":
+        return _handle_list_templates(engine)
+    elif args.template_action == "create":
+        return _handle_create_template(engine, args)
+    elif args.template_action == "validate":
+        return _handle_validate_templates(args)
+    else:
+        print("Unknown template action")
+        return 1
+
+
 def main():
     """Execute the main CLI entry point."""
     parser = create_parser()
     args = parser.parse_args()
 
-    task, exit_code = get_task_input(args, parser)
-    if task is None:
-        return exit_code
+    # Handle template commands
+    if args.command == "template":
+        return handle_template_command(args)
+
+    # Handle task execution (run command only)
+    if args.command == "run":
+        task = args.task
+    else:
+        # No command specified
+        parser.print_help()
+        return 1
+
+    # Validate task is not empty
+    if not task or not task.strip():
+        print("Error: No task provided", file=sys.stderr)
+        return 1
 
     print(f"Executing task: {task}")
     print(f"Agent: {args.agent_name}, Starting depth: {args.depth}")

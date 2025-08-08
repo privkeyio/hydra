@@ -1,267 +1,161 @@
-# Project Hydra: Self-Replicating Coding Agent System
+# Hydra: Production-Ready AI Code Generation Platform
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Internal Project](https://img.shields.io/badge/status-internal-red.svg)]()
+[![Claude Code Integration](https://img.shields.io/badge/claude-code-purple.svg)]()
 
 ## Overview
 
-Hydra is a production-grade hierarchical AI agent system designed for autonomous code generation and task delegation. It enables a primary "boss" agent to decompose complex coding tasks, generate and execute code, and spawn "employee" agents that inherit the same capabilities, creating a recursive structure for handling sophisticated software development workflows.
+Hydra is an enterprise-grade platform for autonomous code generation with Claude Code-like capabilities. It orchestrates multiple AI agents in parallel, intelligently routes tasks between models, and provides production safety guardrails.
 
 ## Key Features
 
-- 🤖 **Hierarchical Agent Architecture**: Multi-level agent spawning with parent-child relationships
-- 🧠 **Intelligent Task Decomposition**: Automatic breaking down of complex tasks into manageable subtasks
-- 💻 **Autonomous Code Generation**: AI-powered code creation with multiple LLM providers
-- 🔄 **Provider Flexibility**: Switch between Venice, Anthropic, OpenAI, or Claude CLI
-- 🔒 **Sandboxed Execution**: Safe code execution in isolated subprocess environments
-- 📊 **Comprehensive Logging**: Detailed activity tracking with automatic log rotation
-- 🔄 **Retry Logic**: Automatic retry on failures with configurable attempts
-- 🛡️ **Safety Guards**: Built-in recursion limits and timeout protection
-- 🔌 **Extensible Design**: Modular architecture for easy feature additions
+- **Parallel Agent Execution**: Run up to 10 concurrent agents with intelligent task orchestration
+- **Multi-Model Support**: Venice, Anthropic Claude (Opus/Sonnet), OpenAI, and Claude CLI
+- **Smart Model Routing**: Automatically routes simple tasks to Sonnet, complex to Opus for cost optimization
+- **Production Safety**: Rate limiting, resource quotas, circuit breakers, and sandboxed execution
+- **State Persistence**: Resume interrupted work with checkpoint-based state management
+- **Real-time Monitoring**: OpenTelemetry tracing, Prometheus metrics, and live dashboard
+- **Template System**: 12+ project templates for instant scaffolding
+- **Task Specification DSL**: Define complex workflows in YAML/JSON
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.11 or higher
-- Virtual environment (recommended)
-- API key for your chosen LLM provider (Venice, Anthropic, OpenAI, or Claude CLI)
+- Python 3.11+
+- Redis (for task queue)
+- API keys for your chosen provider
 
 ### Installation
 
-1. **Clone the repository:**
 ```bash
-git clone <internal-repo-url>
+# Clone and setup
+git clone <repo-url>
 cd hydra
+pip install -r requirements.txt
+pip install -e .
+
+# Configure API keys
+export VENICE_API_KEY=your_key  # or ANTHROPIC_API_KEY
 ```
 
-2. **Run the setup script:**
-```bash
-./scripts/setup.sh
-```
-
-3. **Configure your API keys:**
-```bash
-cp .env.example .env
-# Edit .env and add your chosen provider's API key
-# Example: VENICE_API_KEY=your_key_here
-```
-
-4. **Verify installation:**
-```bash
-source venv/bin/activate
-make test
-```
-
-## Usage
-
-### Command Line Interface
+### Basic Usage
 
 ```bash
-# Basic usage
-hydra "Create a function to calculate fibonacci numbers"
+# Simple code generation
+hydra "Create a REST API with FastAPI"
 
-# Multi-line input via stdin
-echo "Create two functions:
-1. add(a, b) that returns sum
-2. subtract(a, b) that returns difference" | hydra
+# Use specific model
+hydra "Complex refactoring task" --model opus
 
-# JSON output format
-hydra "Refactor this code" --json
-
-# Custom agent name
-hydra "Build a calculator" --agent-name "architect"
-
-# Specify starting depth
-hydra "Complex task" --depth 1
+# Generate from template
+hydra template create --template fastapi_rest_api --name my_api
 ```
 
 ### Python API
 
 ```python
-from hydra import CodeAgent, execute_workflow
+from hydra import ProductionGuardrails, ProjectOrchestrator
+from hydra.specifications import TaskSpec
 
-# Create an agent
-agent = CodeAgent("developer")
+# Initialize with safety guardrails
+guardrails = ProductionGuardrails()
+guardrails.register_tenant("my_app")
 
-# Execute a task
-results = execute_workflow(
-    task="Create a REST API endpoint",
-    agent_name="boss",
-    depth=0
-)
+# Create project orchestrator
+orchestrator = ProjectOrchestrator()
+
+# Define task specification
+spec = TaskSpec.from_yaml("project.yaml")
+
+# Execute with monitoring
+with guardrails.protected_execution("my_app", "build_api"):
+    results = orchestrator.execute_project(spec)
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────┐
+│     Project Orchestrator            │
+├─────────────────────────────────────┤
+│  Model Router │ Task Scheduler      │
+├───────────────┼─────────────────────┤
+│  Claude Opus  │  Claude Sonnet      │
+├───────────────┴─────────────────────┤
+│     Production Guardrails           │
+│  • Rate Limiting  • Cost Control    │
+│  • Resource Quotas • Circuit Break  │
+├─────────────────────────────────────┤
+│   Monitoring & Observability        │
+│  • OpenTelemetry • Prometheus       │
+│  • Real-time Dashboard              │
+└─────────────────────────────────────┘
 ```
 
 ## Project Structure
 
 ```
 hydra/
-├── src/hydra/              # Main package source code
-│   ├── agents/             # Agent implementations
-│   ├── workflows/          # Workflow engine (LangGraph)
-│   ├── utils/              # Utility modules
-│   └── cli.py              # CLI entry point
-├── tests/                  # Test suite
-│   ├── unit/               # Unit tests
-│   └── integration/        # Integration tests
-├── config/                 # Configuration files
-├── docs/                   # Documentation
-├── scripts/                # Utility scripts
-├── Makefile               # Development commands
-└── pyproject.toml         # Project configuration
+├── src/hydra/
+│   ├── orchestrator/       # Project orchestration
+│   ├── agents/            # Claude Code agent wrapper
+│   ├── routing/           # Model selection logic
+│   ├── safety/            # Production guardrails
+│   ├── state/             # Persistence layer
+│   ├── monitoring/        # Observability
+│   └── templates/         # Project templates
+├── examples/              # Usage examples
+└── tests/                # Test suite
 ```
-
-## Development
-
-### Setting Up Development Environment
-
-```bash
-# Install development dependencies
-make install-dev
-
-# Run tests
-make test
-
-# Run linting
-make lint
-
-# Format code
-make format
-
-# Build package
-make build
-```
-
-### Running Tests
-
-```bash
-# All tests
-make test
-
-# Unit tests only
-make test-unit
-
-# Integration tests only
-make test-int
-
-# With coverage report
-pytest --cov=hydra --cov-report=html
-```
-
-### Code Quality
-
-The project uses:
-- **Black** for code formatting
-- **Flake8** and **Ruff** for linting
-- **MyPy** for type checking
-- **Pre-commit** hooks for automated checks
 
 ## Configuration
 
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-# LLM Provider Configuration
-LLM_PROVIDER=venice  # Options: venice, anthropic, openai, claude_cli
-LLM_MODEL=qwen-2.5-coder-32b  # Optional: Override default model
-
-# Provider API Keys (add the one for your chosen provider)
-VENICE_API_KEY=your_venice_key_here
-# ANTHROPIC_API_KEY=your_anthropic_key_here
-# OPENAI_API_KEY=your_openai_key_here
-
-# Other Settings
-ENVIRONMENT=development
-LOG_LEVEL=INFO
-```
-
-### Configuration File
-
-Edit `config/default.yaml` for system-wide settings:
+Create `config/default.yaml`:
 
 ```yaml
-# LLM Provider Configuration
 llm:
-  provider: venice  # Options: venice, anthropic, openai, claude_cli
-  model: qwen-2.5-coder-32b  # Optional: uses provider default if not set
-  temperature: 0.2
-  max_tokens: 2048
+  provider: venice  # or anthropic, openai, claude_cli
+  model_routing:
+    enabled: true
+    simple_tasks: claude-3-sonnet
+    complex_tasks: claude-3-opus
 
-# Agent Configuration
-agent:
-  max_depth: 2
-  timeout: 30
-  retry_attempts: 2
+safety:
+  rate_limit:
+    requests_per_minute: 60
+  resource_quota:
+    memory_mb: 2048
+    cpu_percent: 80
+  cost_budget:
+    daily_limit_usd: 100
+
+monitoring:
+  jaeger_endpoint: localhost:14268
+  prometheus_port: 9090
 ```
 
-## Architecture
+## Examples
 
-### Agent Hierarchy
-```
-Boss Agent (depth 0)
-├── Employee 1 (depth 1)
-│   ├── Sub-employee 1.1 (depth 2)
-│   └── Sub-employee 1.2 (depth 2)
-└── Employee 2 (depth 1)
-    └── Sub-employee 2.1 (depth 2)
-```
+See the `examples/` directory for:
+- Venice API integration
+- Claude Code agent usage
+- Complex project orchestration
+- Template customization
 
-### Workflow Engine
+## Testing
 
-Built on LangGraph for stateful workflow management:
-- **Plan Node**: Task decomposition and strategy
-- **Spawn Node**: Employee agent creation
-- **Aggregate Node**: Result collection and synthesis
-
-## Safety & Security
-
-- **Recursion Limit**: Hard limit of 2 levels to prevent infinite loops
-- **Execution Timeout**: 30-second timeout for code execution
-- **Sandboxed Environment**: Subprocess isolation for generated code
-- **Input Validation**: AST parsing before execution
-- **Comprehensive Logging**: Full audit trail of all operations
-
-## Troubleshooting
-
-### Common Issues
-
-1. **API Key Errors**
-   - Verify `.env` file exists and contains valid keys
-   - Check API quota and rate limits
-
-2. **Import Errors**
-   - Ensure virtual environment is activated
-   - Run `pip install -e .` to install in development mode
-
-3. **Recursion Limit Exceeded**
-   - Simplify input tasks
-   - Check max_depth configuration
-
-### Debug Mode
-
-Enable detailed logging:
 ```bash
-export LOG_LEVEL=DEBUG
-hydra "Your task"
+# Run all tests
+pytest tests/
+
+# Unit tests only
+pytest tests/unit/
+
+# With coverage
+pytest --cov=hydra --cov-report=html
 ```
 
-## Internal Development
+## License
 
-This is an internal project. For modifications:
-1. Create a feature branch
-2. Make changes with tests
-3. Request code review from team lead
-4. Merge after approval
-
-## Support
-
-For internal support:
-- Open an issue on GitHub
-- Contact the development team
-- Check documentation in `/docs`
-
----
-
-**⚠️ INTERNAL USE ONLY**: This tool is proprietary and confidential. Do not share outside the organization. Follow company security guidelines when handling API keys and sensitive data.
+Internal use only. Proprietary and confidential.

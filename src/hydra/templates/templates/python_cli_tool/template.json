@@ -1,0 +1,36 @@
+{
+  "name": "python_cli_tool",
+  "description": "A professional Python CLI tool with Click, configuration, and testing",
+  "parameters": [
+    {
+      "name": "tool_name",
+      "type": "string",
+      "description": "Name of the CLI tool",
+      "required": true
+    },
+    {
+      "name": "author",
+      "type": "string",
+      "description": "Author name",
+      "default": "Developer"
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "description": "Tool version",
+      "default": "1.0.0"
+    },
+    {
+      "name": "config_format",
+      "type": "string",
+      "description": "Configuration file format",
+      "choices": ["yaml", "toml", "json"],
+      "default": "yaml"
+    }
+  ],
+  "post_generation_commands": [
+    "pip install -e .",
+    "pytest tests/"
+  ],
+  "tags": ["cli", "python", "click", "tool"]
+}

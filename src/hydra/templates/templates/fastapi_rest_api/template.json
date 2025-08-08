@@ -1,0 +1,38 @@
+{
+  "name": "fastapi_rest_api",
+  "description": "A production-ready FastAPI REST API with authentication, database, and documentation",
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "description": "Name of the API project",
+      "required": true
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "description": "API version",
+      "default": "1.0.0"
+    },
+    {
+      "name": "database",
+      "type": "string",
+      "description": "Database to use",
+      "choices": ["sqlite", "postgresql"],
+      "default": "postgresql"
+    },
+    {
+      "name": "include_auth",
+      "type": "boolean",
+      "description": "Include JWT authentication",
+      "default": true
+    }
+  ],
+  "post_generation_commands": [
+    "pip install -r requirements.txt",
+    "alembic init alembic",
+    "alembic revision --autogenerate -m 'Initial tables'",
+    "alembic upgrade head"
+  ],
+  "tags": ["api", "fastapi", "python", "rest"]
+}

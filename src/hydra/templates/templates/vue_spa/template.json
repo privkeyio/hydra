@@ -1,0 +1,37 @@
+{
+  "name": "vue_spa",
+  "description": "Vue.js single page application with routing and state management",
+  "parameters": [
+    {
+      "name": "app_name",
+      "type": "string",
+      "description": "Vue application name",
+      "required": true
+    },
+    {
+      "name": "vue_version",
+      "type": "string",
+      "description": "Vue.js version",
+      "choices": ["vue2", "vue3"],
+      "default": "vue3"
+    },
+    {
+      "name": "ui_framework",
+      "type": "string",
+      "description": "UI framework",
+      "choices": ["vuetify", "element-plus", "quasar"],
+      "default": "vuetify"
+    },
+    {
+      "name": "use_composition_api",
+      "type": "boolean",
+      "description": "Use Composition API",
+      "default": true
+    }
+  ],
+  "post_generation_commands": [
+    "npm install",
+    "npm run build"
+  ],
+  "tags": ["vue", "spa", "frontend", "javascript"]
+}

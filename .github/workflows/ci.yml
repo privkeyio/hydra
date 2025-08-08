@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     
     services:
       redis:
@@ -43,12 +44,13 @@ jobs:
     
     - name: Run linting
       run: |
-        ruff check src/
+        ruff check src/ --exclude="src/hydra/templates/templates"
     
     - name: Run tests
       env:
         LLM_PROVIDER: mock
         REDIS_URL: redis://localhost:6379/0
         DATABASE_URL: sqlite:///test.db
+        TESTING: "1"
       run: |
-        python -m pytest tests/ -v --tb=short
+        timeout 18m python -m pytest tests/ -v --tb=short --timeout=300

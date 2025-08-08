@@ -4,6 +4,7 @@ from typing import Any, Dict, List, TypedDict
 from langgraph.graph import END, StateGraph
 
 from hydra.agents.base import CodeAgent
+from hydra.exceptions import RecursionLimitError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,7 +21,13 @@ class WorkflowState(TypedDict):
 
 
 def plan_node(state: WorkflowState) -> WorkflowState:
-    agent = CodeAgent(state["current_agent"], depth=state["depth"])
+    try:
+        agent = CodeAgent(state["current_agent"], depth=state["depth"])
+    except RecursionLimitError as e:
+        logger.warning(f"Depth limit reached during agent creation: {e}")
+        state["subtasks"] = []
+        state["plan"] = f"Depth limit reached at level {state['depth']}"
+        return state
 
     try:
         # For simple tasks, complete directly instead of planning
@@ -28,7 +35,7 @@ def plan_node(state: WorkflowState) -> WorkflowState:
 
         # Check if task is simple (doesn't need decomposition)
         is_simple_task = (
-            len(task.split()) < 20 or
+            len(task.split()) < 10 and
             any(keyword in task.lower() for keyword in [
                 "write a function", "create a function", "implement",
                 "calculate", "compute", "generate code"
@@ -51,7 +58,7 @@ def plan_node(state: WorkflowState) -> WorkflowState:
             logger.info(
                 f"Agent {agent.name} created plan with {subtask_count} subtasks"
             )
-    except RecursionError as e:
+    except (RecursionError, RecursionLimitError) as e:
         logger.warning(f"Depth limit reached: {e}")
         state["subtasks"] = []
         state["plan"] = f"Depth limit reached at level {state['depth']}"

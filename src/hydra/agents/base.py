@@ -405,6 +405,14 @@ Return ONLY the explanation text, no markdown formatting."""
         """Complete a task by generating and optionally executing code."""
         self.logger.info(f"Agent {self.agent_id} completing task: {task[:100]}...")
 
+        # Check depth limits
+        if self.depth > self.max_depth:
+            error_msg = (
+                f"{self.depth} exceeds max depth {self.max_depth}"
+            )
+            self.logger.error(f"Agent {self.agent_id} {error_msg}")
+            raise RecursionLimitError(error_msg)
+
         try:
             # Generate code for the task
             code = self.generate_code(task)

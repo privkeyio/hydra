@@ -471,7 +471,8 @@ class TestProjectOrchestrator:
         orchestrator.start_time = time.time()
         
         simple_spec.tasks[0].status = TaskStatus.COMPLETED
-        simple_spec.tasks[0].execution_time = 5.0
+        simple_spec.tasks[0].start_time = time.time() - 5.0
+        simple_spec.tasks[0].end_time = time.time()
         orchestrator.completed_tasks.add("task1")
         
         simple_spec.tasks[1].status = TaskStatus.RUNNING

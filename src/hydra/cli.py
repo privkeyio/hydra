@@ -119,13 +119,7 @@ def create_parser():
     )
     validate_parser.add_argument("--template", help="Specific template to validate")
 
-    # Backward compatibility - direct task as positional argument
-    parser.add_argument(
-        "task",
-        help="Task description for the agent system",
-        nargs="?",
-        default=None
-    )
+    # Main parser arguments (not including task - that's in subparsers)
     parser.add_argument(
         "--agent-name",
         default="boss",
@@ -333,14 +327,18 @@ def main():
     if args.command == "template":
         return handle_template_command(args)
 
-    # Handle task execution (run command or direct task)
+    # Handle task execution (run command only)
     if args.command == "run":
         task = args.task
     else:
-        # Backward compatibility - direct task argument
-        task, exit_code = get_task_input(args, parser)
-        if task is None:
-            return exit_code
+        # No command specified
+        parser.print_help()
+        return 1
+
+    # Validate task is not empty
+    if not task or not task.strip():
+        print("Error: No task provided", file=sys.stderr)
+        return 1
 
     print(f"Executing task: {task}")
     print(f"Agent: {args.agent_name}, Starting depth: {args.depth}")

@@ -15,8 +15,9 @@ class TestCodeAgent(unittest.TestCase):
         self.assertEqual(child.depth, 1)
     
     def test_depth_enforcement(self):
+        from hydra.exceptions import RecursionLimitError
         agent = CodeAgent("boss", depth=3)
-        with self.assertRaises(RecursionError):
+        with self.assertRaises(RecursionLimitError):
             agent.reason("test task")
     
     def test_generate_code_validation(self):
@@ -33,9 +34,9 @@ class TestCodeAgent(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertIn("hello", result["stdout"])
         
-        result = agent.execute_code("import time; time.sleep(40)")
-        self.assertFalse(result["success"])
-        self.assertIn("timeout", result["stderr"].lower())
+        from hydra.exceptions import ExecutionTimeoutError
+        with self.assertRaises(ExecutionTimeoutError):
+            agent.execute_code("import time; time.sleep(40)")
 
 
 if __name__ == "__main__":

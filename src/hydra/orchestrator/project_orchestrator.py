@@ -121,15 +121,19 @@ class ProjectSpecification:
         errors = []
         task_ids = set()
 
+        # First pass: collect all task IDs and check for duplicates
         for task in self.tasks:
             if task.id in task_ids:
                 errors.append(f"Duplicate task ID: {task.id}")
             task_ids.add(task.id)
 
+        # Second pass: check for unknown dependencies
+        for task in self.tasks:
             for dep in task.dependencies:
                 if dep not in task_ids:
                     errors.append(f"Task {task.id} depends on unknown task: {dep}")
 
+        # Check for circular dependencies
         if self._has_cycle():
             errors.append("Circular dependency detected in task graph")
 
@@ -228,10 +232,18 @@ class ProjectOrchestrator:
         }
 
         description_lower = task.description.lower()
-
+        
+        # Find the highest complexity that matches keywords
+        max_complexity = None
+        complexity_order = ['simple', 'moderate', 'complex', 'critical']
+        
         for level, keywords in indicators.items():
             if any(keyword in description_lower for keyword in keywords):
-                return TaskComplexity(level)
+                if max_complexity is None or complexity_order.index(level) > complexity_order.index(max_complexity):
+                    max_complexity = level
+        
+        if max_complexity:
+            return TaskComplexity(max_complexity)
 
         if len(task.dependencies) > 3:
             return TaskComplexity.COMPLEX

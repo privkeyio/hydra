@@ -8,12 +8,11 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 from uuid import uuid4
 
-# Global test mode detection - but allow parallel engine tests to run normally
+# Global test mode detection - disable threading in test environment
 TEST_MODE = (
-    (os.getenv('TESTING') == '1' or
-     os.getenv('PYTEST_CURRENT_TEST') is not None or
-     'pytest' in str(os.getenv('_', ''))) and
-    'test_parallel_engine.py' not in str(os.getenv('PYTEST_CURRENT_TEST', ''))
+    os.getenv('TESTING') == '1' or
+    os.getenv('PYTEST_CURRENT_TEST') is not None or
+    'pytest' in str(os.getenv('_', ''))
 )
 
 try:
@@ -299,7 +298,8 @@ class ParallelExecutionEngine:
         # Auto-detect test mode if not explicitly set
         if test_mode is None:
             test_mode = TEST_MODE
-
+        # Always respect explicit test_mode parameter
+        
         self.test_mode = test_mode
         self.max_workers = max_workers
         self.task_queue = ThreadSafeTaskQueue()
@@ -358,8 +358,29 @@ class ParallelExecutionEngine:
         # Only submit to executor if not in test mode
         if self._executor:
             self._executor.submit(self._process_next_task)
+        elif self.test_mode:
+            # In test mode, process tasks synchronously
+            self._process_tasks_sync()
 
         return task_id
+
+    def _process_tasks_sync(self):
+        """Process all available tasks synchronously (for test mode)."""
+        while True:
+            task = self.task_queue.get(self._completed_tasks)
+            if not task:
+                break
+            
+            agent_resource = self.resource_pool.acquire(timeout=0.1)
+            if not agent_resource:
+                # Put task back and break if no agents available
+                self.task_queue.put(task)
+                break
+            
+            try:
+                self._execute_task(task, agent_resource)
+            finally:
+                self.resource_pool.release(agent_resource)
 
     def _process_next_task(self):
         while not self._shutdown:

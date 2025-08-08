@@ -142,6 +142,11 @@ def create_parser():
     # Run all tickets
     run_tickets_parser = ticket_subparsers.add_parser("run-all", help="Execute all tickets in sequence")
     run_tickets_parser.add_argument("--tickets", default="tickets.md", help="Tickets file (default: tickets.md)")
+    
+    # Verify ticket completion
+    verify_parser = ticket_subparsers.add_parser("verify", help="Verify ticket acceptance criteria")
+    verify_parser.add_argument("identifier", help="Ticket identifier to verify")
+    verify_parser.add_argument("--tickets", default="tickets.md", help="Tickets file (default: tickets.md)")
 
     # Auto workflow - dependency-aware parallel execution
     auto_parser = ticket_subparsers.add_parser("auto", help="Automatically execute tickets with dependency-aware parallelism")
@@ -174,6 +179,14 @@ def create_parser():
     # Kill session
     kill_parser = claude_subparsers.add_parser("kill", help="Kill a Claude Code session")
     kill_parser.add_argument("session_name", help="Name of session to kill")
+    
+    # Save session
+    save_parser = claude_subparsers.add_parser("save", help="Save Claude Code session state")
+    save_parser.add_argument("session_name", help="Name of session to save")
+    
+    # Restore session
+    restore_parser = claude_subparsers.add_parser("restore", help="Restore Claude Code session")
+    restore_parser.add_argument("session_name", help="Name of session to restore")
 
     # Main parser arguments (not including task - that's in subparsers)
     parser.add_argument(
@@ -408,6 +421,26 @@ def _handle_run_all_tickets(args):
         return 1
 
 
+def _handle_verify_ticket(args):
+    """Handle ticket verification."""
+    from hydra.verification.ticket_verifier import TicketVerifier
+    
+    verifier = TicketVerifier(os.path.dirname(args.tickets))
+    
+    try:
+        report = verifier.verify_ticket(args.tickets, args.identifier)
+        print(verifier.generate_report(report))
+        
+        if report.coverage >= 80:
+            return 0
+        else:
+            return 1
+            
+    except Exception as e:
+        print(f"Verification error: {e}")
+        return 1
+
+
 def _handle_auto_workflow(args):
     """Handle automated workflow with dependency-aware parallel execution."""
     try:
@@ -447,6 +480,8 @@ def handle_ticket_command(args):
         return _handle_execute_ticket(args)
     elif args.ticket_action == "run-all":
         return _handle_run_all_tickets(args)
+    elif args.ticket_action == "verify":
+        return _handle_verify_ticket(args)
     elif args.ticket_action == "auto":
         return _handle_auto_workflow(args)
     else:
@@ -513,6 +548,37 @@ def handle_claude_command(args):
         # Kill session
         orchestrator.kill_session(args.session_name)
         return 0
+    
+    elif args.claude_action == "save":
+        # Save session state
+        from hydra.persistence.session_manager import SessionManager
+        manager = SessionManager()
+        
+        # Get session tasks from orchestrator
+        tasks = orchestrator.task_history
+        project_path = os.getcwd()
+        
+        save_path = manager.save_session(args.session_name, project_path, tasks)
+        print(f"✅ Session saved to: {save_path}")
+        return 0
+    
+    elif args.claude_action == "restore":
+        # Restore session state
+        from hydra.persistence.session_manager import SessionManager
+        manager = SessionManager()
+        
+        state = manager.restore_session(args.session_name)
+        if state:
+            print(f"✅ Session restored: {args.session_name}")
+            print(f"📁 Project: {state.project_path}")
+            print(f"📋 Tasks: {len(state.tasks)}")
+            
+            # Restore task history
+            orchestrator.task_history = state.tasks
+            return 0
+        else:
+            print(f"❌ Session not found: {args.session_name}")
+            return 1
         
     else:
         print("Unknown Claude action")

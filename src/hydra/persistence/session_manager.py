@@ -115,7 +115,9 @@ class SessionManager:
             "created_at": datetime.fromtimestamp(state.created_at).isoformat(),
             "last_accessed": datetime.fromtimestamp(state.last_accessed).isoformat(),
             "task_count": len(tasks),
-            "completed_tasks": sum(1 for t in tasks if t.status == TaskStatus.COMPLETED),
+            "completed_tasks": sum(
+                1 for t in tasks if t.status == TaskStatus.COMPLETED
+            ),
             "git_branch": git_branch,
             "git_commit": git_commit,
             "metadata": metadata
@@ -175,8 +177,12 @@ class SessionManager:
                 sessions.append({
                     "session_id": session_id,
                     "project_path": info["project_path"],
-                    "created_at": datetime.fromtimestamp(info["created_at"]).isoformat(),
-                    "last_accessed": datetime.fromtimestamp(info["last_accessed"]).isoformat(),
+                    "created_at": datetime.fromtimestamp(
+                        info["created_at"]
+                    ).isoformat(),
+                    "last_accessed": datetime.fromtimestamp(
+                        info["last_accessed"]
+                    ).isoformat(),
                     "task_count": info.get("task_count", 0)
                 })
 
@@ -220,7 +226,9 @@ class SessionManager:
                         parts = line.strip().split(maxsplit=1)
                         if len(parts) > 1:
                             file_path = parts[1]
-                            if not file_path.endswith('.pyc') and '/__pycache__/' not in file_path:
+                            is_pyc = file_path.endswith('.pyc')
+                            is_pycache = '/__pycache__/' in file_path
+                            if not is_pyc and not is_pycache:
                                 modified_files.append(file_path)
 
                 # Save snapshots of modified files

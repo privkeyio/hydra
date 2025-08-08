@@ -67,9 +67,11 @@ class ClaudeCLIProvider(LLMProvider):
         """Execute Claude CLI command and let it actually work with files."""
         # For file operations, we need to let Claude run interactively
         # Add a marker to know when Claude is done
+        completion_msg = "IMPLEMENTATION_COMPLETE"
         full_prompt = f"""{prompt}
 
-When you are completely done implementing this ticket, please say "IMPLEMENTATION_COMPLETE" at the end.
+When you are completely done implementing this ticket, \\
+please say "{completion_msg}" at the end.
 /exit
 """
 

@@ -683,7 +683,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
         # In test mode, use regular execution to avoid threading
         if TEST_MODE:
             return self._execute_regular(prompt, timeout)
-            
+
         handler = StreamingResponseHandler()
 
         def stream_output(proc, handler):

@@ -81,7 +81,7 @@ class ResourceMonitor:
         # Skip thread creation in test mode
         if TEST_MODE:
             return
-            
+
         try:
             self.monitor_thread = threading.Thread(
                 target=self._monitor_loop,

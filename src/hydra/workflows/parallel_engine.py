@@ -299,7 +299,7 @@ class ParallelExecutionEngine:
         if test_mode is None:
             test_mode = TEST_MODE
         # Always respect explicit test_mode parameter
-        
+
         self.test_mode = test_mode
         self.max_workers = max_workers
         self.task_queue = ThreadSafeTaskQueue()
@@ -370,13 +370,13 @@ class ParallelExecutionEngine:
             task = self.task_queue.get(self._completed_tasks)
             if not task:
                 break
-            
+
             agent_resource = self.resource_pool.acquire(timeout=0.1)
             if not agent_resource:
                 # Put task back and break if no agents available
                 self.task_queue.put(task)
                 break
-            
+
             try:
                 self._execute_task(task, agent_resource)
             finally:

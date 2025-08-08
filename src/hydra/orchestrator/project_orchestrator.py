@@ -232,16 +232,19 @@ class ProjectOrchestrator:
         }
 
         description_lower = task.description.lower()
-        
+
         # Find the highest complexity that matches keywords
         max_complexity = None
         complexity_order = ['simple', 'moderate', 'complex', 'critical']
-        
+
         for level, keywords in indicators.items():
             if any(keyword in description_lower for keyword in keywords):
-                if max_complexity is None or complexity_order.index(level) > complexity_order.index(max_complexity):
+                current_index = complexity_order.index(level)
+                max_index = (complexity_order.index(max_complexity)
+                            if max_complexity else -1)
+                if max_complexity is None or current_index > max_index:
                     max_complexity = level
-        
+
         if max_complexity:
             return TaskComplexity(max_complexity)
 

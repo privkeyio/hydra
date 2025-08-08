@@ -481,6 +481,7 @@ def _handle_quality_gates(args):
 def _handle_parallel_execution(args):
     """Handle parallel ticket execution with dependency resolution."""
     from hydra.parallel import ParallelExecutor
+    from hydra.dashboard import DashboardServer, DashboardState
     
     try:
         # Get absolute path to tickets file
@@ -489,9 +490,18 @@ def _handle_parallel_execution(args):
             print(f"❌ Tickets file not found: {tickets_path}")
             return 1
         
-        # Initialize executor
+        # Initialize dashboard
+        dashboard_state = DashboardState()
+        dashboard_server = DashboardServer(state=dashboard_state)
+        dashboard_server.start()
+        
+        # Initialize executor with dashboard
         project_root = tickets_path.parent
-        executor = ParallelExecutor(max_workers=args.workers, project_root=str(project_root))
+        executor = ParallelExecutor(
+            max_workers=args.workers, 
+            project_root=str(project_root),
+            dashboard_state=dashboard_state
+        )
         
         print(f"🎯 Loading tickets from: {tickets_path}")
         
@@ -505,6 +515,17 @@ def _handle_parallel_execution(args):
         
         # Build execution plan
         plan = executor.build_execution_plan()
+        
+        # Initialize dashboard session
+        import uuid
+        session_id = str(uuid.uuid4())[:8]
+        dashboard_state.start_session(
+            session_id=session_id,
+            tickets_path=str(tickets_path),
+            total_tickets=len(tickets),
+            total_waves=len(plan.waves),
+            workers=args.workers
+        )
         
         # Execute plan
         summary = executor.execute_plan(plan, str(tickets_path))
@@ -520,12 +541,18 @@ def _handle_parallel_execution(args):
         
         # Return success if all tickets completed
         if summary['completed'] == summary['total_tickets']:
+            print("\n✅ All tickets completed successfully!")
+            dashboard_server.stop()
             return 0
         else:
+            print(f"\n⚠️ Execution incomplete: {summary['completed']}/{summary['total_tickets']} completed")
+            dashboard_server.stop()
             return 1
             
     except Exception as e:
         print(f"❌ Parallel execution error: {e}")
+        if 'dashboard_server' in locals():
+            dashboard_server.stop()
         return 1
 
 

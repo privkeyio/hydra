@@ -56,7 +56,8 @@ class ExecutionPlan:
 class ParallelExecutor:
     """Executes tickets in parallel respecting dependencies."""
     
-    def __init__(self, max_workers: int = 3, project_root: str = "."):
+    def __init__(self, max_workers: int = 3, project_root: str = ".", 
+                 dashboard_state=None):
         self.max_workers = max_workers
         self.project_root = Path(project_root).resolve()
         self.tickets: Dict[str, TicketNode] = {}
@@ -65,6 +66,7 @@ class ParallelExecutor:
         self.failed_tickets: Set[str] = set()
         self.running_tickets: Set[str] = set()
         self.orchestrators: Dict[str, ClaudeCodeOrchestrator] = {}
+        self.dashboard_state = dashboard_state
     
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md."""
@@ -103,6 +105,15 @@ class ParallelExecutor:
                     status=ExecutionStatus.PENDING
                 )
                 tickets[ticket_id] = node
+                
+                # Add to dashboard if available
+                if self.dashboard_state:
+                    self.dashboard_state.add_ticket(
+                        ticket_id, 
+                        ticket_data['title'],
+                        ticket_data['model'],
+                        ticket_data.get('dependencies', [])
+                    )
         
         self.tickets = tickets
         return tickets
@@ -169,6 +180,11 @@ class ParallelExecutor:
             node = self.tickets[ticket_id]
             node.status = ExecutionStatus.RUNNING
             node.start_time = time.time()
+            
+            # Update dashboard
+            if self.dashboard_state:
+                from hydra.dashboard.state import TicketStatus
+                self.dashboard_state.update_ticket_status(ticket_id, TicketStatus.RUNNING)
         
         print(f"\n{'='*60}")
         print(f"🎫 Starting Ticket {ticket_id}: {node.title}")
@@ -230,6 +246,11 @@ Instructions:
                     node.quality_passed = quality_passed
                     self.completed_tickets.add(ticket_id)
                     self.running_tickets.remove(ticket_id)
+                    
+                    # Update dashboard
+                    if self.dashboard_state:
+                        from hydra.dashboard.state import TicketStatus
+                        self.dashboard_state.update_ticket_status(ticket_id, TicketStatus.COMPLETED)
                 
                 duration = node.end_time - node.start_time
                 print(f"\n✅ Ticket {ticket_id} completed in {duration:.2f}s")
@@ -248,6 +269,11 @@ Instructions:
                 node.error = str(e)
                 self.failed_tickets.add(ticket_id)
                 self.running_tickets.remove(ticket_id)
+                
+                # Update dashboard
+                if self.dashboard_state:
+                    from hydra.dashboard.state import TicketStatus
+                    self.dashboard_state.update_ticket_status(ticket_id, TicketStatus.FAILED, str(e))
             
             print(f"\n❌ Ticket {ticket_id} failed: {e}")
             return False
@@ -257,6 +283,13 @@ Instructions:
         results = {}
         
         print(f"\n🌊 Executing wave with {len(wave)} tickets: {', '.join(wave)}")
+        
+        # Update dashboard wave
+        if self.dashboard_state:
+            for ticket_id in wave:
+                if ticket_id not in self.completed_tickets and ticket_id not in self.failed_tickets:
+                    # Mark as pending if not already processed
+                    pass
         
         with ThreadPoolExecutor(max_workers=min(len(wave), self.max_workers)) as executor:
             futures = {
@@ -294,6 +327,10 @@ Instructions:
         
         for wave_num, wave in enumerate(plan.waves, 1):
             print(f"\n🚀 Starting Wave {wave_num}/{len(plan.waves)}")
+            
+            # Update dashboard wave
+            if self.dashboard_state:
+                self.dashboard_state.update_wave(wave_num)
             
             # Filter out already completed tickets
             wave_to_execute = [

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydra Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0a0e27;
+            color: #e4e4e7;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #1e293b;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #60a5fa;
+        }
+        
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background: #10b981;
+            color: white;
+        }
+        
+        .status-idle {
+            background: #6b7280;
+            color: white;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #334155;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        
+        .metric-value {
+            font-size: 32px;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+        
+        .metric-unit {
+            font-size: 14px;
+            color: #64748b;
+            margin-left: 4px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #334155;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            transition: width 0.3s ease;
+        }
+        
+        .tickets-grid {
+            display: grid;
+            gap: 16px;
+        }
+        
+        .ticket-card {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid #334155;
+            display: grid;
+            grid-template-columns: auto 1fr auto auto;
+            gap: 16px;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+        
+        .ticket-card:hover {
+            border-color: #475569;
+            transform: translateX(2px);
+        }
+        
+        .ticket-id {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 14px;
+            color: #60a5fa;
+            font-weight: 500;
+        }
+        
+        .ticket-info {
+            flex: 1;
+        }
+        
+        .ticket-title {
+            font-size: 16px;
+            color: #f1f5f9;
+            margin-bottom: 4px;
+        }
+        
+        .ticket-meta {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .ticket-status {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .status-pending {
+            background: #475569;
+            color: #e2e8f0;
+        }
+        
+        .status-running {
+            background: #3b82f6;
+            color: white;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-completed {
+            background: #10b981;
+            color: white;
+        }
+        
+        .status-failed {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .status-blocked {
+            background: #f59e0b;
+            color: white;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .ticket-duration {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 12px;
+            color: #94a3b8;
+            min-width: 60px;
+            text-align: right;
+        }
+        
+        .wave-indicator {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid #334155;
+        }
+        
+        .wave-label {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+        
+        .wave-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #60a5fa;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 60px;
+            color: #64748b;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 12px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #e4e4e7;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+        
+        button:hover {
+            background: #334155;
+            border-color: #475569;
+        }
+        
+        .connection-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            margin-right: 8px;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+        
+        .connection-lost {
+            background: #ef4444;
+            animation: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Hydra Dashboard</h1>
+            <div class="controls">
+                <span id="connection-status">
+                    <span class="connection-indicator" id="connection-indicator"></span>
+                    <span id="connection-text">Connected</span>
+                </span>
+                <button onclick="clearState()">Clear</button>
+                <button onclick="location.reload()">Refresh</button>
+            </div>
+        </header>
+        
+        <div id="content">
+            <div class="no-data">
+                <h2>No Active Session</h2>
+                <p>Waiting for ticket execution to begin...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let eventSource = null;
+        let connectionLost = false;
+        
+        function formatDuration(seconds) {
+            if (!seconds) return '-';
+            if (seconds < 60) return `${Math.round(seconds)}s`;
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.round(seconds % 60);
+            return `${minutes}m ${secs}s`;
+        }
+        
+        function updateDashboard(data) {
+            const content = document.getElementById('content');
+            
+            if (!data.session) {
+                content.innerHTML = `
+                    <div class="no-data">
+                        <h2>No Active Session</h2>
+                        <p>Waiting for ticket execution to begin...</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const session = data.session;
+            const tickets = data.tickets || [];
+            
+            content.innerHTML = `
+                <div class="metrics">
+                    <div class="metric-card">
+                        <div class="metric-label">Progress</div>
+                        <div class="metric-value">${Math.round(session.progress)}<span class="metric-unit">%</span></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${session.progress}%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Completed</div>
+                        <div class="metric-value">${session.completed_tickets}<span class="metric-unit">/ ${session.total_tickets}</span></div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Failed</div>
+                        <div class="metric-value">${session.failed_tickets}</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Workers</div>
+                        <div class="metric-value">${session.workers}</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">Elapsed Time</div>
+                        <div class="metric-value">${formatDuration(session.elapsed_time)}</div>
+                    </div>
+                </div>
+                
+                <div class="wave-indicator">
+                    <span class="wave-label">Current Wave:</span>
+                    <span class="wave-value">${session.current_wave} / ${session.total_waves}</span>
+                </div>
+                
+                <div class="tickets-grid">
+                    ${tickets.map(ticket => `
+                        <div class="ticket-card">
+                            <div class="ticket-id">${ticket.ticket_id}</div>
+                            <div class="ticket-info">
+                                <div class="ticket-title">${ticket.title}</div>
+                                <div class="ticket-meta">
+                                    Model: ${ticket.model}
+                                    ${ticket.dependencies.length > 0 ? ` | Deps: ${ticket.dependencies.join(', ')}` : ''}
+                                </div>
+                            </div>
+                            <div class="ticket-status status-${ticket.status}">${ticket.status}</div>
+                            <div class="ticket-duration">${formatDuration(ticket.duration)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        function connectEventSource() {
+            eventSource = new EventSource('/api/events');
+            
+            eventSource.onmessage = function(event) {
+                connectionLost = false;
+                updateConnectionStatus(true);
+                
+                try {
+                    const data = JSON.parse(event.data);
+                    updateDashboard(data);
+                } catch (e) {
+                    console.error('Failed to parse event data:', e);
+                }
+            };
+            
+            eventSource.onerror = function(error) {
+                console.error('EventSource error:', error);
+                updateConnectionStatus(false);
+                
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    setTimeout(connectEventSource, 3000);
+                }
+            };
+        }
+        
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('connection-indicator');
+            const text = document.getElementById('connection-text');
+            
+            if (connected) {
+                indicator.classList.remove('connection-lost');
+                text.textContent = 'Connected';
+            } else {
+                indicator.classList.add('connection-lost');
+                text.textContent = 'Disconnected';
+            }
+        }
+        
+        async function clearState() {
+            if (!confirm('Clear all dashboard state?')) return;
+            
+            try {
+                await fetch('/api/clear', { method: 'POST' });
+                location.reload();
+            } catch (e) {
+                console.error('Failed to clear state:', e);
+            }
+        }
+        
+        // Initial load
+        fetch('/api/state')
+            .then(res => res.json())
+            .then(data => updateDashboard(data))
+            .catch(err => console.error('Failed to load initial state:', err));
+        
+        // Connect to event stream
+        connectEventSource();
+    </script>
+</body>
+</html>

@@ -1,9 +1,6 @@
 """Claude CLI Orchestrator that properly invokes Claude Code for file operations."""
-import json
 import os
 import subprocess
-import tempfile
-import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -16,10 +13,10 @@ class ClaudeCLIOrchestratorProvider(LLMProvider):
     def validate_config(self):
         """Validate Claude CLI configuration."""
         self.claude_path = self.config.extra_params.get(
-            'claude_path', 
+            'claude_path',
             os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
         )
-        
+
         # Verify Claude exists
         if not Path(self.claude_path).exists():
             raise ValueError(f"Claude CLI not found at: {self.claude_path}")
@@ -30,7 +27,6 @@ class ClaudeCLIOrchestratorProvider(LLMProvider):
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Execute Claude to implement a ticket with file operations."""
-        
         # Create a script that Claude will execute
         script_content = f"""#!/bin/bash
 # Hydra-generated script for Claude Code execution
@@ -53,17 +49,17 @@ EOF
 # Mark as complete
 echo "done" > .hydra_complete
 """
-        
+
         # Write script
         script_path = Path("/tmp/hydra_claude_script.sh")
         script_path.write_text(script_content)
         script_path.chmod(0o755)
-        
+
         # Remove completion marker if exists
         complete_marker = Path(os.getcwd()) / ".hydra_complete"
         if complete_marker.exists():
             complete_marker.unlink()
-        
+
         try:
             # Execute the script in a new terminal/process
             # This allows Claude to run interactively
@@ -74,14 +70,14 @@ echo "done" > .hydra_complete
                 timeout=self.config.timeout,
                 cwd=os.getcwd()
             )
-            
+
             # Check for completion
             if complete_marker.exists():
                 complete_marker.unlink()
                 return "Files have been edited successfully"
             else:
                 return result.stdout or "Task attempted"
-                
+
         except subprocess.TimeoutExpired:
             raise Exception(f"Claude CLI timeout after {self.config.timeout}s")
         except Exception as e:

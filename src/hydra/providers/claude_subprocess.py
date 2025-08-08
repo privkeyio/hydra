@@ -1,7 +1,6 @@
 """Claude Subprocess Provider - Direct subprocess interaction with Claude CLI."""
 import os
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict
@@ -18,7 +17,7 @@ class ClaudeSubprocessProvider(LLMProvider):
             'claude_path',
             os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
         )
-        
+
         if not Path(self.claude_path).exists():
             raise ValueError(f"Claude CLI not found at: {self.claude_path}")
 
@@ -28,22 +27,21 @@ class ClaudeSubprocessProvider(LLMProvider):
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Execute Claude to implement ticket with actual file operations."""
-        
         project_dir = kwargs.get('cwd', os.getcwd())
-        
+
         # Create a prompt file that Claude will read
         prompt_file = Path("/tmp/hydra_ticket_prompt.txt")
         prompt_file.write_text(prompt + "\n\nPlease implement this by creating/editing the necessary files.")
-        
+
         try:
-            print(f"🚀 Launching Claude Code CLI...")
+            print("🚀 Launching Claude Code CLI...")
             print(f"📁 Working directory: {project_dir}")
-            
+
             # Run Claude with the prompt file as input
             # Use unbuffered output and proper terminal settings
             env = os.environ.copy()
             env['TERM'] = 'xterm-256color'
-            
+
             process = subprocess.Popen(
                 [self.claude_path],
                 stdin=subprocess.PIPE,
@@ -54,26 +52,26 @@ class ClaudeSubprocessProvider(LLMProvider):
                 text=True,
                 bufsize=0  # Unbuffered
             )
-            
+
             # Send the prompt to Claude
             prompt_text = prompt_file.read_text()
             process.stdin.write(prompt_text + "\n")
             process.stdin.flush()
-            
+
             # Give Claude time to process
             time.sleep(5)
-            
+
             # Send exit command
             process.stdin.write("/exit\n")
             process.stdin.flush()
-            
+
             # Wait for completion with timeout
             try:
                 stdout, _ = process.communicate(timeout=self.config.timeout)
             except subprocess.TimeoutExpired:
                 process.kill()
                 stdout, _ = process.communicate()
-            
+
             # Check for file changes
             git_status = subprocess.run(
                 ["git", "status", "--short"],
@@ -81,7 +79,7 @@ class ClaudeSubprocessProvider(LLMProvider):
                 text=True,
                 cwd=project_dir
             )
-            
+
             if git_status.stdout and git_status.stdout != "?? tickets.md\n":
                 print("\n✅ Files were modified by Claude Code:")
                 for line in git_status.stdout.strip().split('\n'):
@@ -96,10 +94,10 @@ class ClaudeSubprocessProvider(LLMProvider):
                     if any("snapshot" in f.name.lower() for f in src_files):
                         print("✅ Snapshot-related files created")
                         return "Implementation completed"
-                
+
                 print("⚠️  No file changes detected")
                 return stdout or "Claude session completed without file changes"
-                
+
         except Exception as e:
             raise Exception(f"Claude subprocess error: {str(e)}")
         finally:
@@ -114,7 +112,7 @@ class ClaudeSubprocessProvider(LLMProvider):
     def stream_generate(self, prompt: str, **kwargs):
         """Not used for subprocess mode."""
         yield self.generate(prompt, **kwargs)
-    
+
     def list_models(self):
         """Return available models."""
         return ["claude-3-opus", "claude-3-sonnet"]

@@ -3,20 +3,18 @@
 Automatically verifies that acceptance criteria are met after ticket execution.
 """
 
-import ast
-import os
 import re
-import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from hydra.ticket_workflow import parse_ticket
 
 
 class CriterionStatus(Enum):
     """Status of a single acceptance criterion."""
+
     PASSED = "passed"
     FAILED = "failed"
     PARTIAL = "partial"
@@ -27,6 +25,7 @@ class CriterionStatus(Enum):
 @dataclass
 class VerificationResult:
     """Result of verifying a single criterion."""
+
     criterion: str
     status: CriterionStatus
     evidence: str
@@ -36,6 +35,7 @@ class VerificationResult:
 @dataclass
 class TicketVerificationReport:
     """Complete verification report for a ticket."""
+
     ticket_id: str
     ticket_title: str
     total_criteria: int
@@ -49,11 +49,11 @@ class TicketVerificationReport:
 
 class TicketVerifier:
     """Verifies ticket acceptance criteria through code analysis."""
-    
+
     def __init__(self, project_root: str = "."):
         self.project_root = Path(project_root).resolve()
         self.verification_patterns = self._load_verification_patterns()
-    
+
     def _load_verification_patterns(self) -> Dict[str, List[str]]:
         """Load patterns for detecting common acceptance criteria."""
         return {
@@ -88,13 +88,15 @@ class TicketVerifier:
                 r"[Aa]dd\s+(\S+)\s+configuration"
             ]
         }
-    
-    def verify_ticket(self, tickets_path: str, ticket_id: str) -> TicketVerificationReport:
+
+    def verify_ticket(
+        self, tickets_path: str, ticket_id: str
+    ) -> TicketVerificationReport:
         """Verify all acceptance criteria for a ticket."""
         ticket = parse_ticket(tickets_path, ticket_id)
         if not ticket:
             raise ValueError(f"Ticket {ticket_id} not found")
-        
+
         results = []
         for criterion in ticket['acceptance_criteria']:
             # Skip already completed criteria
@@ -106,18 +108,18 @@ class TicketVerifier:
                     confidence=1.0
                 ))
                 continue
-            
+
             result = self._verify_criterion(criterion)
             results.append(result)
-        
+
         # Calculate statistics
         passed = sum(1 for r in results if r.status == CriterionStatus.PASSED)
         failed = sum(1 for r in results if r.status == CriterionStatus.FAILED)
         partial = sum(1 for r in results if r.status == CriterionStatus.PARTIAL)
-        
+
         # Generate recommendations
         recommendations = self._generate_recommendations(results)
-        
+
         return TicketVerificationReport(
             ticket_id=ticket_id,
             ticket_title=ticket['title'],
@@ -129,39 +131,45 @@ class TicketVerifier:
             results=results,
             recommendations=recommendations
         )
-    
+
     def _verify_criterion(self, criterion: str) -> VerificationResult:
         """Verify a single acceptance criterion."""
         criterion_lower = criterion.lower()
-        
+
         # Check for file creation
-        if any(keyword in criterion_lower for keyword in ['create', 'add', 'generate']) and 'file' in criterion_lower:
+        file_keywords = ['create', 'add', 'generate']
+        has_file_keyword = any(keyword in criterion_lower for keyword in file_keywords)
+        if has_file_keyword and 'file' in criterion_lower:
             return self._verify_file_exists(criterion)
-        
+
         # Check for directory creation
-        if any(keyword in criterion_lower for keyword in ['directory', 'folder', 'structure']):
+        dir_keywords = ['directory', 'folder', 'structure']
+        if any(keyword in criterion_lower for keyword in dir_keywords):
             return self._verify_directory_exists(criterion)
-        
+
         # Check for endpoint creation
         if 'endpoint' in criterion_lower:
             return self._verify_endpoint_exists(criterion)
-        
+
         # Check for function/method implementation
-        if any(keyword in criterion_lower for keyword in ['function', 'method', 'implement']):
+        func_keywords = ['function', 'method', 'implement']
+        if any(keyword in criterion_lower for keyword in func_keywords):
             return self._verify_function_exists(criterion)
-        
+
         # Check for dependency installation
-        if any(keyword in criterion_lower for keyword in ['dependency', 'requirement', 'install']):
+        dep_keywords = ['dependency', 'requirement', 'install']
+        if any(keyword in criterion_lower for keyword in dep_keywords):
             return self._verify_dependency_exists(criterion)
-        
+
         # Check for test creation
         if 'test' in criterion_lower:
             return self._verify_test_exists(criterion)
-        
+
         # Check for configuration
-        if any(keyword in criterion_lower for keyword in ['configure', 'configuration', 'setting']):
+        config_keywords = ['configure', 'configuration', 'setting']
+        if any(keyword in criterion_lower for keyword in config_keywords):
             return self._verify_configuration_exists(criterion)
-        
+
         # Default: unable to automatically verify
         return VerificationResult(
             criterion=criterion,
@@ -169,7 +177,7 @@ class TicketVerifier:
             evidence="Unable to automatically verify this criterion",
             confidence=0.0
         )
-    
+
     def _verify_file_exists(self, criterion: str) -> VerificationResult:
         """Verify that a file was created."""
         # Extract potential file paths from criterion
@@ -178,7 +186,7 @@ class TicketVerifier:
             r'(\w+/\w+\.\w+)',  # Path-like patterns
             r'(\w+\.\w+)',  # Simple filenames
         ]
-        
+
         for pattern in patterns:
             matches = re.findall(pattern, criterion)
             for match in matches:
@@ -190,14 +198,14 @@ class TicketVerifier:
                         evidence=f"File {match} exists",
                         confidence=0.9
                     )
-        
+
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence="File not found",
             confidence=0.7
         )
-    
+
     def _verify_directory_exists(self, criterion: str) -> VerificationResult:
         """Verify that a directory was created."""
         patterns = [
@@ -205,7 +213,7 @@ class TicketVerifier:
             r'(\w+)\s+directory',  # Directory name before 'directory'
             r'(\w+)\s+folder',  # Directory name before 'folder'
         ]
-        
+
         for pattern in patterns:
             matches = re.findall(pattern, criterion, re.IGNORECASE)
             for match in matches:
@@ -217,14 +225,14 @@ class TicketVerifier:
                         evidence=f"Directory {match} exists",
                         confidence=0.9
                     )
-        
+
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence="Directory not found",
             confidence=0.7
         )
-    
+
     def _verify_endpoint_exists(self, criterion: str) -> VerificationResult:
         """Verify that an API endpoint was created."""
         # Extract endpoint path
@@ -233,7 +241,7 @@ class TicketVerifier:
             r'(GET|POST|PUT|DELETE|PATCH)\s+(/\S+)',  # HTTP method + path
             r'(/\w+(?:/\w+)*)',  # Path-like patterns
         ]
-        
+
         endpoint_path = None
         for pattern in patterns:
             matches = re.findall(pattern, criterion)
@@ -243,7 +251,7 @@ class TicketVerifier:
                 else:
                     endpoint_path = matches[0]
                 break
-        
+
         if not endpoint_path:
             return VerificationResult(
                 criterion=criterion,
@@ -251,10 +259,10 @@ class TicketVerifier:
                 evidence="Could not extract endpoint path",
                 confidence=0.3
             )
-        
+
         # Search for endpoint in code
         found = self._search_in_files(endpoint_path, ['.py', '.js', '.ts'])
-        
+
         if found:
             return VerificationResult(
                 criterion=criterion,
@@ -262,14 +270,14 @@ class TicketVerifier:
                 evidence=f"Endpoint {endpoint_path} found in {found[0]}",
                 confidence=0.85
             )
-        
+
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence=f"Endpoint {endpoint_path} not found in code",
             confidence=0.6
         )
-    
+
     def _verify_function_exists(self, criterion: str) -> VerificationResult:
         """Verify that a function/method was implemented."""
         # Extract function name
@@ -279,14 +287,14 @@ class TicketVerifier:
             r'(\w+)\s+method',  # Method name before 'method'
             r'implement\s+(\w+)',  # After 'implement'
         ]
-        
+
         func_name = None
         for pattern in patterns:
             matches = re.findall(pattern, criterion, re.IGNORECASE)
             if matches:
                 func_name = matches[0]
                 break
-        
+
         if not func_name:
             return VerificationResult(
                 criterion=criterion,
@@ -294,10 +302,10 @@ class TicketVerifier:
                 evidence="Could not extract function name",
                 confidence=0.3
             )
-        
+
         # Search for function definition
         found = self._search_function_definition(func_name)
-        
+
         if found:
             return VerificationResult(
                 criterion=criterion,
@@ -305,14 +313,14 @@ class TicketVerifier:
                 evidence=f"Function {func_name} found in {found[0]}",
                 confidence=0.9
             )
-        
+
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence=f"Function {func_name} not found",
             confidence=0.7
         )
-    
+
     def _verify_dependency_exists(self, criterion: str) -> VerificationResult:
         """Verify that a dependency was added."""
         # Extract package name
@@ -320,19 +328,20 @@ class TicketVerifier:
             r'[\'"`]([^\'"`]+)[\'"`]',  # Quoted package name
             r'(\w+(?:-\w+)*)',  # Package name pattern
         ]
-        
+
         package_name = None
         for pattern in patterns:
             matches = re.findall(pattern, criterion)
             if matches:
                 # Filter out common words
                 for match in matches:
-                    if match not in ['add', 'install', 'dependency', 'to', 'with', 'in']:
+                    common_words = ['add', 'install', 'dependency', 'to', 'with', 'in']
+                    if match not in common_words:
                         package_name = match
                         break
                 if package_name:
                     break
-        
+
         if not package_name:
             return VerificationResult(
                 criterion=criterion,
@@ -340,10 +349,10 @@ class TicketVerifier:
                 evidence="Could not extract package name",
                 confidence=0.3
             )
-        
+
         # Check in various dependency files
         found = self._check_dependency_files(package_name)
-        
+
         if found:
             return VerificationResult(
                 criterion=criterion,
@@ -351,23 +360,26 @@ class TicketVerifier:
                 evidence=f"Package {package_name} found in {found}",
                 confidence=0.95
             )
-        
+
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence=f"Package {package_name} not found in dependency files",
             confidence=0.8
         )
-    
+
     def _verify_test_exists(self, criterion: str) -> VerificationResult:
         """Verify that tests were created."""
         # Look for test files
-        test_patterns = ['test_*.py', '*_test.py', '*.test.js', '*.test.ts', '*.spec.js', '*.spec.ts']
+        test_patterns = [
+            'test_*.py', '*_test.py', '*.test.js',
+            '*.test.ts', '*.spec.js', '*.spec.ts'
+        ]
         test_files = []
-        
+
         for pattern in test_patterns:
             test_files.extend(self.project_root.rglob(pattern))
-        
+
         if not test_files:
             return VerificationResult(
                 criterion=criterion,
@@ -375,31 +387,39 @@ class TicketVerifier:
                 evidence="No test files found",
                 confidence=0.8
             )
-        
+
         # Check if tests were recently modified
         import time
         current_time = time.time()
-        recent_tests = [f for f in test_files if (current_time - f.stat().st_mtime) < 3600]  # Within last hour
-        
+        # Within last hour
+        recent_tests = [
+            f for f in test_files if (current_time - f.stat().st_mtime) < 3600
+        ]
+
         if recent_tests:
+            test_names = [f.name for f in recent_tests[:3]]
+            evidence = f"Recent test files: {', '.join(test_names)}"
             return VerificationResult(
                 criterion=criterion,
                 status=CriterionStatus.PASSED,
-                evidence=f"Recent test files: {', '.join([f.name for f in recent_tests[:3]])}",
+                evidence=evidence,
                 confidence=0.85
             )
-        
+
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.PARTIAL,
             evidence="Test files exist but were not recently modified",
             confidence=0.6
         )
-    
+
     def _verify_configuration_exists(self, criterion: str) -> VerificationResult:
         """Verify that configuration was added."""
-        config_files = ['.env', '.env.example', 'config.py', 'config.js', 'settings.py', 'settings.json']
-        
+        config_files = [
+            '.env', '.env.example', 'config.py',
+            'config.js', 'settings.py', 'settings.json'
+        ]
+
         for config_file in config_files:
             file_path = self.project_root / config_file
             if file_path.exists():
@@ -412,18 +432,20 @@ class TicketVerifier:
                         evidence=f"Configuration file {config_file} recently modified",
                         confidence=0.8
                     )
-        
+
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.PARTIAL,
             evidence="Configuration files exist but were not recently modified",
             confidence=0.5
         )
-    
-    def _search_in_files(self, pattern: str, extensions: List[str]) -> Optional[List[str]]:
+
+    def _search_in_files(
+        self, pattern: str, extensions: List[str]
+    ) -> Optional[List[str]]:
         """Search for a pattern in files with given extensions."""
         found_in = []
-        
+
         for ext in extensions:
             for file_path in self.project_root.rglob(f'*{ext}'):
                 try:
@@ -432,9 +454,9 @@ class TicketVerifier:
                         found_in.append(str(file_path.relative_to(self.project_root)))
                 except Exception:
                     continue
-        
+
         return found_in if found_in else None
-    
+
     def _search_function_definition(self, func_name: str) -> Optional[List[str]]:
         """Search for function definitions in code files."""
         patterns = [
@@ -443,10 +465,10 @@ class TicketVerifier:
             rf'const\s+{func_name}\s*=',  # JS arrow function
             rf'{func_name}\s*:\s*function',  # Object method
         ]
-        
+
         found_in = []
         code_extensions = ['.py', '.js', '.ts', '.jsx', '.tsx']
-        
+
         for ext in code_extensions:
             for file_path in self.project_root.rglob(f'*{ext}'):
                 try:
@@ -457,9 +479,9 @@ class TicketVerifier:
                             break
                 except Exception:
                     continue
-        
+
         return found_in if found_in else None
-    
+
     def _check_dependency_files(self, package_name: str) -> Optional[str]:
         """Check if a package is listed in dependency files."""
         dependency_files = {
@@ -469,7 +491,7 @@ class TicketVerifier:
             'go.mod': package_name,
             'pom.xml': f'<artifactId>{package_name}</artifactId>',
         }
-        
+
         for file_name, search_pattern in dependency_files.items():
             file_path = self.project_root / file_name
             if file_path.exists():
@@ -479,54 +501,65 @@ class TicketVerifier:
                         return file_name
                 except Exception:
                     continue
-        
+
         return None
-    
+
     def _generate_recommendations(self, results: List[VerificationResult]) -> List[str]:
         """Generate recommendations based on verification results."""
         recommendations = []
-        
+
         failed_count = sum(1 for r in results if r.status == CriterionStatus.FAILED)
         unknown_count = sum(1 for r in results if r.status == CriterionStatus.UNKNOWN)
-        
+
         if failed_count > 0:
-            recommendations.append(f"Review {failed_count} failed criteria and complete implementation")
-        
+            failed_msg = (
+                f"Review {failed_count} failed criteria and complete implementation"
+            )
+            recommendations.append(failed_msg)
+
         if unknown_count > 0:
-            recommendations.append(f"Manually verify {unknown_count} criteria that couldn't be automatically checked")
-        
+            manual_msg = (
+                f"Manually verify {unknown_count} criteria that couldn't be "
+                "automatically checked"
+            )
+            recommendations.append(manual_msg)
+
         if failed_count == 0 and unknown_count == 0:
-            recommendations.append("All verifiable criteria passed - consider marking ticket as complete")
-        
+            complete_msg = (
+                "All verifiable criteria passed - consider marking ticket as complete"
+            )
+            recommendations.append(complete_msg)
+
         # Specific recommendations based on failure types
         for result in results:
             if result.status == CriterionStatus.FAILED:
                 if 'file' in result.criterion.lower():
-                    recommendations.append(f"Create missing file: {result.criterion[:50]}")
+                    file_msg = f"Create missing file: {result.criterion[:50]}"
+                    recommendations.append(file_msg)
                 elif 'test' in result.criterion.lower():
                     recommendations.append("Add missing tests")
                 elif 'endpoint' in result.criterion.lower():
                     recommendations.append("Implement missing API endpoint")
-        
+
         return recommendations[:5]  # Limit to top 5 recommendations
-    
+
     def generate_report(self, report: TicketVerificationReport) -> str:
         """Generate a human-readable report."""
         lines = [
-            f"📋 Ticket Verification Report",
+            "📋 Ticket Verification Report",
             f"{'='*50}",
             f"Ticket: {report.ticket_id} - {report.ticket_title}",
-            f"",
-            f"📊 Summary:",
+            "",
+            "📊 Summary:",
             f"  Total Criteria: {report.total_criteria}",
             f"  ✅ Passed: {report.passed}",
             f"  ❌ Failed: {report.failed}",
             f"  ⚠️  Partial: {report.partial}",
             f"  📈 Coverage: {report.coverage:.1f}%",
-            f"",
-            f"📝 Detailed Results:",
+            "",
+            "📝 Detailed Results:",
         ]
-        
+
         for result in report.results:
             status_icon = {
                 CriterionStatus.PASSED: "✅",
@@ -535,10 +568,11 @@ class TicketVerifier:
                 CriterionStatus.SKIPPED: "⏭️",
                 CriterionStatus.UNKNOWN: "❓"
             }.get(result.status, "")
-            
+
             lines.append(f"  {status_icon} {result.criterion[:60]}")
-            lines.append(f"     → {result.evidence} (confidence: {result.confidence:.0%})")
-        
+            confidence_pct = f"{result.confidence:.0%}"
+            lines.append(f"     → {result.evidence} (confidence: {confidence_pct})")
+
         if report.recommendations:
             lines.extend([
                 "",
@@ -546,5 +580,5 @@ class TicketVerifier:
             ])
             for rec in report.recommendations:
                 lines.append(f"  • {rec}")
-        
+
         return "\n".join(lines)

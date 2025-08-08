@@ -15,7 +15,7 @@ class ClaudeCLIDirectProvider(LLMProvider):
     def validate_config(self):
         """Validate Claude CLI configuration."""
         claude_path = self.config.extra_params.get('claude_path', '/home/kyle/.claude/local/claude')
-        
+
         if not Path(claude_path).exists():
             # Try to find it
             result = subprocess.run(["which", "claude"], capture_output=True, text=True)
@@ -23,7 +23,7 @@ class ClaudeCLIDirectProvider(LLMProvider):
                 claude_path = result.stdout.strip()
             else:
                 raise ValueError(f"Claude CLI not found at: {claude_path}")
-        
+
         self.claude_path = claude_path
 
     @property
@@ -32,19 +32,18 @@ class ClaudeCLIDirectProvider(LLMProvider):
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Execute Claude with the ability to edit files."""
-        
         # Create a temporary script file with the prompt
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write(prompt)
             f.write("\n\nWhen done, write 'COMPLETE' to a file called .claude_done\n")
             prompt_file = f.name
-        
+
         try:
             # Remove any existing completion marker
             done_file = Path('.claude_done')
             if done_file.exists():
                 done_file.unlink()
-            
+
             # Run Claude with the prompt file as input
             # This allows Claude to actually edit files in the current directory
             process = subprocess.Popen(
@@ -55,18 +54,18 @@ class ClaudeCLIDirectProvider(LLMProvider):
                 text=True,
                 cwd=os.getcwd()
             )
-            
+
             # Wait for completion with timeout
             timeout = self.config.timeout
             start_time = time.time()
-            
+
             while time.time() - start_time < timeout:
                 # Check if Claude created the done marker
                 if done_file.exists():
                     process.terminate()
                     done_file.unlink()
                     return "Implementation complete - files have been edited"
-                
+
                 # Check if process ended
                 if process.poll() is not None:
                     stdout, stderr = process.communicate()
@@ -74,13 +73,13 @@ class ClaudeCLIDirectProvider(LLMProvider):
                         return stdout or "Implementation complete"
                     else:
                         raise Exception(f"Claude CLI error: {stderr}")
-                
+
                 time.sleep(1)
-            
+
             # Timeout
             process.terminate()
             raise Exception(f"Claude CLI timeout after {timeout}s")
-            
+
         finally:
             # Clean up temp file
             Path(prompt_file).unlink(missing_ok=True)

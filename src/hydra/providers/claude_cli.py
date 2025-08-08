@@ -72,10 +72,10 @@ class ClaudeCLIProvider(LLMProvider):
 When you are completely done implementing this ticket, please say "IMPLEMENTATION_COMPLETE" at the end.
 /exit
 """
-        
+
         # Get the current working directory for context
         cwd = os.getcwd()
-        
+
         return subprocess.run(
             [self.claude_path],
             input=full_prompt,

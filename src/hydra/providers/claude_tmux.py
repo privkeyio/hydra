@@ -18,10 +18,10 @@ class ClaudeTmuxProvider(LLMProvider):
             'claude_path',
             os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
         )
-        
+
         if not Path(self.claude_path).exists():
             raise ValueError(f"Claude CLI not found at: {self.claude_path}")
-        
+
         # Check if tmux is available
         try:
             subprocess.run(["tmux", "-V"], capture_output=True, check=True)
@@ -59,7 +59,7 @@ class ClaudeTmuxProvider(LLMProvider):
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
             f.write(text)
             temp_file = f.name
-        
+
         try:
             # Use tmux load-buffer and paste-buffer for accurate text transmission
             subprocess.run(
@@ -89,23 +89,22 @@ class ClaudeTmuxProvider(LLMProvider):
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Execute Claude in a tmux session for file operations."""
-        
         project_dir = kwargs.get('cwd', os.getcwd())
         ticket_id = kwargs.get('ticket_id', None)
         session_name = self._create_session_name(ticket_id)
-        
+
         # Kill any existing session with the same name
         self._kill_session(session_name)
-        
+
         # Marker file to detect when Claude is done
         done_marker = Path(project_dir) / f".hydra_done_{session_name}"
         if done_marker.exists():
             done_marker.unlink()
-        
+
         try:
             print(f"🖥️  Starting tmux session: {session_name}")
             print(f"📁 Working directory: {project_dir}")
-            
+
             # Create a new tmux session with Claude
             subprocess.run(
                 [
@@ -115,13 +114,13 @@ class ClaudeTmuxProvider(LLMProvider):
                 ],
                 check=True
             )
-            
+
             # Wait for Claude to initialize
             print("⏳ Waiting for Claude Code to initialize...")
             initialization_timeout = 30
             start_init = time.time()
             claude_ready = False
-            
+
             while time.time() - start_init < initialization_timeout:
                 output = self._capture_session_output(session_name)
                 # Check for various Claude Code prompts
@@ -130,38 +129,38 @@ class ClaudeTmuxProvider(LLMProvider):
                     print("✅ Claude Code is ready")
                     break
                 time.sleep(1)
-            
+
             if not claude_ready:
                 print("⚠️  Claude Code initialization timeout - proceeding anyway")
-            
+
             # Send the implementation prompt
             print("📝 Sending task to Claude Code...")
             self._send_to_session(session_name, prompt)
-            
+
             # Give Claude time to process the prompt
             time.sleep(3)
-            
+
             # Add instruction to create done marker (only if not already in prompt)
             if f".hydra_done_{session_name}" not in prompt:
                 done_instruction = f"\nWhen you're completely done with all file operations, please create a file called .hydra_done_{session_name} to signal completion."
                 self._send_to_session(session_name, done_instruction)
-            
+
             # Monitor for completion
             start_time = time.time()
             last_output = ""
             no_change_count = 0
             last_status_time = time.time()
-            
+
             while time.time() - start_time < self.config.timeout:
                 # Check if done marker exists
                 if done_marker.exists():
                     print("✅ Claude Code signaled completion")
                     done_marker.unlink()
                     break
-                
+
                 # Capture current output
                 current_output = self._capture_session_output(session_name)
-                
+
                 # Check if output has changed
                 if current_output == last_output:
                     no_change_count += 1
@@ -178,13 +177,13 @@ class ClaudeTmuxProvider(LLMProvider):
                         if any(pattern in new_content for pattern in ["Reading", "Writing", "Editing", "Creating", "Running"]):
                             print("⚙️  Claude Code is actively working on files...")
                     last_output = current_output
-                    
+
                 # Show periodic status updates
                 if time.time() - last_status_time > 10:
                     last_status_time = time.time()
                     elapsed = int(time.time() - start_time)
                     print(f"⏳ Elapsed time: {elapsed}s")
-                
+
                 # Check for file changes periodically
                 if int(time.time() - start_time) % 10 == 0:
                     git_status = subprocess.run(
@@ -199,14 +198,14 @@ class ClaudeTmuxProvider(LLMProvider):
                     ]
                     if changed_files:
                         print(f"📝 Files modified: {len(changed_files)} files")
-                
+
                 time.sleep(1)
-            
+
             # Send exit command to Claude
             print("🛑 Ending Claude session...")
             self._send_to_session(session_name, "/exit")
             time.sleep(2)
-            
+
             # Check final results
             git_status = subprocess.run(
                 ["git", "status", "--short"],
@@ -214,12 +213,12 @@ class ClaudeTmuxProvider(LLMProvider):
                 text=True,
                 cwd=project_dir
             )
-            
+
             changed_files = [
                 line for line in git_status.stdout.strip().split('\n')
                 if line and not line.endswith("tickets.md")
             ]
-            
+
             if changed_files:
                 print("\n✅ Files successfully modified by Claude Code:")
                 for line in changed_files:
@@ -237,9 +236,9 @@ class ClaudeTmuxProvider(LLMProvider):
                     if new_files.stdout.strip():
                         print("✅ New files created")
                         return "Implementation completed"
-                
+
                 return self._capture_session_output(session_name) or "Claude session completed"
-                
+
         except subprocess.CalledProcessError as e:
             raise Exception(f"tmux command failed: {str(e)}")
         except Exception as e:
@@ -258,7 +257,7 @@ class ClaudeTmuxProvider(LLMProvider):
     def stream_generate(self, prompt: str, **kwargs):
         """Not used for tmux mode."""
         yield self.generate(prompt, **kwargs)
-    
+
     def list_models(self):
         """Return available models."""
         return ["claude-3-opus", "claude-3-sonnet"]

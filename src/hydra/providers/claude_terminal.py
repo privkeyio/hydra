@@ -1,8 +1,6 @@
 """Claude Terminal Provider - Runs Claude Code in a proper terminal environment."""
 import os
 import subprocess
-import tempfile
-import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -18,7 +16,7 @@ class ClaudeTerminalProvider(LLMProvider):
             'claude_path',
             os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
         )
-        
+
         if not Path(self.claude_path).exists():
             raise ValueError(f"Claude CLI not found at: {self.claude_path}")
 
@@ -28,12 +26,11 @@ class ClaudeTerminalProvider(LLMProvider):
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Execute Claude in a terminal environment for file operations."""
-        
         project_dir = kwargs.get('cwd', os.getcwd())
-        
+
         # Escape the prompt for shell
-        escaped_prompt = prompt.replace("'", "'\\''").replace('"', '\\"')
-        
+        prompt.replace("'", "'\\''").replace('"', '\\"')
+
         # Create a temporary script that will be executed in the terminal
         script_content = f"""#!/bin/bash
 set -e
@@ -64,17 +61,17 @@ echo "Claude Code session completed."
         script_path = Path("/tmp/hydra_claude_terminal.sh")
         script_path.write_text(script_content)
         script_path.chmod(0o755)
-        
+
         try:
             # Use script command to provide a proper terminal environment
             # This ensures Claude has a TTY and can use all its interactive features
             terminal_cmd = [
                 "script", "-q", "-c", str(script_path), "/dev/null"
             ]
-            
-            print(f"🖥️  Launching Claude Code in terminal mode...")
+
+            print("🖥️  Launching Claude Code in terminal mode...")
             print(f"📁 Working directory: {project_dir}")
-            
+
             # Execute with proper terminal
             result = subprocess.run(
                 terminal_cmd,
@@ -84,7 +81,7 @@ echo "Claude Code session completed."
                 cwd=project_dir,
                 env={**os.environ, "TERM": "xterm-256color"}
             )
-            
+
             # Check for created/modified files
             git_status = subprocess.run(
                 ["git", "status", "--short"],
@@ -92,7 +89,7 @@ echo "Claude Code session completed."
                 text=True,
                 cwd=project_dir
             )
-            
+
             if git_status.stdout:
                 print("✅ Files were modified:")
                 for line in git_status.stdout.strip().split('\n'):
@@ -101,7 +98,7 @@ echo "Claude Code session completed."
             else:
                 # Even if git doesn't show changes, Claude may have worked on non-git files
                 return result.stdout or "Claude Code session completed"
-                
+
         except subprocess.TimeoutExpired:
             raise Exception(f"Claude terminal timeout after {self.config.timeout}s")
         except Exception as e:
@@ -119,7 +116,7 @@ echo "Claude Code session completed."
     def stream_generate(self, prompt: str, **kwargs):
         """Not used for terminal mode."""
         yield self.generate(prompt, **kwargs)
-    
+
     def list_models(self):
         """Return available models."""
         return ["claude-3-opus", "claude-3-sonnet"]

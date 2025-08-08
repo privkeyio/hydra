@@ -1,6 +1,5 @@
 """Interactive Claude CLI provider using pexpect for file operations."""
 import os
-import re
 import time
 from pathlib import Path
 from typing import Any, Dict
@@ -19,17 +18,16 @@ class ClaudeInteractiveProvider(LLMProvider):
             'claude_path',
             os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
         )
-        
+
         if not Path(self.claude_path).exists():
             raise ValueError(f"Claude CLI not found at: {self.claude_path}")
 
-    @property 
+    @property
     def name(self) -> str:
         return "claude_interactive"
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Run Claude interactively to implement a ticket."""
-        
         # Start Claude in the project directory
         child = pexpect.spawn(
             self.claude_path,
@@ -37,26 +35,26 @@ class ClaudeInteractiveProvider(LLMProvider):
             timeout=self.config.timeout,
             encoding='utf-8'
         )
-        
+
         try:
             # Wait for Claude to be ready (look for prompt or welcome message)
             child.expect(['Welcome to Claude', '>', pexpect.TIMEOUT], timeout=10)
-            
+
             # Send the implementation prompt
             child.sendline(prompt)
-            
+
             # Add completion marker request
             child.sendline("\nWhen you're done implementing, please create a file called .hydra_done")
-            
+
             # Monitor for completion
             start_time = time.time()
             output_lines = []
             done_marker = Path(os.getcwd()) / ".hydra_done"
-            
+
             # Remove marker if exists
             if done_marker.exists():
                 done_marker.unlink()
-            
+
             while time.time() - start_time < self.config.timeout:
                 try:
                     # Check for output
@@ -65,7 +63,7 @@ class ClaudeInteractiveProvider(LLMProvider):
                     if line:
                         output_lines.append(line)
                         print(f"Claude: {line}")  # Debug output
-                    
+
                     # Check if done marker exists
                     if done_marker.exists():
                         print("✅ Claude created completion marker")
@@ -73,7 +71,7 @@ class ClaudeInteractiveProvider(LLMProvider):
                         child.sendline("/exit")
                         child.expect(pexpect.EOF, timeout=5)
                         return "Implementation complete - files have been edited"
-                        
+
                 except pexpect.TIMEOUT:
                     # Check for done file periodically even without output
                     if done_marker.exists():
@@ -85,17 +83,17 @@ class ClaudeInteractiveProvider(LLMProvider):
                 except pexpect.EOF:
                     # Claude exited
                     return '\n'.join(output_lines) or "Claude session ended"
-            
+
             # Timeout reached
             child.sendline("/exit")
             child.expect(pexpect.EOF, timeout=5)
             raise Exception(f"Claude timeout after {self.config.timeout}s")
-            
+
         except Exception as e:
             # Clean up
             try:
                 child.terminate()
-            except:
+            except Exception:
                 pass
             raise Exception(f"Claude interactive error: {str(e)}")
         finally:
@@ -111,7 +109,7 @@ class ClaudeInteractiveProvider(LLMProvider):
     def stream_generate(self, prompt: str, **kwargs):
         """Not used for interactive mode."""
         yield self.generate(prompt, **kwargs)
-    
+
     def list_models(self):
         """Return available models."""
         return ["claude-3-opus", "claude-3-sonnet"]

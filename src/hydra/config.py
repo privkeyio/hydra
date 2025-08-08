@@ -79,7 +79,7 @@ class HydraConfig:
 
         if os.getenv('LLM_MAX_TOKENS'):
             self.config['llm']['max_tokens'] = int(os.getenv('LLM_MAX_TOKENS'))
-            
+
         if os.getenv('LLM_TIMEOUT'):
             self.config['llm']['timeout'] = int(os.getenv('LLM_TIMEOUT'))
 
@@ -132,7 +132,7 @@ class HydraConfig:
                 extra_params.get('cli_flags') or
                 os.getenv('CLAUDE_CLI_FLAGS', '')
             )
-        
+
         elif provider_type == 'claude_tmux':
             # Configuration for Claude Code tmux provider
             extra_params = llm_config.get('extra_params', {})

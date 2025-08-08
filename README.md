@@ -1,6 +1,10 @@
-# 🐉 HYDRA
-
-**Multi-headed AI orchestration for autonomous code generation**
+<div align="center">
+  <img src="assets/hydra-logo.png" alt="Hydra Logo" width="200" height="200">
+  
+  # HYDRA
+  
+  **Multi-headed AI orchestration for autonomous code generation**
+</div>
 
 ```
 ╦ ╦╦ ╦╔╦╗╦═╗╔═╗
@@ -18,7 +22,7 @@
 
 Hydra orchestrates Claude Code CLI and other AI models to autonomously build production software. Execute complex development workflows with parallel agents, automatic verification, and real-time monitoring.
 
-### 🚀 Core Capabilities
+### Core Capabilities
 
 **Claude Code Orchestration**
 - Direct integration with Claude Code CLI through tmux
@@ -222,19 +226,19 @@ results = executor.execute_plan(plan, "tickets.md")
 
 ## Features
 
-### 🎯 Ticket Verification
+### Ticket Verification
 - Pattern-based acceptance criteria checking
 - File existence validation
 - Function/endpoint detection
 - Automatic completion tracking
 
-### 💾 Session Persistence
+### Session Persistence
 - Save/restore Claude Code sessions
 - File snapshot preservation
 - Task history tracking
 - State serialization
 
-### 🚦 Quality Gates
+### Quality Gates
 - Language-specific tool detection
 - Automatic lint/test/build execution
 - Python: ruff, pytest, mypy
@@ -242,13 +246,13 @@ results = executor.execute_plan(plan, "tickets.md")
 - Rust: cargo check, clippy, test
 - Go: go vet, test, build
 
-### ⚡ Parallel Execution
+### Parallel Execution
 - Dependency graph resolution
 - Wave-based scheduling
 - Concurrent agent management
 - Resource pool optimization
 
-### 📊 Progress Dashboard
+### Progress Dashboard
 - Real-time execution monitoring
 - Server-sent events streaming
 - Ticket status visualization

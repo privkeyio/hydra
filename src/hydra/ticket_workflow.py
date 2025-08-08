@@ -80,12 +80,10 @@ def parse_ticket(tickets_path, ticket_identifier):
         ]
 
     match = None
-    matched_pattern = None
 
     for pattern in patterns:
         match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
         if match:
-            matched_pattern = pattern
             break
 
     if not match:
@@ -174,7 +172,7 @@ Generate tickets in this EXACT format:
 
 [Brief description of what needs to be done]
 
-- [ ] [Specific acceptance criteria]  
+- [ ] [Specific acceptance criteria]
 - [ ] [Another acceptance criteria]
 - [ ] [etc...]
 
@@ -266,19 +264,19 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
 
     # Set up agent with appropriate model and timeout
     print(f"\n🤖 Creating {ticket['model']} agent...")
-    
+
     # Save original timeout
     original_timeout = os.environ.get('LLM_TIMEOUT')
-    
+
     # Override timeout for ticket execution BEFORE creating agent
     if timeout_override:
         os.environ['LLM_TIMEOUT'] = str(timeout_override)
         print(f"⏱️  Using extended timeout: {timeout_override}s")
 
     # Use the tmux Claude provider for ticket implementation
-    from hydra.providers.claude_tmux import ClaudeTmuxProvider
     from hydra.providers.base import LLMConfig
-    
+    from hydra.providers.claude_tmux import ClaudeTmuxProvider
+
     # Create tmux provider config
     config = LLMConfig(
         provider_type='claude_tmux',
@@ -287,7 +285,7 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
             'claude_path': os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
         }
     )
-    
+
     # Create the tmux provider directly
     provider = ClaudeTmuxProvider(config)
 
@@ -325,15 +323,15 @@ Please implement this ticket now by creating/editing the necessary files."""
     try:
         # Execute via Claude Code CLI directly - it will handle all file operations
         print("\n🤖 Invoking Claude Code CLI to implement ticket...")
-        
+
         # Use the tmux provider to send prompt to Claude Code
         # Claude Code will create/edit all necessary files
         project_dir = os.path.dirname(os.path.abspath(tickets_path))
-        response = provider.generate(prompt, cwd=project_dir, ticket_id=ticket_identifier)
-        
+        provider.generate(prompt, cwd=project_dir, ticket_id=ticket_identifier)
+
         # Claude Code has executed and created/modified files
         print(f"\n✅ Ticket {ticket_identifier} implementation complete!")
-        
+
         # Check what files were created/modified
         print("\n📁 Checking for changes...")
         git_result = subprocess.run(
@@ -342,28 +340,28 @@ Please implement this ticket now by creating/editing the necessary files."""
             text=True,
             cwd=project_dir
         )
-        
+
         if git_result.stdout:
             print("📝 Files changed:")
             for line in git_result.stdout.strip().split('\n'):
                 print(f"   {line}")
-        
+
         # Mark ticket as completed
         print("\n🔍 Marking ticket as completed...")
         mark_ticket_completed(tickets_path, ticket_identifier)
-        
+
         # Run quality gates
         print("\n🚦 Running quality gates...")
         from hydra.quality import QualityGateRunner
-        
+
         gate_runner = QualityGateRunner(project_dir)
         quality_report = gate_runner.run_quality_gates(ticket_identifier)
         print(gate_runner.generate_report(quality_report))
-        
+
         # Save report
         report_file = gate_runner.save_report(quality_report)
         print(f"\n📄 Quality report saved: {report_file}")
-        
+
         # Legacy validation (backward compatibility)
         if "Node.js" in project_context:
             print("\n🔧 Running Node.js validation...")
@@ -371,7 +369,7 @@ Please implement this ticket now by creating/editing the necessary files."""
         else:
             print("\n🔧 Running validation...")
             run_validation_commands()
-        
+
         return True
 
     except Exception as e:
@@ -395,7 +393,8 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
 
     # Try multiple ticket header patterns for completion marking
     patterns = [
-        rf'(### TICKET-{ticket_identifier}:.*?)(?=### TICKET-|\Z)',   # TICKET-007 format
+        # TICKET-007 format
+        rf'(### TICKET-{ticket_identifier}:.*?)(?=### TICKET-|\Z)',
         rf'(## TICKET-{ticket_identifier}:.*?)(?=## TICKET-|\Z)',    # TICKET-007 format
         rf'(## Ticket-{ticket_identifier}:.*?)(?=## Ticket-|\Z)',    # Ticket-007 format
         rf'(## Ticket {ticket_identifier}:.*?)(?=## Ticket|\Z)',     # Ticket 007 format
@@ -413,7 +412,8 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
             updated_content = ticket_content.replace('- [ ]', '- [x]')
             return updated_content
 
-        new_content = re.sub(pattern, replace_ticket, updated_content, flags=re.DOTALL | re.IGNORECASE)
+        flags = re.DOTALL | re.IGNORECASE
+        new_content = re.sub(pattern, replace_ticket, updated_content, flags=flags)
         if new_content != updated_content:
             updated_content = new_content
             ticket_found = True
@@ -422,7 +422,8 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
     if ticket_found:
         with open(tickets_path, 'w') as f:
             f.write(updated_content)
-        print(f"✅ Updated {tickets_path} - marked ticket {ticket_identifier} completed")
+        update_msg = f"✅ Updated {tickets_path} - marked ticket {ticket_identifier} completed"
+        print(update_msg)
     else:
         print(f"⚠️  Could not find ticket {ticket_identifier} to mark as completed")
 
@@ -456,7 +457,7 @@ def run_node_validation():
         ("🔍 Linting", ["npm", "run", "lint"]),
         ("🧪 Testing", ["npm", "test"]),
     ]
-    
+
     for desc, cmd in commands:
         print(f"{desc}...")
         try:
@@ -511,7 +512,9 @@ def parse_all_tickets(tickets_path: str) -> Dict[str, dict]:
     return tickets
 
 
-def build_dependency_graph(tickets: Dict[str, dict]) -> Tuple[Dict[str, Set[str]], Dict[str, Set[str]]]:
+def build_dependency_graph(
+    tickets: Dict[str, dict]
+) -> Tuple[Dict[str, Set[str]], Dict[str, Set[str]]]:
     """Build dependency and reverse dependency graphs."""
     deps = defaultdict(set)
     reverse_deps = defaultdict(set)
@@ -548,15 +551,15 @@ def get_executable_tickets(tickets: Dict[str, dict], completed: Set[str]) -> Lis
     return executable
 
 
-def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str, 
+def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
                          completed_lock: threading.Lock) -> bool:
     """Worker function for parallel ticket execution."""
     try:
         print(f"\n🚀 Starting ticket {ticket_id}")
-        
+
         # Use the raw_id stored during parsing
         raw_id = ticket_data.get('raw_id', ticket_id.lstrip('0'))
-        
+
         # Use longer timeout for ticket execution (5 minutes)
         success = execute_single_ticket(tickets_path, raw_id, timeout_override=300)
 

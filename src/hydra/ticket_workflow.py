@@ -119,12 +119,12 @@ def parse_ticket(tickets_path, ticket_identifier):
     in_criteria = False
     for line in lines[1:]:
         line = line.strip()
-        if line.startswith('**Model**:'):
-            model_text = line.replace('**Model**:', '').strip().lower()
+        if line.startswith('**Model:**'):
+            model_text = line.replace('**Model:**', '').strip().lower()
             ticket['model'] = 'opus' if 'opus' in model_text else 'sonnet'
-        elif line.startswith('**Dependencies**:'):
+        elif line.startswith('**Dependencies:**'):
             # Parse simplified dependency format: "001,002,003" or "None"
-            deps_text = line.replace('**Dependencies**:', '').strip()
+            deps_text = line.replace('**Dependencies:**', '').strip()
             if deps_text.lower() not in ['none', 'n/a', '-', '']:
                 # Split by comma and normalize to 3 digits
                 deps = deps_text.split(',')
@@ -132,10 +132,10 @@ def parse_ticket(tickets_path, ticket_identifier):
                     dep = dep.strip()
                     if dep.isdigit():
                         ticket['dependencies'].append(dep.zfill(3))
-        elif line.startswith('**Description**:'):
+        elif line.startswith('**Description:**'):
             # Capture single-line description
-            ticket['description'] = line.replace('**Description**:', '').strip()
-        elif line.startswith('**Acceptance Criteria**:'):
+            ticket['description'] = line.replace('**Description:**', '').strip()
+        elif line.startswith('**Acceptance Criteria:**'):
             in_criteria = True
         elif line.startswith('- [ ]'):
             criteria = line.replace('- [ ]', '').strip()

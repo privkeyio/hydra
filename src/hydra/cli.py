@@ -158,6 +158,12 @@ def create_parser():
     auto_parser.add_argument("--tickets", default="tickets.md", help="Tickets file (default: tickets.md)")
     auto_parser.add_argument("--parallel", type=int, default=3, help="Max parallel agents (default: 3)")
     auto_parser.add_argument("--dir", help="Project directory (default: current dir)")
+    
+    # Parallel execution
+    parallel_parser = ticket_subparsers.add_parser("parallel", help="Execute tickets in parallel with dependency resolution")
+    parallel_parser.add_argument("--tickets", default="tickets.md", help="Tickets file (default: tickets.md)")
+    parallel_parser.add_argument("--workers", type=int, default=3, help="Max parallel workers (default: 3)")
+    parallel_parser.add_argument("--save-log", action="store_true", help="Save execution log")
 
     # Claude Code orchestration subcommand
     claude_parser = subparsers.add_parser("claude", help="Claude Code CLI orchestration")
@@ -472,6 +478,57 @@ def _handle_quality_gates(args):
         return 1
 
 
+def _handle_parallel_execution(args):
+    """Handle parallel ticket execution with dependency resolution."""
+    from hydra.parallel import ParallelExecutor
+    
+    try:
+        # Get absolute path to tickets file
+        tickets_path = Path(args.tickets).resolve()
+        if not tickets_path.exists():
+            print(f"❌ Tickets file not found: {tickets_path}")
+            return 1
+        
+        # Initialize executor
+        project_root = tickets_path.parent
+        executor = ParallelExecutor(max_workers=args.workers, project_root=str(project_root))
+        
+        print(f"🎯 Loading tickets from: {tickets_path}")
+        
+        # Load tickets
+        tickets = executor.load_tickets(str(tickets_path))
+        if not tickets:
+            print("❌ No pending tickets found")
+            return 1
+        
+        print(f"📋 Found {len(tickets)} pending tickets")
+        
+        # Build execution plan
+        plan = executor.build_execution_plan()
+        
+        # Execute plan
+        summary = executor.execute_plan(plan, str(tickets_path))
+        
+        # Generate and print report
+        report = executor.generate_report(summary)
+        print(report)
+        
+        # Save log if requested
+        if args.save_log:
+            log_file = executor.save_execution_log(summary)
+            print(f"\n📄 Execution log saved: {log_file}")
+        
+        # Return success if all tickets completed
+        if summary['completed'] == summary['total_tickets']:
+            return 0
+        else:
+            return 1
+            
+    except Exception as e:
+        print(f"❌ Parallel execution error: {e}")
+        return 1
+
+
 def _handle_auto_workflow(args):
     """Handle automated workflow with dependency-aware parallel execution."""
     try:
@@ -515,6 +572,8 @@ def handle_ticket_command(args):
         return _handle_verify_ticket(args)
     elif args.ticket_action == "quality":
         return _handle_quality_gates(args)
+    elif args.ticket_action == "parallel":
+        return _handle_parallel_execution(args)
     elif args.ticket_action == "auto":
         return _handle_auto_workflow(args)
     else:

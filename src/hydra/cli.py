@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict
 
 from hydra.templates import TemplateEngine, TemplateValidator
+from hydra.ticket_workflow import (
+    execute_single_ticket,
+    generate_tickets_md,
+    run_all_tickets,
+)
 from hydra.workflows.engine import execute_workflow
 
 
@@ -118,6 +124,56 @@ def create_parser():
         "validate", help="Validate templates"
     )
     validate_parser.add_argument("--template", help="Specific template to validate")
+
+    # Ticket workflow subcommand
+    ticket_parser = subparsers.add_parser("ticket", help="Ticket workflow operations")
+    ticket_subparsers = ticket_parser.add_subparsers(dest="ticket_action", help="Ticket actions")
+
+    # Create tickets
+    create_tickets_parser = ticket_subparsers.add_parser("create", help="Create tickets.md from project description")
+    create_tickets_parser.add_argument("description", help="Project description")
+    create_tickets_parser.add_argument("--output", default="tickets.md", help="Output file (default: tickets.md)")
+
+    # Execute ticket
+    execute_ticket_parser = ticket_subparsers.add_parser("execute", help="Execute specific ticket")
+    execute_ticket_parser.add_argument("identifier", help="Ticket identifier to execute (e.g., 1, 007, TICKET-001)")
+    execute_ticket_parser.add_argument("--tickets", default="tickets.md", help="Tickets file (default: tickets.md)")
+
+    # Run all tickets
+    run_tickets_parser = ticket_subparsers.add_parser("run-all", help="Execute all tickets in sequence")
+    run_tickets_parser.add_argument("--tickets", default="tickets.md", help="Tickets file (default: tickets.md)")
+
+    # Auto workflow - dependency-aware parallel execution
+    auto_parser = ticket_subparsers.add_parser("auto", help="Automatically execute tickets with dependency-aware parallelism")
+    auto_parser.add_argument("--tickets", default="tickets.md", help="Tickets file (default: tickets.md)")
+    auto_parser.add_argument("--parallel", type=int, default=3, help="Max parallel agents (default: 3)")
+    auto_parser.add_argument("--dir", help="Project directory (default: current dir)")
+
+    # Claude Code orchestration subcommand
+    claude_parser = subparsers.add_parser("claude", help="Claude Code CLI orchestration")
+    claude_subparsers = claude_parser.add_subparsers(dest="claude_action", help="Claude Code actions")
+    
+    # Execute task with Claude Code
+    execute_parser = claude_subparsers.add_parser("execute", help="Execute a task with Claude Code")
+    execute_parser.add_argument("task", help="Task description for Claude Code")
+    execute_parser.add_argument("--timeout", type=int, default=300, help="Timeout in seconds (default: 300)")
+    execute_parser.add_argument("--cwd", help="Working directory (default: current dir)")
+    
+    # Create development session
+    session_parser = claude_subparsers.add_parser("session", help="Create a Claude Code development session")
+    session_parser.add_argument("project_path", help="Path to project directory")
+    session_parser.add_argument("--name", help="Session name (auto-generated if not provided)")
+    
+    # List sessions
+    list_parser = claude_subparsers.add_parser("list", help="List active Claude Code sessions")
+    
+    # Attach to session
+    attach_parser = claude_subparsers.add_parser("attach", help="Attach to a Claude Code session")
+    attach_parser.add_argument("session_name", help="Name of session to attach to")
+    
+    # Kill session
+    kill_parser = claude_subparsers.add_parser("kill", help="Kill a Claude Code session")
+    kill_parser.add_argument("session_name", help="Name of session to kill")
 
     # Main parser arguments (not including task - that's in subparsers)
     parser.add_argument(
@@ -318,6 +374,151 @@ def handle_template_command(args):
         return 1
 
 
+def _handle_create_tickets(args):
+    """Handle ticket create command."""
+    try:
+        success = generate_tickets_md(args.description, args.output)
+        return 0 if success else 1
+    except Exception as e:
+        print(f"Error creating tickets: {e}")
+        return 1
+
+
+def _handle_execute_ticket(args):
+    """Handle ticket execute command."""
+    try:
+        from hydra.monitoring import monitoring
+        correlation_id = monitoring.set_correlation_id(f"ticket_{args.identifier}")
+        print(f"🔗 Session: {correlation_id}")
+
+        success = execute_single_ticket(args.tickets, args.identifier)
+        return 0 if success else 1
+    except Exception as e:
+        print(f"Error executing ticket: {e}")
+        return 1
+
+
+def _handle_run_all_tickets(args):
+    """Handle run all tickets command."""
+    try:
+        success = run_all_tickets(args.tickets)
+        return 0 if success else 1
+    except Exception as e:
+        print(f"Error running tickets: {e}")
+        return 1
+
+
+def _handle_auto_workflow(args):
+    """Handle automated workflow with dependency-aware parallel execution."""
+    try:
+        original_dir = os.getcwd()
+
+        if args.dir:
+            target_dir = Path(args.dir).resolve()
+            if not target_dir.exists():
+                print(f"❌ Directory not found: {target_dir}")
+                return 1
+            os.chdir(target_dir)
+            print(f"📁 Changed to: {target_dir}")
+
+        tickets_path = Path(args.tickets).resolve()
+        if not tickets_path.exists():
+            print(f"❌ Tickets file not found: {tickets_path}")
+            return 1
+
+        print(f"🎯 Processing: {tickets_path}")
+        print(f"⚡ Max parallel agents: {args.parallel}")
+
+        success = run_all_tickets(str(tickets_path), max_parallel=args.parallel)
+
+        os.chdir(original_dir)
+        return 0 if success else 1
+
+    except Exception as e:
+        print(f"Error in auto workflow: {e}")
+        return 1
+
+
+def handle_ticket_command(args):
+    """Handle ticket workflow subcommands."""
+    if args.ticket_action == "create":
+        return _handle_create_tickets(args)
+    elif args.ticket_action == "execute":
+        return _handle_execute_ticket(args)
+    elif args.ticket_action == "run-all":
+        return _handle_run_all_tickets(args)
+    elif args.ticket_action == "auto":
+        return _handle_auto_workflow(args)
+    else:
+        print("Unknown ticket action")
+        return 1
+
+
+def handle_claude_command(args):
+    """Handle Claude Code orchestration commands."""
+    from hydra.orchestrator.claude_code_orchestrator import ClaudeCodeOrchestrator
+    
+    try:
+        orchestrator = ClaudeCodeOrchestrator()
+    except ValueError as e:
+        print(f"Error initializing Claude Code orchestrator: {e}")
+        return 1
+    
+    if args.claude_action == "execute":
+        # Execute a task with Claude Code
+        task = orchestrator.create_task(
+            description=args.task[:50],
+            prompt=args.task,
+            working_directory=args.cwd,
+            timeout=args.timeout
+        )
+        
+        print(f"🚀 Executing task with Claude Code CLI...")
+        result = orchestrator.execute_task(task)
+        
+        if result.status.value == "completed":
+            print(f"✅ Task completed successfully")
+            if result.files_changed:
+                print(f"📝 Files changed: {', '.join(result.files_changed)}")
+            return 0
+        else:
+            print(f"❌ Task failed: {result.error}")
+            return 1
+            
+    elif args.claude_action == "session":
+        # Create development session
+        session_name = orchestrator.create_development_session(
+            args.project_path,
+            args.name
+        )
+        return 0
+        
+    elif args.claude_action == "list":
+        # List sessions
+        sessions = orchestrator.list_sessions()
+        if not sessions:
+            print("No active Claude Code sessions")
+        else:
+            print("Active Claude Code sessions:")
+            for session in sessions:
+                print(f"  - {session['name']}: {session['project_path']}")
+        return 0
+        
+    elif args.claude_action == "attach":
+        # Attach to session
+        orchestrator.attach_to_session(args.session_name)
+        return 0
+        
+    elif args.claude_action == "kill":
+        # Kill session
+        orchestrator.kill_session(args.session_name)
+        return 0
+        
+    else:
+        print("Unknown Claude action")
+        return 1
+
+
 def main():
     """Execute the main CLI entry point."""
     parser = create_parser()
@@ -326,6 +527,14 @@ def main():
     # Handle template commands
     if args.command == "template":
         return handle_template_command(args)
+
+    # Handle ticket commands
+    if args.command == "ticket":
+        return handle_ticket_command(args)
+    
+    # Handle Claude Code orchestration commands
+    if args.command == "claude":
+        return handle_claude_command(args)
 
     # Handle task execution (run command only)
     if args.command == "run":

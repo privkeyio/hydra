@@ -147,6 +147,11 @@ def create_parser():
     verify_parser = ticket_subparsers.add_parser("verify", help="Verify ticket acceptance criteria")
     verify_parser.add_argument("identifier", help="Ticket identifier to verify")
     verify_parser.add_argument("--tickets", default="tickets.md", help="Tickets file (default: tickets.md)")
+    
+    # Run quality gates
+    quality_parser = ticket_subparsers.add_parser("quality", help="Run quality gates for a ticket")
+    quality_parser.add_argument("identifier", help="Ticket identifier")
+    quality_parser.add_argument("--save", action="store_true", help="Save report to file")
 
     # Auto workflow - dependency-aware parallel execution
     auto_parser = ticket_subparsers.add_parser("auto", help="Automatically execute tickets with dependency-aware parallelism")
@@ -441,6 +446,32 @@ def _handle_verify_ticket(args):
         return 1
 
 
+def _handle_quality_gates(args):
+    """Handle quality gates command."""
+    from hydra.quality import QualityGateRunner
+    
+    runner = QualityGateRunner(os.getcwd())
+    
+    try:
+        report = runner.run_quality_gates(args.identifier)
+        print(runner.generate_report(report))
+        
+        if args.save:
+            report_file = runner.save_report(report)
+            print(f"\n📄 Report saved: {report_file}")
+        
+        if report.overall_status.value == "passed":
+            return 0
+        elif report.overall_status.value == "warning":
+            return 0
+        else:
+            return 1
+            
+    except Exception as e:
+        print(f"Quality gate error: {e}")
+        return 1
+
+
 def _handle_auto_workflow(args):
     """Handle automated workflow with dependency-aware parallel execution."""
     try:
@@ -482,6 +513,8 @@ def handle_ticket_command(args):
         return _handle_run_all_tickets(args)
     elif args.ticket_action == "verify":
         return _handle_verify_ticket(args)
+    elif args.ticket_action == "quality":
+        return _handle_quality_gates(args)
     elif args.ticket_action == "auto":
         return _handle_auto_workflow(args)
     else:

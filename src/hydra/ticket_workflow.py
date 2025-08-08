@@ -352,7 +352,19 @@ Please implement this ticket now by creating/editing the necessary files."""
         print("\n🔍 Marking ticket as completed...")
         mark_ticket_completed(tickets_path, ticket_identifier)
         
-        # Run validation for Node.js projects
+        # Run quality gates
+        print("\n🚦 Running quality gates...")
+        from hydra.quality import QualityGateRunner
+        
+        gate_runner = QualityGateRunner(project_dir)
+        quality_report = gate_runner.run_quality_gates(ticket_identifier)
+        print(gate_runner.generate_report(quality_report))
+        
+        # Save report
+        report_file = gate_runner.save_report(quality_report)
+        print(f"\n📄 Quality report saved: {report_file}")
+        
+        # Legacy validation (backward compatibility)
         if "Node.js" in project_context:
             print("\n🔧 Running Node.js validation...")
             run_node_validation()

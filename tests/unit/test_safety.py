@@ -2,6 +2,7 @@ import unittest
 import os
 import tempfile
 from hydra.agents.base import CodeAgent
+from hydra.exceptions import RecursionLimitError
 
 
 class TestSafetyFeatures(unittest.TestCase):
@@ -12,16 +13,15 @@ class TestSafetyFeatures(unittest.TestCase):
     def test_recursion_guard_depth_limit(self):
         agent = CodeAgent("test_boss", depth=3)
         
-        with self.assertRaises(RecursionError) as context:
+        with self.assertRaises(RecursionLimitError) as context:
             agent.reason("test task")
         
         self.assertIn("exceeded max depth", str(context.exception))
-        self.assertIn("RecursionError", str(context.exception))
     
     def test_employee_spawn_depth_limit(self):
         agent = CodeAgent("test_boss", depth=3)
         
-        with self.assertRaises(RecursionError) as context:
+        with self.assertRaises(RecursionLimitError) as context:
             agent.create_employee("test subtask")
         
         self.assertIn("Cannot spawn employee", str(context.exception))

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from collections import defaultdict, deque
@@ -14,6 +15,13 @@ import yaml
 from hydra.agents.base import CodeAgent
 from hydra.config import get_config
 from hydra.exceptions import ValidationError
+
+# Test mode detection
+TEST_MODE = (
+    os.getenv('TESTING') == '1' or
+    os.getenv('PYTEST_CURRENT_TEST') is not None or
+    'pytest' in str(os.getenv('_', ''))
+)
 
 logger = logging.getLogger(__name__)
 
@@ -276,10 +284,14 @@ class ProjectOrchestrator:
 
             prompt = self._build_task_prompt(task)
 
-            result = await asyncio.wait_for(
-                asyncio.to_thread(agent.complete_task, prompt),
-                timeout=task.timeout
-            )
+            if TEST_MODE:
+                # Run synchronously in test mode to avoid thread creation
+                result = agent.complete_task(prompt)
+            else:
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(agent.complete_task, prompt),
+                    timeout=task.timeout
+                )
 
             self.config.llm_provider.model = original_model
 

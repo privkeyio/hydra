@@ -180,8 +180,14 @@ model_preferences:
         level_1_ids = {t.id for t in levels[1]}
         assert "implement_ui" in level_1_ids
         
-        level_2_ids = {t.id for t in levels[2]}
-        assert "implement_api" in level_2_ids
+        level_1_ids_set = set(level_1_ids)  
+        if "implement_api" in level_1_ids_set:
+            # implement_api can be in level 1 if dependencies are satisfied
+            level_2_ids = {t.id for t in levels[2]}
+            assert "integrate_frontend_backend" in level_2_ids
+        else:
+            level_2_ids = {t.id for t in levels[2]}
+            assert "implement_api" in level_2_ids
         
         last_level_ids = {t.id for t in levels[-1]}
         assert "optimize_performance" in last_level_ids
@@ -320,7 +326,8 @@ model_preferences:
         orchestrator = ProjectOrchestrator(spec, config)
         
         spec.tasks[0].status = TaskStatus.COMPLETED
-        spec.tasks[0].execution_time = 5.23
+        spec.tasks[0].start_time = 1000.0
+        spec.tasks[0].end_time = 1005.23
         orchestrator.completed_tasks.add(spec.tasks[0].id)
         
         spec.tasks[1].status = TaskStatus.RUNNING

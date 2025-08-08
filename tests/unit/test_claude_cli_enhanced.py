@@ -366,16 +366,13 @@ class TestClaudeCLIEnhancedProvider(unittest.TestCase):
         
         self.assertEqual(result, {"key": "value"})
 
-    @patch('subprocess.Popen')
-    def test_streaming_response(self, mock_popen):
-        import io
-        mock_process = Mock()
-        mock_process.stdout = io.StringIO("Line 1\nLine 2\n")
-        mock_process.poll.return_value = 0
-        mock_process.stdin = Mock()
-        mock_process.stdin.write = Mock()
-        mock_process.stdin.flush = Mock()
-        mock_popen.return_value = mock_process
+    @patch('subprocess.run')
+    def test_streaming_response(self, mock_run):
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Line 1\nLine 2\n"
+        mock_result.stderr = ""
+        mock_run.return_value = mock_result
         
         response = self.provider._execute_streaming("Test prompt", 30)
         

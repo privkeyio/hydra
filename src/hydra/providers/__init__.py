@@ -2,6 +2,9 @@
 from .anthropic import AnthropicProvider
 from .base import LLMConfig, LLMProvider
 from .claude_cli import ClaudeCLIProvider
+from .claude_direct import ClaudeDirectProvider
+from .claude_terminal import ClaudeTerminalProvider
+from .claude_tmux import ClaudeTmuxProvider
 from .factory import LLMProviderFactory, ProviderRegistry
 from .openai_provider import OpenAIProvider
 
@@ -20,5 +23,8 @@ __all__ = [
     'VeniceProvider',
     'AnthropicProvider',
     'OpenAIProvider',
-    'ClaudeCLIProvider'
+    'ClaudeCLIProvider',
+    'ClaudeTerminalProvider',
+    'ClaudeDirectProvider',
+    'ClaudeTmuxProvider'
 ]

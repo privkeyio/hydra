@@ -64,15 +64,28 @@ class ClaudeCLIProvider(LLMProvider):
         return '\n'.join(response_lines).strip()
 
     def _execute_claude_command(self, prompt: str) -> subprocess.CompletedProcess:
-        """Execute Claude CLI command."""
-        full_prompt = f"{prompt}\n/exit\n"
+        """Execute Claude CLI command and let it actually work with files."""
+        # For file operations, we need to let Claude run interactively
+        # Add a marker to know when Claude is done
+        completion_msg = "IMPLEMENTATION_COMPLETE"
+        full_prompt = f"""{prompt}
+
+When you are completely done implementing this ticket, \\
+please say "{completion_msg}" at the end.
+/exit
+"""
+
+        # Get the current working directory for context
+        cwd = os.getcwd()
+
         return subprocess.run(
             [self.claude_path],
             input=full_prompt,
             capture_output=True,
             text=True,
             timeout=self.config.timeout,
-            env=os.environ.copy()
+            env=os.environ.copy(),
+            cwd=cwd  # Run in the project directory
         )
 
     def generate(self, prompt: str, **kwargs) -> str:

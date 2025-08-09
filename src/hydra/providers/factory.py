@@ -37,6 +37,11 @@ def auto_register_providers():
         'anthropic': 'AnthropicProvider',
         'openai': 'OpenAIProvider',
         'claude_cli': 'ClaudeCLIProvider',
+        'claude_terminal': 'ClaudeTerminalProvider',
+        'claude_direct': 'ClaudeDirectProvider',
+        'claude_tmux': 'ClaudeTmuxProvider',
+        'claude_interactive': 'ClaudeInteractiveProvider',
+        'claude_cli_orchestrator': 'ClaudeCLIOrchestratorProvider',
         'mock': 'MockProvider'
     }
 

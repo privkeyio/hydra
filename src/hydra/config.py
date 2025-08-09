@@ -50,7 +50,7 @@ class HydraConfig:
                 'model': None,  # Will use provider default
                 'temperature': 0.2,
                 'max_tokens': 2048,
-                'timeout': 30
+                'timeout': 120  # Increased for complex ticket tasks
             },
             'agent': {
                 'max_depth': 2,
@@ -79,6 +79,9 @@ class HydraConfig:
 
         if os.getenv('LLM_MAX_TOKENS'):
             self.config['llm']['max_tokens'] = int(os.getenv('LLM_MAX_TOKENS'))
+
+        if os.getenv('LLM_TIMEOUT'):
+            self.config['llm']['timeout'] = int(os.getenv('LLM_TIMEOUT'))
 
         # Agent configuration
         if os.getenv('AGENT_MAX_DEPTH'):
@@ -128,6 +131,14 @@ class HydraConfig:
             config.extra_params['cli_flags'] = (
                 extra_params.get('cli_flags') or
                 os.getenv('CLAUDE_CLI_FLAGS', '')
+            )
+
+        elif provider_type == 'claude_tmux':
+            # Configuration for Claude Code tmux provider
+            extra_params = llm_config.get('extra_params', {})
+            config.extra_params['claude_path'] = (
+                extra_params.get('claude_path') or
+                os.getenv('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
             )
 
         elif provider_type == 'mock':

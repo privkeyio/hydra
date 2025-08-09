@@ -12,6 +12,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from hydra.agents.pool import AgentPool
 from hydra.orchestrator.claude_code_orchestrator import (
     ClaudeCodeOrchestrator,
 )
@@ -68,6 +69,10 @@ class ParallelExecutor:
         self.running_tickets: Set[str] = set()
         self.orchestrators: Dict[str, ClaudeCodeOrchestrator] = {}
         self.dashboard_state = dashboard_state
+        
+        # Initialize agent pool for managing Claude Code terminals
+        self.agent_pool = AgentPool(max_agents=max_workers)
+        self.agent_pool.start()
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md."""
@@ -175,10 +180,18 @@ class ParallelExecutor:
 
     def execute_ticket(self, ticket_id: str, tickets_path: str) -> bool:
         """Execute a single ticket."""
+        # Spawn an agent for this ticket
+        agent_id = self.agent_pool.spawn_agent(ticket_id)
+        if not agent_id:
+            print(f"⚠️  No available agent slots for ticket {ticket_id}")
+            return False
+            
         with self.lock:
             if ticket_id in self.completed_tickets:
+                self.agent_pool.release_agent(agent_id)
                 return True
             if ticket_id in self.failed_tickets:
+                self.agent_pool.release_agent(agent_id)
                 return False
 
             self.running_tickets.add(ticket_id)
@@ -251,12 +264,13 @@ COMPLETION PROCESS:
 
 Take your time and deliver excellence!"""
 
-            # Create task
+            # Create task with the actual ticket_id for unique session naming
             task = orchestrator.create_task(
                 description=f"Ticket {ticket_id}: {node.title}",
                 prompt=prompt,
                 working_directory=str(self.project_root),
-                timeout=300
+                timeout=300,
+                task_id=ticket_id  # Pass ticket ID for unique tmux session
             )
 
             # Execute task
@@ -305,6 +319,8 @@ Take your time and deliver excellence!"""
                 if not quality_passed:
                     print(f"⚠️  Quality gates failed for ticket {ticket_id}")
 
+                # Release the agent back to the pool
+                self.agent_pool.release_agent(agent_id)
                 return True
             else:
                 raise Exception(f"Task failed: {result.error}")
@@ -325,6 +341,8 @@ Take your time and deliver excellence!"""
                     )
 
             print(f"\n❌ Ticket {ticket_id} failed: {e}")
+            # Release the agent even on failure
+            self.agent_pool.release_agent(agent_id)
             return False
         finally:
             # Restore original model setting for other agents
@@ -525,3 +543,10 @@ Take your time and deliver excellence!"""
             json.dump(log_data, f, indent=2)
 
         return str(log_file)
+    
+    def shutdown(self):
+        """Shutdown the executor and clean up resources."""
+        # Stop the agent pool
+        if hasattr(self, 'agent_pool'):
+            self.agent_pool.stop()
+            print("🛑 Agent pool shutdown complete")

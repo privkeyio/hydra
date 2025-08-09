@@ -603,6 +603,7 @@ def _handle_parallel_execution(args):
         # Return success if all tickets completed
         if summary['completed'] == summary['total_tickets']:
             print("\n✅ All tickets completed successfully!")
+            executor.shutdown()
             dashboard_server.stop()
             return 0
         else:
@@ -610,11 +611,14 @@ def _handle_parallel_execution(args):
             total = summary['total_tickets']
             incomplete_msg = f"Execution incomplete: {completed}/{total} completed"
             print(f"\n⚠️ {incomplete_msg}")
+            executor.shutdown()
             dashboard_server.stop()
             return 1
 
     except Exception as e:
         print(f"❌ Parallel execution error: {e}")
+        if 'executor' in locals():
+            executor.shutdown()
         if 'dashboard_server' in locals():
             dashboard_server.stop()
         return 1

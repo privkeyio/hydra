@@ -127,6 +127,26 @@
             transform: translateX(2px);
         }
         
+        .ticket-running {
+            border: 2px solid #60a5fa;
+            background: linear-gradient(135deg, #1e293b 0%, #1e3a5f 100%);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .ticket-failed {
+            border: 1px solid #ef4444;
+            background: linear-gradient(135deg, #1e293b 0%, #3b1e1e 100%);
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(96, 165, 250, 0.5);
+            }
+        }
+        
         .ticket-id {
             font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
             font-size: 14px;
@@ -347,22 +367,85 @@
                     <span class="wave-value">${session.current_wave} / ${session.total_waves}</span>
                 </div>
                 
-                <div class="tickets-grid">
-                    ${tickets.map(ticket => `
-                        <div class="ticket-card">
-                            <div class="ticket-id">${ticket.ticket_id}</div>
-                            <div class="ticket-info">
-                                <div class="ticket-title">${ticket.title}</div>
-                                <div class="ticket-meta">
-                                    Model: ${ticket.model}
-                                    ${ticket.dependencies.length > 0 ? ` | Deps: ${ticket.dependencies.join(', ')}` : ''}
-                                </div>
+                ${(() => {
+                    const runningTickets = tickets.filter(t => t.status === 'running');
+                    const completedTickets = tickets.filter(t => t.status === 'completed');
+                    const failedTickets = tickets.filter(t => t.status === 'failed');
+                    const pendingTickets = tickets.filter(t => t.status === 'pending');
+                    
+                    return `
+                        ${runningTickets.length > 0 ? `
+                            <h2 style="color: #60a5fa; margin: 20px 0 10px;">🏃 Currently Running (${runningTickets.length})</h2>
+                            <div class="tickets-grid">
+                                ${runningTickets.map(ticket => `
+                                    <div class="ticket-card ticket-running">
+                                        <div class="ticket-id">🎫 ${ticket.ticket_id}</div>
+                                        <div class="ticket-info">
+                                            <div class="ticket-title">${ticket.title}</div>
+                                            <div class="ticket-meta">
+                                                Model: ${ticket.model}
+                                                ${ticket.dependencies.length > 0 ? ` | Deps: ${ticket.dependencies.join(', ')}` : ''}
+                                            </div>
+                                        </div>
+                                        <div class="ticket-status status-${ticket.status}">⚙️ ${ticket.status}</div>
+                                        <div class="ticket-duration">${formatDuration(ticket.duration)}</div>
+                                    </div>
+                                `).join('')}
                             </div>
-                            <div class="ticket-status status-${ticket.status}">${ticket.status}</div>
-                            <div class="ticket-duration">${formatDuration(ticket.duration)}</div>
-                        </div>
-                    `).join('')}
-                </div>
+                        ` : ''}
+                        
+                        ${completedTickets.length > 0 ? `
+                            <h2 style="color: #10b981; margin: 20px 0 10px;">✅ Completed (${completedTickets.length})</h2>
+                            <div class="tickets-grid">
+                                ${completedTickets.slice(0, 5).map(ticket => `
+                                    <div class="ticket-card">
+                                        <div class="ticket-id">${ticket.ticket_id}</div>
+                                        <div class="ticket-info">
+                                            <div class="ticket-title">${ticket.title}</div>
+                                        </div>
+                                        <div class="ticket-status status-${ticket.status}">✅</div>
+                                        <div class="ticket-duration">${formatDuration(ticket.duration)}</div>
+                                    </div>
+                                `).join('')}
+                                ${completedTickets.length > 5 ? `<div style="color: #64748b; padding: 10px;">... and ${completedTickets.length - 5} more</div>` : ''}
+                            </div>
+                        ` : ''}
+                        
+                        ${failedTickets.length > 0 ? `
+                            <h2 style="color: #ef4444; margin: 20px 0 10px;">❌ Failed (${failedTickets.length})</h2>
+                            <div class="tickets-grid">
+                                ${failedTickets.map(ticket => `
+                                    <div class="ticket-card ticket-failed">
+                                        <div class="ticket-id">${ticket.ticket_id}</div>
+                                        <div class="ticket-info">
+                                            <div class="ticket-title">${ticket.title}</div>
+                                            ${ticket.error ? `<div style="color: #f87171; font-size: 12px;">${ticket.error}</div>` : ''}
+                                        </div>
+                                        <div class="ticket-status status-${ticket.status}">❌</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        ${pendingTickets.length > 0 ? `
+                            <details style="margin-top: 20px;">
+                                <summary style="cursor: pointer; color: #94a3b8;">⏳ Pending (${pendingTickets.length})</summary>
+                                <div class="tickets-grid" style="margin-top: 10px;">
+                                    ${pendingTickets.slice(0, 10).map(ticket => `
+                                        <div class="ticket-card" style="opacity: 0.6;">
+                                            <div class="ticket-id">${ticket.ticket_id}</div>
+                                            <div class="ticket-info">
+                                                <div class="ticket-title">${ticket.title}</div>
+                                            </div>
+                                            <div class="ticket-status">⏳</div>
+                                        </div>
+                                    `).join('')}
+                                    ${pendingTickets.length > 10 ? `<div style="color: #64748b; padding: 10px;">... and ${pendingTickets.length - 10} more</div>` : ''}
+                                </div>
+                            </details>
+                        ` : ''}
+                    `;
+                })()}
             `;
         }
         

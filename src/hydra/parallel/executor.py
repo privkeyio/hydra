@@ -107,24 +107,36 @@ class ParallelExecutor:
         # Parse each ticket
         for ticket_id in ticket_ids:
             ticket_data = parse_ticket(tickets_path, ticket_id)
-            if ticket_data and not ticket_data.get('completed'):
-                node = TicketNode(
-                    ticket_id=ticket_id,
-                    title=ticket_data['title'],
-                    model=ticket_data['model'],
-                    dependencies=ticket_data.get('dependencies', []),
-                    status=ExecutionStatus.PENDING
-                )
-                tickets[ticket_id] = node
-
-                # Add to dashboard if available
-                if self.dashboard_state:
-                    self.dashboard_state.add_ticket(
-                        ticket_id,
-                        ticket_data['title'],
-                        ticket_data['model'],
-                        ticket_data.get('dependencies', [])
+            if ticket_data:
+                if ticket_data.get('completed'):
+                    # Track completed tickets but mark them as already done
+                    node = TicketNode(
+                        ticket_id=ticket_id,
+                        title=ticket_data['title'],
+                        model=ticket_data['model'],
+                        dependencies=ticket_data.get('dependencies', []),
+                        status=ExecutionStatus.COMPLETED
                     )
+                    tickets[ticket_id] = node
+                    self.completed_tickets.add(ticket_id)
+                else:
+                    node = TicketNode(
+                        ticket_id=ticket_id,
+                        title=ticket_data['title'],
+                        model=ticket_data['model'],
+                        dependencies=ticket_data.get('dependencies', []),
+                        status=ExecutionStatus.PENDING
+                    )
+                    tickets[ticket_id] = node
+
+                    # Add to dashboard if available
+                    if self.dashboard_state:
+                        self.dashboard_state.add_ticket(
+                            ticket_id,
+                            ticket_data['title'],
+                            ticket_data['model'],
+                            ticket_data.get('dependencies', [])
+                        )
 
         self.tickets = tickets
         return tickets
@@ -395,6 +407,18 @@ Take your time and deliver excellence!"""
     def execute_plan(self, plan: ExecutionPlan, tickets_path: str) -> Dict[str, Any]:
         """Execute the full execution plan."""
         start_time = time.time()
+        
+        # Initialize dashboard session
+        if self.dashboard_state:
+            import uuid
+            session_id = str(uuid.uuid4())[:8]
+            self.dashboard_state.start_session(
+                session_id=session_id,
+                tickets_path=tickets_path,
+                total_tickets=plan.total_tickets,
+                total_waves=len(plan.waves),
+                workers=self.max_workers
+            )
 
         print("\n📋 Execution Plan")
         print(f"{'='*60}")

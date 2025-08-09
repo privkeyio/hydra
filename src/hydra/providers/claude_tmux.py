@@ -261,16 +261,68 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                             print("🔔 Claude Code is asking for confirmation - auto-approving...")
                             self._send_to_session(session_name, "1")
                             time.sleep(2)  # Give Claude time to process
-                        # Look for Claude Code tool usage patterns
-                        elif any(pattern in new_content for pattern in ["Reading", "Writing", "Editing", "Creating", "Running"]):
-                            print("⚙️  Claude Code is actively working on files...")
+                        # Look for Claude Code tool usage patterns and show what it's doing
+                        elif "Reading" in new_content:
+                            # Extract file being read if possible
+                            import re
+                            file_match = re.search(r'Reading[:\s]+([^\s]+)', new_content)
+                            if file_match:
+                                print(f"👁️  Reading: {file_match.group(1)}")
+                            else:
+                                print("👁️  Reading files...")
+                        elif "Writing" in new_content or "Creating" in new_content:
+                            file_match = re.search(r'(?:Writing|Creating)[:\s]+([^\s]+)', new_content)
+                            if file_match:
+                                print(f"✍️  Writing: {file_match.group(1)}")
+                            else:
+                                print("✍️  Writing new content...")
+                        elif "Editing" in new_content:
+                            file_match = re.search(r'Editing[:\s]+([^\s]+)', new_content)
+                            if file_match:
+                                print(f"✏️  Editing: {file_match.group(1)}")
+                            else:
+                                print("✏️  Editing files...")
+                        elif "Running" in new_content or "Executing" in new_content:
+                            cmd_match = re.search(r'(?:Running|Executing)[:\s]+(.+?)(?:\n|$)', new_content)
+                            if cmd_match:
+                                cmd = cmd_match.group(1).strip()
+                                if len(cmd) > 50:
+                                    cmd = cmd[:50] + "..."
+                                print(f"🚀 Running: {cmd}")
+                            else:
+                                print("🚀 Executing commands...")
+                        elif "npm" in new_content or "yarn" in new_content or "pip" in new_content:
+                            print("📦 Installing dependencies...")
+                        elif "test" in new_content.lower():
+                            print("🧪 Running tests...")
+                        elif any(pattern in new_content for pattern in ["Analyzing", "Checking", "Reviewing"]):
+                            print("🔍 Analyzing code structure...")
                     last_output = current_output
 
-                # Show periodic status updates
+                # Show periodic status updates with progress indicator
                 if time.time() - last_status_time > 10:
                     last_status_time = time.time()
                     elapsed = int(time.time() - start_time)
-                    print(f"⏳ Elapsed time: {elapsed}s")
+                    
+                    # Create a progress indicator based on activity
+                    if elapsed < 30:
+                        phase = "🔍 Analyzing requirements"
+                    elif elapsed < 60:
+                        phase = "🏗️  Building implementation"
+                    elif elapsed < 90:
+                        phase = "✅ Finalizing changes"
+                    elif elapsed < 120:
+                        phase = "🧹 Cleaning up"
+                    else:
+                        phase = "⏳ Working"
+                    
+                    # Show time in a more readable format
+                    mins = elapsed // 60
+                    secs = elapsed % 60
+                    if mins > 0:
+                        print(f"{phase} ({mins}m {secs}s)...")
+                    else:
+                        print(f"{phase} ({elapsed}s)...")
 
                 # Check for file changes periodically
                 if int(time.time() - start_time) % 10 == 0:
@@ -285,7 +337,23 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                         if line and not line.endswith("tickets.md")
                     ]
                     if changed_files:
-                        print(f"📝 Files modified: {len(changed_files)} files")
+                        # Show what files are being modified
+                        print(f"📝 Working on {len(changed_files)} files:")
+                        for file in changed_files[:3]:  # Show first 3 files
+                            file_parts = file.strip().split()
+                            if len(file_parts) >= 2:
+                                status = file_parts[0]
+                                filepath = ' '.join(file_parts[1:])
+                                if status == "M":
+                                    print(f"   ✏️  Editing: {filepath}")
+                                elif status == "A" or status == "??":
+                                    print(f"   ➕ Creating: {filepath}")
+                                elif status == "D":
+                                    print(f"   ➖ Removing: {filepath}")
+                                else:
+                                    print(f"   📄 {status}: {filepath}")
+                        if len(changed_files) > 3:
+                            print(f"   ... and {len(changed_files) - 3} more")
 
                 time.sleep(1)
 
@@ -309,8 +377,52 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
 
             if changed_files:
                 print("\n✅ Files successfully modified by Claude Code:")
+                created_files = []
+                modified_files = []
+                deleted_files = []
+                
                 for line in changed_files:
-                    print(f"   {line}")
+                    parts = line.strip().split()
+                    if len(parts) >= 2:
+                        status = parts[0]
+                        filepath = ' '.join(parts[1:])
+                        if status == "M":
+                            modified_files.append(filepath)
+                        elif status == "A" or status == "??":
+                            created_files.append(filepath)
+                        elif status == "D":
+                            deleted_files.append(filepath)
+                
+                # Show categorized summary
+                if created_files:
+                    print(f"\n   ➕ Created {len(created_files)} new file(s):")
+                    for f in created_files[:5]:
+                        print(f"      • {f}")
+                    if len(created_files) > 5:
+                        print(f"      ... and {len(created_files) - 5} more")
+                
+                if modified_files:
+                    print(f"\n   ✏️  Modified {len(modified_files)} file(s):")
+                    for f in modified_files[:5]:
+                        print(f"      • {f}")
+                    if len(modified_files) > 5:
+                        print(f"      ... and {len(modified_files) - 5} more")
+                
+                if deleted_files:
+                    print(f"\n   ➖ Deleted {len(deleted_files)} file(s):")
+                    for f in deleted_files[:3]:
+                        print(f"      • {f}")
+                
+                # Show quick summary of what was likely done
+                if "index.html" in str(created_files + modified_files):
+                    print("\n   📄 HTML structure updated")
+                if "style.css" in str(created_files + modified_files):
+                    print("   🎨 Styles applied")
+                if any(".js" in f for f in created_files + modified_files):
+                    print("   ⚙️  JavaScript functionality added")
+                if any("test" in f.lower() for f in created_files + modified_files):
+                    print("   🧪 Tests implemented")
+                
                 return "Files have been successfully edited"
             else:
                 # Check if any new files were created

@@ -543,6 +543,7 @@ def _handle_parallel_execution(args):
     """Handle parallel ticket execution with dependency resolution."""
     from hydra.dashboard import DashboardServer, DashboardState
     from hydra.parallel import ParallelExecutor
+    from hydra.parallel.executor import ExecutionStatus
 
     try:
         # Get absolute path to tickets file
@@ -571,8 +572,16 @@ def _handle_parallel_execution(args):
         if not tickets:
             print("❌ No pending tickets found")
             return 1
-
-        print(f"📋 Found {len(tickets)} pending tickets")
+        
+        # Count only pending tickets (not already completed)
+        pending_count = len([t for t in tickets.values() 
+                           if t.status == ExecutionStatus.PENDING])
+        total_count = len(tickets)
+        completed_count = len(executor.completed_tickets)
+        
+        if completed_count > 0:
+            print(f"✅ {completed_count} tickets already completed")
+        print(f"📋 Found {pending_count} pending tickets")
 
         # Build execution plan
         plan = executor.build_execution_plan()

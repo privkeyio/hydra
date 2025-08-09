@@ -63,35 +63,52 @@ class ClaudeCLIProvider(LLMProvider):
 
         return '\n'.join(response_lines).strip()
 
-    def _execute_claude_command(self, prompt: str) -> subprocess.CompletedProcess:
+    def _execute_claude_command(self, prompt: str, non_interactive: bool = False) -> subprocess.CompletedProcess:
         """Execute Claude CLI command and let it actually work with files."""
-        # For file operations, we need to let Claude run interactively
-        # Add a marker to know when Claude is done
-        completion_msg = "IMPLEMENTATION_COMPLETE"
-        full_prompt = f"""{prompt}
+        # Get the current working directory for context
+        cwd = os.getcwd()
+        
+        if non_interactive:
+            # Use --print flag for non-interactive mode (e.g., ticket generation)
+            # Add --dangerously-skip-permissions for automated ticket generation
+            return subprocess.run(
+                [self.claude_path, "--print", "--dangerously-skip-permissions", prompt],
+                capture_output=True,
+                text=True,
+                timeout=self.config.timeout,
+                env=os.environ.copy(),
+                cwd=cwd
+            )
+        else:
+            # For file operations, we need to let Claude run interactively
+            # Add a marker to know when Claude is done
+            completion_msg = "IMPLEMENTATION_COMPLETE"
+            full_prompt = f"""{prompt}
 
 When you are completely done implementing this ticket, \\
 please say "{completion_msg}" at the end.
 /exit
 """
-
-        # Get the current working directory for context
-        cwd = os.getcwd()
-
-        return subprocess.run(
-            [self.claude_path],
-            input=full_prompt,
-            capture_output=True,
-            text=True,
-            timeout=self.config.timeout,
-            env=os.environ.copy(),
-            cwd=cwd  # Run in the project directory
-        )
+            return subprocess.run(
+                [self.claude_path],
+                input=full_prompt,
+                capture_output=True,
+                text=True,
+                timeout=self.config.timeout,
+                env=os.environ.copy(),
+                cwd=cwd  # Run in the project directory
+            )
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response using Claude CLI."""
+        # Check if we should use non-interactive mode (for generating text/markdown)
+        non_interactive = kwargs.get('non_interactive', False)
+        # Auto-detect: if prompt mentions tickets.md or markdown, use non-interactive
+        if 'tickets.md' in prompt.lower() or 'markdown' in prompt.lower():
+            non_interactive = True
+            
         try:
-            result = self._execute_claude_command(prompt)
+            result = self._execute_claude_command(prompt, non_interactive=non_interactive)
 
             if result.returncode == 0:
                 return self._clean_claude_output(result.stdout)

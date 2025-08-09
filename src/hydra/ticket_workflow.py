@@ -157,79 +157,84 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     print("🎫 Generating tickets.md...")
     print("=" * 30)
 
-    # Use Opus for planning (complex task)
+    # Always use Opus 4 for ticket planning
     print("🧠 Using Opus 4 for ticket planning...")
-    agent = CodeAgent("ticket_planner", depth=0)
+    
+    # Use the exact prompt format that works when you run Claude Code manually
+    prompt = f"""make a tickets.md doc with tickets that are made in task language for claude code to execute that include acceptance criteria, dependencies (like 001,002 or None), and which model (sonnet 4 or opus 4) should be used for that ticket. be minimalistic, surgical and future proof!
 
-    prompt = f"""Create a tickets.md document for this project: {project_description}
+Each ticket MUST have this format:
+## Ticket 001: [Title]
+**Model:** [Sonnet 4 or Opus 4]
+**Dependencies:** [None or comma-separated ticket numbers like 001,002]
+**Description:** [Task description]
 
-Generate tickets in this EXACT format:
+**Acceptance Criteria:**
+- [ ] [Criteria]
 
-# Project Tickets
-
-## Ticket 1: [Descriptive Title]
-**Model:** [Sonnet 4 OR Opus 4]
-
-[Brief description of what needs to be done]
-
-- [ ] [Specific acceptance criteria]
-- [ ] [Another acceptance criteria]
-- [ ] [etc...]
-
-## Ticket 2: [Next Title]
-**Model:** [Sonnet 4 OR Opus 4]
-
-[Description]
-
-- [ ] [Acceptance criteria]
-- [ ] [More criteria]
-
-Requirements:
-- Be minimalistic, surgical and future proof
-- Each ticket should be executable by Claude Code
-- Include specific acceptance criteria
-- Choose Sonnet 4 for straightforward tasks, Opus 4 for complex/architectural tasks
-- Make tickets atomic and focused
-- No AI-generated looking language
-- Production quality standards only"""
+Project: {project_description}"""
 
     print("🚀 Generating tickets with production standards...")
 
     try:
-        result = agent.complete_task(prompt)
-
-        if result['success'] and 'generated_code' in result:
-            tickets_content = result['generated_code']
-
-            # Clean up the content (remove any code block markers)
-            if tickets_content.startswith('```'):
-                lines = tickets_content.split('\n')
-                if lines[0].startswith('```'):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith('```'):
-                    lines = lines[:-1]
-                tickets_content = '\n'.join(lines)
-
-            # Write tickets.md
-            with open(output_path, 'w') as f:
-                f.write(tickets_content)
-
+        # Import necessary modules
+        from hydra.config import get_config
+        import subprocess
+        import os
+        
+        config = get_config()
+        
+        # Get Claude path from config or environment
+        claude_path = os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
+        if hasattr(config, 'llm_provider') and hasattr(config.llm_provider.config, 'extra_params'):
+            claude_path = config.llm_provider.config.extra_params.get('claude_path', claude_path)
+        
+        # Run Claude Code directly to create the file (not using --print)
+        # Use the exact same way you would run it manually
+        result = subprocess.run(
+            [claude_path, "--dangerously-skip-permissions", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=os.getcwd()
+        )
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            # Read the created file
+            with open(output_path, 'r') as f:
+                tickets_content = f.read()
+            
             print(f"✅ {output_path} created successfully!")
-
-            # Show summary
-            ticket_count = tickets_content.count('## Ticket')
-            opus_count = tickets_content.count('**Model:** Opus 4')
-            sonnet_count = tickets_content.count('**Model:** Sonnet 4')
-
+            
+            # Show summary - handle various ticket formats
+            import re
+            # Count any heading that looks like a ticket
+            ticket_patterns = [
+                r'## Ticket \d+:',  # ## Ticket 001:
+                r'## CALC-\d+:',     # ## CALC-001:
+                r'## \w+-\d+:',      # ## ANY-001:
+                r'## Ticket'         # ## Ticket
+            ]
+            ticket_count = 0
+            for pattern in ticket_patterns:
+                matches = len(re.findall(pattern, tickets_content))
+                if matches > 0:
+                    ticket_count = matches
+                    break
+            
+            # Count models - handle variations
+            opus_count = tickets_content.lower().count('opus')
+            sonnet_count = tickets_content.lower().count('sonnet')
+            
             print(f"📊 Generated {ticket_count} tickets:")
             print(f"   🧠 Opus 4: {opus_count} tickets")
             print(f"   ⚡ Sonnet 4: {sonnet_count} tickets")
-
+            
             return True
-
         else:
             print("❌ Failed to generate tickets")
-            print(f"💥 Error: {result.get('error', 'Unknown error')}")
+            if result.stderr:
+                print(f"💥 Error: {result.stderr}")
             return False
 
     except Exception as e:

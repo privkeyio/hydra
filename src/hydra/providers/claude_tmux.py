@@ -135,7 +135,7 @@ class ClaudeTmuxProvider(LLMProvider):
 
             # Send the implementation prompt with auto-approval instruction
             print("📝 Sending task to Claude Code...")
-            enhanced_prompt = prompt + "\n\nIMPORTANT: When you show file creation confirmations, please use option 2 'Yes, and don't ask again this session' to proceed automatically with all file operations."
+            enhanced_prompt = prompt + "\n\nIMPORTANT: When you show file creation confirmations, please use option 2 'Yes, and don't ask again this session' to proceed automatically with all file operations.\n\nSAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) without explicit user approval."
             self._send_to_session(session_name, enhanced_prompt)
 
             # Give Claude time to process the prompt
@@ -174,23 +174,52 @@ class ClaudeTmuxProvider(LLMProvider):
                             if line.strip():
                                 print(f"   > {line[:100]}")
 
+                        # Check for git-related dangerous operations
+                        git_indicators = [
+                            'git commit', 'git push', 'git merge', 'git rebase',
+                            'git reset', 'git checkout', 'git branch -d', 'git branch -D',
+                            'force push', 'git clean', 'git stash drop'
+                        ]
+                        
+                        # SAFETY: Never auto-approve git operations
+                        if any(git_cmd in current_output.lower() for git_cmd in git_indicators):
+                            print("🛑 SAFETY: Git operation detected - requires manual approval")
+                            print("⚠️  Stopping automation for safety. Please handle git operations manually.")
+                            # Don't auto-respond, let it timeout or wait for user
+                            break
+                        
                         # Check for common prompts that need user input
                         prompt_indicators = [
                             '(y/n)', '(yes/no)', 'Continue?', 'Proceed?', 'overwrite',
                             'Yes, looks good', 'make changes', 'tell Claude'
                         ]
 
-                        # Check if Claude Code is showing its confirmation menu
+                        # Check if Claude Code is showing its confirmation menu (for FILE operations only)
                         if "don't ask again" in current_output:
-                            print("⚠️  Claude Code confirmation menu - selecting option 2 (Yes, don't ask again)")
-                            self._send_to_session(session_name, "2")
+                            # Make sure it's about file creation, not git
+                            if not any(git_cmd in current_output.lower() for git_cmd in git_indicators):
+                                print("⚠️  Claude Code confirmation menu - selecting option 2 (Yes, don't ask again)")
+                                self._send_to_session(session_name, "2")
+                            else:
+                                print("🛑 Git operation detected - manual approval required")
+                                break
                         elif "Yes, looks good" in current_output or "tell Claude what to do" in current_output:
-                            print("⚠️  Claude Code showing confirmation menu - selecting option 1 (Yes)")
-                            self._send_to_session(session_name, "1")
+                            # Only auto-approve if it's not git-related
+                            if not any(git_cmd in current_output.lower() for git_cmd in git_indicators):
+                                print("⚠️  Claude Code showing confirmation menu - selecting option 1 (Yes)")
+                                self._send_to_session(session_name, "1")
+                            else:
+                                print("🛑 Git operation detected - manual approval required")
+                                break
                             no_change_count = 0  # Reset counter
                         elif any(indicator in current_output.lower() for indicator in prompt_indicators):
-                            print("⚠️  Detected prompt for user input - sending 'y' to continue")
-                            self._send_to_session(session_name, "y")
+                            # Only auto-respond if it's not git-related
+                            if not any(git_cmd in current_output.lower() for git_cmd in git_indicators):
+                                print("⚠️  Detected prompt for user input - sending 'y' to continue")
+                                self._send_to_session(session_name, "y")
+                            else:
+                                print("🛑 Git operation detected - manual approval required")
+                                break
                             no_change_count = 0  # Reset counter
                         else:
                             print("⏱️  Assuming completion after 120s of inactivity")
@@ -200,7 +229,19 @@ class ClaudeTmuxProvider(LLMProvider):
                     # Check for tool usage patterns in the new output
                     new_content = current_output[len(last_output):] if len(current_output) > len(last_output) else ""
                     if new_content:
-                        # Immediately check for Claude Code confirmation prompts
+                        # SAFETY CHECK: Look for git operations first
+                        git_indicators = [
+                            'git commit', 'git push', 'git merge', 'git rebase',
+                            'git reset', 'git checkout', 'git branch -d', 'git branch -D',
+                            'force push', 'git clean', 'git stash drop'
+                        ]
+                        
+                        if any(git_cmd in new_content.lower() for git_cmd in git_indicators):
+                            print("🛑 SAFETY: Git operation detected in output - stopping automation")
+                            print("⚠️  Please handle git operations manually for safety")
+                            break  # Stop automation immediately
+                        
+                        # Immediately check for Claude Code confirmation prompts (only for safe operations)
                         if "don't ask again" in new_content:
                             print("🔔 Claude Code confirmation - selecting option 2 (don't ask again)...")
                             self._send_to_session(session_name, "2")

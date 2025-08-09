@@ -12,7 +12,6 @@ from hydra.ticket_workflow import (
     generate_tickets_md,
     run_all_tickets,
 )
-from hydra.workflows.engine import execute_workflow
 
 
 def format_code_block(code: str) -> str:
@@ -805,6 +804,7 @@ def main():
     print("-" * 60)
 
     try:
+        from hydra.workflows.engine import execute_workflow
         results = execute_workflow(task, args.agent_name, args.depth)
 
         if "error" in results:

@@ -115,6 +115,9 @@ def parse_ticket(tickets_path, ticket_identifier):
         ticket['completed'] = True
 
     in_criteria = False
+    unchecked_criteria = 0
+    checked_criteria = 0
+    
     for line in lines[1:]:
         line = line.strip()
         if line.startswith('**Model:**'):
@@ -138,18 +141,69 @@ def parse_ticket(tickets_path, ticket_identifier):
         elif line.startswith('- [ ]'):
             criteria = line.replace('- [ ]', '').strip()
             ticket['acceptance_criteria'].append(criteria)
+            unchecked_criteria += 1
         elif line.startswith('- [x]'):
             # Already completed criteria - still add to list but mark as done
             criteria = line.replace('- [x]', '').strip()
             ticket['acceptance_criteria'].append(f"✅ {criteria}")
+            checked_criteria += 1
         elif line.startswith('##'):
             # Stop parsing if we hit another section header
             break
         elif not in_criteria and line and not line.startswith('**') and not ticket['description']:
             # Only capture additional description if we don't have one yet
             ticket['description'] = line
+    
+    # Mark ticket as completed if all acceptance criteria are checked
+    if unchecked_criteria == 0 and checked_criteria > 0:
+        ticket['completed'] = True
+        print(f"✅ Ticket {ticket_identifier} is already completed (all {checked_criteria} criteria checked)")
 
     return ticket
+
+
+def mark_ticket_completed(tickets_path, ticket_id):
+    """Mark a ticket as completed in the tickets.md file."""
+    # Normalize ticket ID to 3 digits
+    if ticket_id.isdigit():
+        ticket_id = ticket_id.zfill(3)
+    
+    try:
+        with open(tickets_path, 'r') as f:
+            content = f.read()
+        
+        # Find the ticket section
+        patterns = [
+            rf'(## Ticket {ticket_id}:.*?)(\n**Model:**)',
+            rf'(## TICKET-{ticket_id}:.*?)(\n**Model:**)',
+            rf'(## \w+-{ticket_id}:.*?)(\n**Model:**)',
+        ]
+        
+        modified = False
+        for pattern in patterns:
+            if re.search(pattern, content, re.DOTALL):
+                # Mark all acceptance criteria as complete
+                # Find the acceptance criteria section for this ticket
+                ticket_pattern = rf'(## .*{ticket_id}:.*?)(## |\Z)'
+                ticket_match = re.search(ticket_pattern, content, re.DOTALL)
+                
+                if ticket_match:
+                    ticket_section = ticket_match.group(1)
+                    # Replace unchecked boxes with checked ones
+                    updated_section = ticket_section.replace('- [ ]', '- [x]')
+                    content = content.replace(ticket_section, updated_section)
+                    modified = True
+                    break
+        
+        if modified:
+            with open(tickets_path, 'w') as f:
+                f.write(content)
+            print(f"✅ Ticket {ticket_id} marked as completed in {tickets_path}")
+        else:
+            print(f"⚠️  Could not find ticket {ticket_id} to mark as completed")
+            
+    except Exception as e:
+        print(f"❌ Error marking ticket {ticket_id} as completed: {e}")
 
 
 def generate_tickets_md(project_description, output_path="tickets.md"):

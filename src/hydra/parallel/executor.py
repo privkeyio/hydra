@@ -88,10 +88,11 @@ class ParallelExecutor:
         # Find all ticket IDs
         import re
         ticket_patterns = [
-            r'### TICKET-(\d+):',
+            r'## Ticket (\d+):',  # Match "## Ticket 001:"
             r'## TICKET-(\d+):',
             r'## Ticket-(\d+):',
-            r'## Ticket (\d+):',
+            r'## \w+-(\d+):',     # Match any prefix like CALC-001
+            r'### TICKET-(\d+):',
             r'## #(\d+):',
             r'## (\d+):'
         ]

@@ -133,9 +133,20 @@ class ClaudeTmuxProvider(LLMProvider):
             if not claude_ready:
                 print("⚠️  Claude Code initialization timeout - proceeding anyway")
 
-            # Send the implementation prompt with auto-approval instruction
+            # Send the implementation prompt with explicit file creation permission
             print("📝 Sending task to Claude Code...")
-            enhanced_prompt = prompt + "\n\nIMPORTANT: When you show file creation confirmations, please use option 2 'Yes, and don't ask again this session' to proceed automatically with all file operations.\n\nSAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) without explicit user approval."
+            # Make the prompt VERY explicit about using tools
+            enhanced_prompt = f"""You have permission to use ALL tools to complete this task.
+Please use the Write, Edit, and Bash tools as needed to create and modify files.
+Do NOT ask for permission - you already have it. Just proceed with implementation.
+
+{prompt}
+
+IMPORTANT: Use the Write tool to create new files and Edit tool to modify existing files.
+You have full permission to create any files needed for this task.
+When asked about file creation, always select option 2 'Yes, and don't ask again this session'.
+
+SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) without explicit user approval."""
             self._send_to_session(session_name, enhanced_prompt)
 
             # Give Claude time to process the prompt

@@ -17,6 +17,7 @@ from hydra.orchestrator.claude_code_orchestrator import (
     ClaudeCodeOrchestrator,
 )
 from hydra.quality import QualityGateRunner
+from hydra.safety.file_lock import get_file_lock_manager
 from hydra.ticket_workflow import mark_ticket_completed, parse_ticket
 
 
@@ -73,6 +74,9 @@ class ParallelExecutor:
         # Initialize agent pool for managing Claude Code terminals
         self.agent_pool = AgentPool(max_agents=max_workers)
         self.agent_pool.start()
+        
+        # Initialize file lock manager
+        self.file_lock_manager = get_file_lock_manager()
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md."""
@@ -319,8 +323,9 @@ Take your time and deliver excellence!"""
                 if not quality_passed:
                     print(f"⚠️  Quality gates failed for ticket {ticket_id}")
 
-                # Release the agent back to the pool
+                # Release the agent back to the pool and file locks
                 self.agent_pool.release_agent(agent_id)
+                self.file_lock_manager.release_all_locks(agent_id)
                 return True
             else:
                 raise Exception(f"Task failed: {result.error}")
@@ -341,8 +346,9 @@ Take your time and deliver excellence!"""
                     )
 
             print(f"\n❌ Ticket {ticket_id} failed: {e}")
-            # Release the agent even on failure
+            # Release the agent and locks even on failure
             self.agent_pool.release_agent(agent_id)
+            self.file_lock_manager.release_all_locks(agent_id)
             return False
         finally:
             # Restore original model setting for other agents

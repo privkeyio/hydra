@@ -162,48 +162,8 @@ def parse_ticket(tickets_path, ticket_identifier):
     return ticket
 
 
-def mark_ticket_completed(tickets_path, ticket_id):
-    """Mark a ticket as completed in the tickets.md file."""
-    # Normalize ticket ID to 3 digits
-    if ticket_id.isdigit():
-        ticket_id = ticket_id.zfill(3)
-    
-    try:
-        with open(tickets_path, 'r') as f:
-            content = f.read()
-        
-        # Find the ticket section
-        patterns = [
-            rf'(## Ticket {ticket_id}:.*?)(\n**Model:**)',
-            rf'(## TICKET-{ticket_id}:.*?)(\n**Model:**)',
-            rf'(## \w+-{ticket_id}:.*?)(\n**Model:**)',
-        ]
-        
-        modified = False
-        for pattern in patterns:
-            if re.search(pattern, content, re.DOTALL):
-                # Mark all acceptance criteria as complete
-                # Find the acceptance criteria section for this ticket
-                ticket_pattern = rf'(## .*{ticket_id}:.*?)(## |\Z)'
-                ticket_match = re.search(ticket_pattern, content, re.DOTALL)
-                
-                if ticket_match:
-                    ticket_section = ticket_match.group(1)
-                    # Replace unchecked boxes with checked ones
-                    updated_section = ticket_section.replace('- [ ]', '- [x]')
-                    content = content.replace(ticket_section, updated_section)
-                    modified = True
-                    break
-        
-        if modified:
-            with open(tickets_path, 'w') as f:
-                f.write(content)
-            print(f"✅ Ticket {ticket_id} marked as completed in {tickets_path}")
-        else:
-            print(f"⚠️  Could not find ticket {ticket_id} to mark as completed")
-            
-    except Exception as e:
-        print(f"❌ Error marking ticket {ticket_id} as completed: {e}")
+# NOTE: This function has been moved to line 577 to avoid duplication
+# The function at line 577 handles more ticket formats and is more comprehensive
 
 
 def generate_tickets_md(project_description, output_path="tickets.md"):
@@ -578,6 +538,10 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
     """Mark ticket as completed in tickets.md."""
     if not os.path.exists(tickets_path):
         return
+
+    # Normalize ticket ID to 3 digits if it's numeric
+    if ticket_identifier.isdigit():
+        ticket_identifier = ticket_identifier.zfill(3)
 
     with open(tickets_path, 'r') as f:
         content = f.read()

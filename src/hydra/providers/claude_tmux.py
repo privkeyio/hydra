@@ -332,10 +332,24 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                         text=True,
                         cwd=project_dir
                     )
-                    changed_files = [
-                        line for line in git_status.stdout.strip().split('\n')
-                        if line and not line.endswith("tickets.md")
-                    ]
+                    # Filter to only show files in the current project directory
+                    changed_files = []
+                    project_path = Path(project_dir).resolve()
+                    for line in git_status.stdout.strip().split('\n'):
+                        if line and not line.endswith("tickets.md"):
+                            # Parse the file path
+                            parts = line.strip().split(maxsplit=1)
+                            if len(parts) >= 2:
+                                filepath = parts[1]
+                                # Convert to absolute path and check if it's within project directory
+                                try:
+                                    file_abs_path = (project_path / filepath).resolve()
+                                    # Check if the file is within the project directory
+                                    if str(file_abs_path).startswith(str(project_path)):
+                                        changed_files.append(line)
+                                except (ValueError, OSError):
+                                    # Skip files that can't be resolved
+                                    pass
                     if changed_files:
                         # Show what files are being modified
                         print(f"📝 Working on {len(changed_files)} files:")
@@ -370,10 +384,24 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                 cwd=project_dir
             )
 
-            changed_files = [
-                line for line in git_status.stdout.strip().split('\n')
-                if line and not line.endswith("tickets.md")
-            ]
+            # Filter to only show files in the current project directory
+            changed_files = []
+            project_path = Path(project_dir).resolve()
+            for line in git_status.stdout.strip().split('\n'):
+                if line and not line.endswith("tickets.md"):
+                    # Parse the file path
+                    parts = line.strip().split(maxsplit=1)
+                    if len(parts) >= 2:
+                        filepath = parts[1]
+                        # Convert to absolute path and check if it's within project directory
+                        try:
+                            file_abs_path = (project_path / filepath).resolve()
+                            # Check if the file is within the project directory
+                            if str(file_abs_path).startswith(str(project_path)):
+                                changed_files.append(line)
+                        except (ValueError, OSError):
+                            # Skip files that can't be resolved
+                            pass
 
             if changed_files:
                 print("\n✅ Files successfully modified by Claude Code:")

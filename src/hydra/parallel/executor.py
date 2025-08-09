@@ -237,8 +237,19 @@ Instructions:
             result = orchestrator.execute_task(task)
 
             if result.status.value == "completed":
-                # Mark ticket as completed
-                mark_ticket_completed(tickets_path, ticket_id)
+                # Validate acceptance criteria before marking complete
+                from hydra.ticket_workflow import validate_acceptance_criteria
+
+                validation_passed = validate_acceptance_criteria(ticket_data, str(self.project_root))
+
+                if validation_passed:
+                    # Mark ticket as completed only if validation passes
+                    mark_ticket_completed(tickets_path, ticket_id)
+                    print("✅ Acceptance criteria validated and ticket marked complete")
+                else:
+                    print("❌ Acceptance criteria validation failed - ticket remains incomplete")
+                    # Treat as failure if validation fails
+                    raise Exception("Acceptance criteria not met")
 
                 # Run quality gates
                 print(f"\n🚦 Running quality gates for ticket {ticket_id}...")

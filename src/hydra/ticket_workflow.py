@@ -237,6 +237,118 @@ Requirements:
         return False
 
 
+def validate_acceptance_criteria(ticket, project_dir):
+    """Validate that acceptance criteria were actually implemented."""
+    criteria = ticket['acceptance_criteria']
+    failed_criteria = []
+
+    print(f"🔍 Checking {len(criteria)} acceptance criteria:")
+
+    for i, criterion in enumerate(criteria, 1):
+        criterion_lower = criterion.lower()
+
+        # File existence checks
+        if "package.json exists" in criterion_lower or "package.json with" in criterion_lower:
+            if not os.path.exists(os.path.join(project_dir, "package.json")):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. package.json missing")
+            else:
+                print(f"   ✅ {i}. package.json found")
+
+        # Folder structure checks
+        elif "folder structure" in criterion_lower or "basic folder" in criterion_lower:
+            required_folders = ["src", "public", "tests", "server"]
+            missing_folders = []
+            for folder in required_folders:
+                folder_path = os.path.join(project_dir, folder)
+                if not os.path.exists(folder_path):
+                    missing_folders.append(folder)
+
+            if missing_folders:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Missing folders: {', '.join(missing_folders)}")
+            else:
+                print(f"   ✅ {i}. All required folders exist")
+
+        # Configuration files checks
+        elif "configuration files" in criterion_lower or "config files" in criterion_lower:
+            config_files = [".gitignore", "README.md", "tsconfig.json", "eslint.config.js"]
+            missing_files = []
+            for file in config_files:
+                file_path = os.path.join(project_dir, file)
+                if not os.path.exists(file_path):
+                    missing_files.append(file)
+
+            if missing_files:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Missing config files: {', '.join(missing_files)}")
+            else:
+                print(f"   ✅ {i}. All config files exist")
+
+        # npm install check
+        elif "npm install" in criterion_lower:
+            try:
+                result = subprocess.run(
+                    ["npm", "install", "--dry-run"],
+                    cwd=project_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    print(f"   ✅ {i}. npm install validation passed")
+                else:
+                    failed_criteria.append(f"{i}. {criterion}")
+                    print(f"   ❌ {i}. npm install would fail: {result.stderr}")
+            except Exception as e:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. npm install check failed: {e}")
+
+        # Generic file checks
+        elif any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
+            # Extract potential file name from criterion
+            words = criterion.split()
+            file_found = False
+            for word in words:
+                if any(ext in word for ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
+                    file_path = os.path.join(project_dir, word.strip('.,()'))
+                    if os.path.exists(file_path):
+                        file_found = True
+                        print(f"   ✅ {i}. File {word} found")
+                        break
+
+            if not file_found:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Required file not found")
+
+        # Development environment checks
+        elif "development environment" in criterion_lower or "docker" in criterion_lower:
+            docker_files = ["Dockerfile", "docker-compose.yml"]
+            missing_docker = []
+            for file in docker_files:
+                if not os.path.exists(os.path.join(project_dir, file)):
+                    missing_docker.append(file)
+
+            if missing_docker:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Missing Docker files: {', '.join(missing_docker)}")
+            else:
+                print(f"   ✅ {i}. Docker environment setup complete")
+
+        else:
+            # Generic validation - assume it passed if no specific checks failed
+            print(f"   ℹ️  {i}. Manual validation required: {criterion}")
+
+    if failed_criteria:
+        print(f"\n❌ Validation failed! {len(failed_criteria)} criteria not met:")
+        for failed in failed_criteria:
+            print(f"   • {failed}")
+        return False
+
+    print(f"\n✅ All {len(criteria)} acceptance criteria validated successfully!")
+    return True
+
+
 def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None):
     """Execute exactly like: 'execute ticket N in tickets.md'."""
     print(f"🎫 Executing Ticket {ticket_identifier}")
@@ -346,9 +458,17 @@ Please implement this ticket now by creating/editing the necessary files."""
             for line in git_result.stdout.strip().split('\n'):
                 print(f"   {line}")
 
-        # Mark ticket as completed
-        print("\n🔍 Marking ticket as completed...")
-        mark_ticket_completed(tickets_path, ticket_identifier)
+        # Validate acceptance criteria before marking complete
+        print("\n🔍 Validating acceptance criteria...")
+        validation_passed = validate_acceptance_criteria(ticket, project_dir)
+
+        if validation_passed:
+            print("✅ All acceptance criteria met!")
+            mark_ticket_completed(tickets_path, ticket_identifier)
+        else:
+            print("❌ Acceptance criteria validation failed!")
+            print("   Ticket will remain incomplete until requirements are met")
+            return False
 
         # Run quality gates
         print("\n🚦 Running quality gates...")

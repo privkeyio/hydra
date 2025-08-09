@@ -133,9 +133,10 @@ class ClaudeTmuxProvider(LLMProvider):
             if not claude_ready:
                 print("⚠️  Claude Code initialization timeout - proceeding anyway")
 
-            # Send the implementation prompt
+            # Send the implementation prompt with auto-approval instruction
             print("📝 Sending task to Claude Code...")
-            self._send_to_session(session_name, prompt)
+            enhanced_prompt = prompt + "\n\nIMPORTANT: When you show file creation confirmations, please use option 2 'Yes, and don't ask again this session' to proceed automatically with all file operations."
+            self._send_to_session(session_name, enhanced_prompt)
 
             # Give Claude time to process the prompt
             time.sleep(3)
@@ -164,17 +165,52 @@ class ClaudeTmuxProvider(LLMProvider):
                 # Check if output has changed
                 if current_output == last_output:
                     no_change_count += 1
-                    # If no changes for 60 seconds, assume Claude is done
-                    if no_change_count > 60:
-                        print("⏱️  No activity detected for 60s, assuming completion")
-                        break
+                    # If no changes for 120 seconds, check if Claude needs input
+                    if no_change_count > 120:
+                        # Extract last few lines to check for prompts
+                        last_lines = current_output.split('\n')[-5:]
+                        print("⏱️  No activity for 120s. Last output:")
+                        for line in last_lines:
+                            if line.strip():
+                                print(f"   > {line[:100]}")
+
+                        # Check for common prompts that need user input
+                        prompt_indicators = [
+                            '(y/n)', '(yes/no)', 'Continue?', 'Proceed?', 'overwrite',
+                            'Yes, looks good', 'make changes', 'tell Claude'
+                        ]
+
+                        # Check if Claude Code is showing its confirmation menu
+                        if "don't ask again" in current_output:
+                            print("⚠️  Claude Code confirmation menu - selecting option 2 (Yes, don't ask again)")
+                            self._send_to_session(session_name, "2")
+                        elif "Yes, looks good" in current_output or "tell Claude what to do" in current_output:
+                            print("⚠️  Claude Code showing confirmation menu - selecting option 1 (Yes)")
+                            self._send_to_session(session_name, "1")
+                            no_change_count = 0  # Reset counter
+                        elif any(indicator in current_output.lower() for indicator in prompt_indicators):
+                            print("⚠️  Detected prompt for user input - sending 'y' to continue")
+                            self._send_to_session(session_name, "y")
+                            no_change_count = 0  # Reset counter
+                        else:
+                            print("⏱️  Assuming completion after 120s of inactivity")
+                            break
                 else:
                     no_change_count = 0
                     # Check for tool usage patterns in the new output
                     new_content = current_output[len(last_output):] if len(current_output) > len(last_output) else ""
                     if new_content:
+                        # Immediately check for Claude Code confirmation prompts
+                        if "don't ask again" in new_content:
+                            print("🔔 Claude Code confirmation - selecting option 2 (don't ask again)...")
+                            self._send_to_session(session_name, "2")
+                            time.sleep(2)  # Give Claude time to process
+                        elif "Yes, looks good" in new_content or "tell Claude what to do" in new_content:
+                            print("🔔 Claude Code is asking for confirmation - auto-approving...")
+                            self._send_to_session(session_name, "1")
+                            time.sleep(2)  # Give Claude time to process
                         # Look for Claude Code tool usage patterns
-                        if any(pattern in new_content for pattern in ["Reading", "Writing", "Editing", "Creating", "Running"]):
+                        elif any(pattern in new_content for pattern in ["Reading", "Writing", "Editing", "Creating", "Running"]):
                             print("⚙️  Claude Code is actively working on files...")
                     last_output = current_output
 

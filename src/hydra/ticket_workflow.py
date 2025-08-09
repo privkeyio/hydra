@@ -405,10 +405,11 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
     project_context = detect_project_context(tickets_path)
 
     # Build comprehensive prompt for Claude Code CLI to execute
-    # Claude Code will handle all file creation and editing
-    prompt = f"""You are implementing ticket {ticket_identifier}: {ticket['title']}
+    # Claude Code will handle all file creation and editing with enhanced instructions
+    prompt = f"""Execute ticket {ticket_identifier} in tickets.md
 
-Task: {ticket['description']}
+Task: {ticket['title']}
+Description: {ticket['description']}
 
 Acceptance Criteria that MUST be met:
 {chr(10).join(f'- {criteria}' for criteria in ticket['acceptance_criteria'])}
@@ -416,15 +417,26 @@ Acceptance Criteria that MUST be met:
 Project Context: {project_context}
 Working Directory: {os.getcwd()}
 
-IMPORTANT Instructions:
-1. Create or edit all necessary files to implement this feature
-2. Use the existing project structure - check package.json for dependencies
-3. Write production-ready code - no placeholders or mocks
-4. Ensure ALL acceptance criteria are fully implemented
-5. Create actual working implementations, not just examples
-6. Use appropriate file paths based on the project structure
+CRITICAL INSTRUCTIONS:
+Be minimalistic, surgical and future proof!
 
-Please implement this ticket now by creating/editing the necessary files."""
+QUALITY REQUIREMENTS:
+- Avoid using any code or comments that may be construed as AI generated
+- Make sure you do a good job because other LLMs said your code sucked!
+- DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS!
+- This has to be production quality, take your time
+- Write code that looks like it was written by a senior developer
+- Use proper error handling and edge case management
+- Follow established patterns in the existing codebase
+
+COMPLETION PROCESS:
+1. Implement ALL requirements from the ticket
+2. Ensure every acceptance criteria is fully met  
+3. Update tickets.md to mark your criteria as complete: [x]
+4. Run lint, build, test commands to validate your work
+5. Only finish when everything passes and is production-ready
+
+Take your time and deliver excellence!"""
 
     print("🚀 Executing with production standards...")
     print("   ✅ No AI-generated patterns")

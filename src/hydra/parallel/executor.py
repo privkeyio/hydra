@@ -203,27 +203,53 @@ class ParallelExecutor:
             # Parse ticket for full details
             ticket_data = parse_ticket(tickets_path, ticket_id)
 
-            # Create orchestrator for this ticket
+            # Create model-specific orchestrator for this ticket
+            ticket_model = ticket_data.get('model', 'sonnet')  # Default to sonnet
+            print(f"🧠 Ticket {ticket_id} requires model: {ticket_model.upper()}")
+
+            # Set the model environment for this agent
+            import os
+            original_model = os.environ.get('CLAUDE_MODEL')
+
+            if ticket_model.lower() == 'opus':
+                os.environ['CLAUDE_MODEL'] = 'claude-opus-4-1-20250805'
+            else:
+                os.environ['CLAUDE_MODEL'] = 'claude-sonnet-4-20250514'
+
             orchestrator = ClaudeCodeOrchestrator()
             self.orchestrators[ticket_id] = orchestrator
 
-            # Build prompt
-            prompt = f"""Implement ticket {ticket_id}: {ticket_data['title']}
+            # Build prompt with comprehensive instructions
+            prompt = f"""Execute ticket {ticket_id} in tickets.md
 
-Task: {ticket_data['description']}
+Task: {ticket_data['title']}
+Description: {ticket_data['description']}
 
 Acceptance Criteria:
 {chr(10).join(f'- {criteria}' for criteria in ticket_data['acceptance_criteria'])}
 
 Working Directory: {self.project_root}
 
-Instructions:
-1. Create or edit all necessary files
-2. Use existing project structure
-3. Write production-ready code
-4. Ensure ALL acceptance criteria are met
-5. No placeholders or mocks
-"""
+CRITICAL INSTRUCTIONS:
+Be minimalistic, surgical and future proof! 
+
+QUALITY REQUIREMENTS:
+- Avoid using any code or comments that may be construed as AI generated
+- Make sure you do a good job because other LLMs said your code sucked!
+- DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! 
+- This has to be production quality, take your time
+- Write code that looks like it was written by a senior developer
+- Use proper error handling and edge case management
+- Follow established patterns in the existing codebase
+
+COMPLETION PROCESS:
+1. Implement ALL requirements from the ticket
+2. Ensure every acceptance criteria is fully met
+3. Update tickets.md to mark your criteria as complete: [x]
+4. Run lint, build, test commands to validate your work
+5. Only finish when everything passes and is production-ready
+
+Take your time and deliver excellence!"""
 
             # Create task
             task = orchestrator.create_task(
@@ -300,6 +326,13 @@ Instructions:
 
             print(f"\n❌ Ticket {ticket_id} failed: {e}")
             return False
+        finally:
+            # Restore original model setting for other agents
+            if 'original_model' in locals():
+                if original_model:
+                    os.environ['CLAUDE_MODEL'] = original_model
+                elif 'CLAUDE_MODEL' in os.environ:
+                    del os.environ['CLAUDE_MODEL']
 
     def execute_wave(self, wave: List[str], tickets_path: str) -> Dict[str, bool]:
         """Execute a wave of tickets in parallel."""

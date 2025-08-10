@@ -18,39 +18,13 @@
 
 ---
 
-## Overview
+## What is Hydra?
 
-Hydra orchestrates multiple AI agents to build production software autonomously. It manages parallel execution, dependency resolution, quality gates, and real-time monitoring while maintaining complete control over the development process.
+Hydra orchestrates multiple AI agents to build production software in parallel. Give it a project description, and it creates tickets that agents work on simultaneously - respecting dependencies, preventing conflicts, and ensuring quality.
 
-### Core Architecture
+## Quick Start
 
-**Parallel Execution Engine**
-- Concurrent agent management with ThreadPoolExecutor
-- Wave-based execution respecting dependencies
-- Dynamic resource allocation and pooling
-- File lock management prevents conflicts
-
-**Claude Code Integration**
-- Direct tmux session control
-- Automatic prompt handling and responses
-- Session persistence and recovery
-- File operation automation
-
-**Quality Assurance**
-- Acceptance criteria verification
-- Language-specific quality gates
-- Production safety guardrails
-- Automatic rollback on failure
-
-**Real-time Monitoring**
-- Live dashboard at localhost:8080
-- Server-sent events for instant updates
-- Execution metrics and performance tracking
-- Session state visualization
-
----
-
-## Installation
+### Installation
 
 ```bash
 git clone https://github.com/username/hydra.git
@@ -58,475 +32,103 @@ cd hydra
 pip install -e .
 ```
 
-### Requirements
+**Requirements:** Python 3.11+, tmux, Claude CLI
 
-- Python 3.11+
-- tmux (for Claude Code orchestration)
-- Claude CLI or Anthropic API key
-
-### Configuration
+### Basic Setup
 
 ```bash
-# Claude CLI path
+# Set Claude CLI path
 export CLAUDE_CLI_PATH=/path/to/claude
 
 # Or use API key
 export ANTHROPIC_API_KEY=your_key
-
-# Optional configurations
-export LLM_TIMEOUT=300          # Task timeout in seconds
-export MAX_WORKERS=4            # Parallel agent limit
-export DASHBOARD_PORT=8080      # Dashboard port
 ```
 
----
-
-## Quick Start
-
-### Single Task Execution
+### Your First Project
 
 ```bash
-hydra claude execute "Create a FastAPI service with JWT authentication, 
-rate limiting, and PostgreSQL integration"
-```
+# 1. Generate tickets from your idea
+hydra ticket create "Build a REST API with authentication, database, and tests"
 
-### Ticket-Based Development
-
-Generate tickets from project description:
-
-```bash
-hydra ticket create "Build a real-time collaborative code editor with 
-WebSocket sync, conflict resolution, and syntax highlighting"
-```
-
-Execute with parallel agents:
-
-```bash
+# 2. Execute with parallel agents
 hydra ticket parallel --workers 4
-```
 
-Monitor progress at http://localhost:8080
-
----
-
-## Ticket System
-
-Hydra uses a ticket-based workflow for complex projects. Each ticket represents an atomic unit of work with dependencies, model selection, and acceptance criteria.
-
-### Ticket Structure
-
-```markdown
-## Ticket 001: Initialize project structure
-**Model:** Sonnet 4
-**Dependencies:** None
-**Description:** Create base project with TypeScript, ESLint, and testing
-
-**Acceptance Criteria:**
-- [ ] Package.json with required dependencies
-- [ ] TypeScript configuration
-- [ ] ESLint and Prettier setup
-- [ ] Jest testing framework configured
-
-## Ticket 002: Implement WebSocket server
-**Model:** Opus 4
-**Dependencies:** 001
-**Description:** Build WebSocket server with room management
-
-**Acceptance Criteria:**
-- [ ] WebSocket server on port 8080
-- [ ] Room creation and joining logic
-- [ ] Client connection handling
-- [ ] Automatic reconnection support
-```
-
-### Execution Modes
-
-**Sequential Execution**
-```bash
-hydra ticket execute 001
-hydra ticket execute 002
-```
-
-**Parallel Execution**
-```bash
-hydra ticket parallel --workers 3
-```
-
-**Automatic Workflow**
-```bash
-hydra ticket auto --parallel 4
-```
-
----
-
-## CLI Reference
-
-### Ticket Operations
-
-```bash
-# Generate tickets from description
-hydra ticket create "project description"
-
-# Execute single ticket
-hydra ticket execute 001 --tickets custom.md
-
-# Parallel execution with monitoring
-hydra ticket parallel --workers 4 --save-log
-
-# Verify ticket completion
-hydra ticket verify 001
-
-# Run quality gates
-hydra ticket quality 001 --save
-```
-
-### Claude Code Management
-
-```bash
-# Direct execution
-hydra claude execute "task" --timeout 600 --cwd /project
-
-# Session management
-hydra claude session /path/to/project --name dev_session
-hydra claude list
-hydra claude attach dev_session
-hydra claude kill dev_session
-
-# State persistence
-hydra claude save dev_session
-hydra claude restore dev_session
-```
-
-### Template System
-
-```bash
-# List available templates
-hydra template list
-
-# Create from template
-hydra template create fastapi_service ./my-service \
-  --param project_name=MyService \
-  --param port=8000
-
-# Validate templates
-hydra template validate
-```
-
----
-
-## Python API
-
-### Basic Usage
-
-```python
-from hydra.parallel import ParallelExecutor
-from hydra.orchestrator import ClaudeCodeOrchestrator
-
-# Initialize executor
-executor = ParallelExecutor(max_workers=4)
-
-# Load and execute tickets
-tickets = executor.load_tickets("tickets.md")
-plan = executor.build_execution_plan()
-results = executor.execute_plan(plan, "tickets.md")
-
-# Generate report
-report = executor.generate_report(results)
-print(report)
-```
-
-### Advanced Integration
-
-```python
-from hydra.agents.pool import AgentPool
-from hydra.safety.file_lock import FileLockManager
-from hydra.monitoring import MonitoringService
-
-# Agent pool management
-pool = AgentPool(max_agents=6, idle_timeout=300)
-pool.start()
-agent_id = pool.spawn_agent("task_001")
-
-# File locking for concurrent operations
-lock_manager = FileLockManager()
-if lock_manager.acquire_lock("src/main.py", agent_id):
-    # Safe to modify file
-    pass
-lock_manager.release_lock("src/main.py", agent_id)
-
-# Real-time monitoring
-monitor = MonitoringService()
-monitor.track_execution("task_001", metrics)
-```
-
----
-
-## Architecture
-
-### Execution Flow
-
-```
-┌─────────────────────────────────────┐
-│         CLI Entry Point             │
-│    (hydra ticket parallel)          │
-└─────────────┬───────────────────────┘
-              │
-┌─────────────▼───────────────────────┐
-│      ParallelExecutor               │
-│   - Dependency resolution           │
-│   - Wave-based scheduling           │
-│   - Resource allocation             │
-└─────────────┬───────────────────────┘
-              │
-┌─────────────▼───────────────────────┐
-│         AgentPool                   │
-│   - Session lifecycle               │
-│   - Health checking                 │
-│   - Dynamic scaling                 │
-└─────────────┬───────────────────────┘
-              │
-┌─────────────▼───────────────────────┐
-│     ClaudeTmuxProvider              │
-│   - Terminal multiplexing           │
-│   - Interactive sessions            │
-│   - Prompt automation               │
-└─────────────────────────────────────┘
-```
-
-### Component Overview
-
-**Parallel Executor**
-- Topological sort for dependency resolution
-- Wave-based execution planning
-- Thread pool management
-- Progress tracking and reporting
-
-**Agent Pool**
-- Dynamic agent spawning and termination
-- Session reuse and health monitoring
-- Automatic cleanup of idle agents
-- Resource limit enforcement
-
-**File Lock Manager**
-- Thread-safe file access control
-- Deadlock detection and prevention
-- Timeout-based lock acquisition
-- Automatic cleanup on agent termination
-
-**Quality Gates**
-- Language detection and tool selection
-- Automatic execution of lint/test/build
-- Configurable pass/fail criteria
-- Report generation and persistence
-
----
-
-## Performance
-
-### Concurrency Metrics
-
-| Configuration | Agents | Tickets | Time | Efficiency |
-|--------------|--------|---------|------|------------|
-| Sequential | 1 | 10 | 600s | 100% |
-| Parallel-3 | 3 | 10 | 220s | 91% |
-| Parallel-5 | 5 | 10 | 140s | 86% |
-| Parallel-8 | 8 | 10 | 95s | 79% |
-
-### Optimization Strategies
-
-**Session Pooling**
-- Pre-warmed sessions reduce startup from 30s to <1s
-- Connection reuse eliminates overhead
-- Health checking ensures reliability
-
-**Intelligent Scheduling**
-- Dependency-aware task distribution
-- Work stealing for load balancing
-- Resource prediction and allocation
-
-**File Conflict Resolution**
-- Predictive locking based on task analysis
-- Compatible change detection
-- Automatic conflict resolution
-
----
-
-## Configuration
-
-### Project Configuration
-
-Create `CLAUDE.md` in your project root:
-
-```markdown
-## Project Context
-Node.js microservices with TypeScript
-
-## Quality Commands
-- Lint: npm run lint
-- Test: npm test
-- Build: npm run build
-
-## Conventions
-- Functional programming patterns
-- Error-first callbacks
-- Comprehensive JSDoc comments
-```
-
-### Environment Variables
-
-```bash
-# Provider selection
-export LLM_PROVIDER=claude_tmux    # or anthropic, openai
-export CLAUDE_CLI_PATH=/usr/local/bin/claude
-
-# Performance tuning
-export MAX_WORKERS=6
-export LLM_TIMEOUT=300
-export SESSION_POOL_SIZE=5
-export IDLE_TIMEOUT=180
-
-# Dashboard configuration
-export DASHBOARD_PORT=8080
-export DASHBOARD_HOST=0.0.0.0
-
-# Safety settings
-export ALLOW_GIT_OPERATIONS=false
-export SANDBOX_MODE=true
-export MAX_FILE_SIZE=10485760
-```
-
----
-
-## Development
-
-### Testing
-
-```bash
-# Unit tests with coverage
-pytest tests/unit/ --cov=hydra --cov-report=html
-
-# Integration tests
-pytest tests/integration/
-
-# Parallel execution tests
-pytest tests/test_parallel.py -v
-
-# Performance benchmarks
-python benchmarks/concurrency.py
-```
-
-### Code Quality
-
-```bash
-# Format code
-ruff format src/
-
-# Lint with autofix
-ruff check --fix src/
-
-# Type checking
-mypy src/hydra --strict
-
-# Security scan
-bandit -r src/
-```
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Write tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
----
-
-## Examples
-
-### Build Full-Stack Application
-
-```bash
-# Generate comprehensive tickets
-hydra ticket create "Build a SaaS platform with Next.js frontend, 
-FastAPI backend, PostgreSQL database, Redis caching, 
-Stripe payments, and AWS deployment"
-
-# Execute with maximum parallelism
-hydra ticket parallel --workers 8
-
-# Monitor dashboard
+# 3. Monitor progress
 open http://localhost:8080
 ```
 
-### Complex Refactoring
+## Core Commands
 
+### Single Task
 ```bash
-# Large-scale refactoring
-hydra claude execute "Refactor the entire codebase to use 
-async/await patterns, add comprehensive error handling, 
-implement retry logic with exponential backoff, 
-and add distributed tracing" --timeout 900
+hydra claude execute "Create a FastAPI service with JWT auth"
 ```
 
-### Microservices Development
-
+### Ticket Workflow
 ```bash
-# Generate microservices architecture
-hydra ticket create "Create microservices: 
-- Auth service with JWT and OAuth2
-- User service with profile management  
-- Payment service with Stripe integration
-- Notification service with email/SMS
-- API gateway with rate limiting"
+# Generate tickets
+hydra ticket create "project description"
 
-# Deploy parallel development
-hydra ticket auto --parallel 5 --dir ./microservices
+# Execute in parallel
+hydra ticket parallel --workers 4
+
+# Verify and fix incomplete work
+hydra ticket verify-parallel --workers 4
 ```
 
----
-
-## Troubleshooting
-
-### Common Issues
-
-**Claude CLI not found**
+### Session Management
 ```bash
-export CLAUDE_CLI_PATH=$(which claude)
-```
-
-**tmux not installed**
-```bash
-# Ubuntu/Debian
-sudo apt-get install tmux
-
-# macOS
-brew install tmux
-```
-
-**Session timeout**
-```bash
-export LLM_TIMEOUT=600  # Increase timeout
-```
-
-**Agent pool exhausted**
-```bash
-export MAX_WORKERS=8  # Increase pool size
-```
-
-### Debug Mode
-
-```bash
-# Enable verbose logging
-export HYDRA_DEBUG=1
-
-# Check agent status
+hydra claude session /project --name dev
 hydra claude list
-
-# View execution logs
-tail -f .hydra/logs/execution.log
+hydra claude attach dev
 ```
 
----
+## How It Works
+
+1. **Create Tickets**: Break down your project into atomic tasks with dependencies
+2. **Parallel Execution**: Multiple agents work simultaneously on different tickets
+3. **Smart Coordination**: Dependency resolution, file locking, conflict prevention
+4. **Quality Gates**: Automatic testing, linting, and verification
+5. **Live Monitoring**: Real-time dashboard shows progress and logs
+
+## Example Ticket
+
+```markdown
+## Ticket 001: Setup API
+**Model:** sonnet
+**Dependencies:** None
+**Description:** Create FastAPI application
+
+**Acceptance Criteria:**
+- [ ] Create main.py with FastAPI app
+- [ ] Add health check endpoint
+- [ ] Setup error handling
+```
+
+## Documentation
+
+- 📚 **[Full Documentation](docs/)** - Complete reference and guides
+- 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - System design and components
+- 🔧 **[API Reference](docs/API_REFERENCE.md)** - Python API and integration
+- 💡 **[Examples](docs/examples/)** - Real-world use cases
+- 🐛 **[Troubleshooting](docs/troubleshooting/)** - Common issues and solutions
+
+## Testing Commands
+
+Try these to see Hydra in action:
+
+```bash
+# Build a complete web app
+hydra ticket create "Build a todo app with React frontend and FastAPI backend"
+hydra ticket parallel --workers 4
+
+# Verify all work is complete
+hydra ticket verify-parallel --workers 4
+
+# Check the results
+ls -la
+cat tickets.md
+```
 
 ## License
 

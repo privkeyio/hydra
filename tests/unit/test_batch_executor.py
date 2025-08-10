@@ -9,6 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from hydra.parallel.batch_executor import (
+    BatchConfig,
+    BatchExecutor,
+    BatchGroup,
+    TicketCompatibilityAnalyzer
+)
+
 
 class TestTicketCompatibilityAnalyzer(unittest.TestCase):
     """Test the ticket compatibility analysis."""
@@ -126,7 +133,7 @@ class TestBatchExecutor:
         """Test BatchExecutor initializes correctly."""
         config = BatchConfig(max_batch_size=3)
         
-        with patch('hydra.parallel.batch_executor.get_file_lock_manager'), \
+        with patch('hydra.parallel.async_executor.get_file_lock_manager'), \
              patch('hydra.agents.pool.AgentPool') as mock_pool:
             
             mock_pool_instance = MagicMock()
@@ -194,7 +201,7 @@ class TestBatchExecutor:
                 enable_batching=True
             )
             
-            with patch('hydra.parallel.batch_executor.get_file_lock_manager'), \
+            with patch('hydra.parallel.async_executor.get_file_lock_manager'), \
                  patch('hydra.agents.pool.AgentPool') as mock_pool, \
                  patch('hydra.parallel.batch_executor.parse_ticket') as mock_parse:
                 
@@ -280,7 +287,7 @@ class TestBatchExecutor:
         """Test that compatible tickets are grouped correctly."""
         config = BatchConfig(max_batch_size=3, min_tickets_for_batch=2)
         
-        with patch('hydra.parallel.batch_executor.get_file_lock_manager'), \
+        with patch('hydra.parallel.async_executor.get_file_lock_manager'), \
              patch('hydra.agents.pool.AgentPool') as mock_pool:
             
             mock_pool_instance = MagicMock()

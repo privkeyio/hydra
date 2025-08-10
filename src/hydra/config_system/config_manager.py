@@ -233,53 +233,54 @@ class ConfigManager:
         overrides = {}
 
         # LLM configuration
-        if os.getenv('HYDRA_LLM_PROVIDER'):
-            overrides.setdefault('llm', {})['provider'] = os.getenv('HYDRA_LLM_PROVIDER')
+        if provider := os.getenv('HYDRA_LLM_PROVIDER'):
+            overrides.setdefault('llm', {})['provider'] = provider
 
-        if os.getenv('HYDRA_LLM_MODEL'):
-            overrides.setdefault('llm', {})['model'] = os.getenv('HYDRA_LLM_MODEL')
+        if model := os.getenv('HYDRA_LLM_MODEL'):
+            overrides.setdefault('llm', {})['model'] = model
 
-        if os.getenv('HYDRA_LLM_TEMPERATURE'):
+        if temp := os.getenv('HYDRA_LLM_TEMPERATURE'):
             try:
-                overrides.setdefault('llm', {})['temperature'] = float(os.getenv('HYDRA_LLM_TEMPERATURE'))
+                overrides.setdefault('llm', {})['temperature'] = float(temp)
             except ValueError:
                 pass
 
-        if os.getenv('HYDRA_LLM_MAX_TOKENS'):
+        if tokens := os.getenv('HYDRA_LLM_MAX_TOKENS'):
             try:
-                overrides.setdefault('llm', {})['max_tokens'] = int(os.getenv('HYDRA_LLM_MAX_TOKENS'))
+                overrides.setdefault('llm', {})['max_tokens'] = int(tokens)
             except ValueError:
                 pass
 
-        if os.getenv('HYDRA_LLM_TIMEOUT'):
+        if timeout := os.getenv('HYDRA_LLM_TIMEOUT'):
             try:
-                overrides.setdefault('llm', {})['timeout'] = int(os.getenv('HYDRA_LLM_TIMEOUT'))
+                overrides.setdefault('llm', {})['timeout'] = int(timeout)
             except ValueError:
                 pass
 
         # Agent configuration
-        if os.getenv('HYDRA_AGENT_MAX_DEPTH'):
+        if depth := os.getenv('HYDRA_AGENT_MAX_DEPTH'):
             try:
-                overrides.setdefault('agent', {})['max_depth'] = int(os.getenv('HYDRA_AGENT_MAX_DEPTH'))
+                overrides.setdefault('agent', {})['max_depth'] = int(depth)
             except ValueError:
                 pass
 
-        if os.getenv('HYDRA_AGENT_RETRY_ATTEMPTS'):
+        if retries := os.getenv('HYDRA_AGENT_RETRY_ATTEMPTS'):
             try:
-                overrides.setdefault('agent', {})['retry_attempts'] = int(os.getenv('HYDRA_AGENT_RETRY_ATTEMPTS'))
+                overrides.setdefault('agent', {})['retry_attempts'] = int(retries)
             except ValueError:
                 pass
 
         # Logging configuration
-        if os.getenv('HYDRA_LOG_LEVEL'):
-            overrides.setdefault('logging', {})['level'] = os.getenv('HYDRA_LOG_LEVEL')
+        if level := os.getenv('HYDRA_LOG_LEVEL'):
+            overrides.setdefault('logging', {})['level'] = level
 
-        if os.getenv('HYDRA_LOG_FILE'):
-            overrides.setdefault('logging', {})['file'] = os.getenv('HYDRA_LOG_FILE')
+        if file := os.getenv('HYDRA_LOG_FILE'):
+            overrides.setdefault('logging', {})['file'] = file
 
         # Security configuration
-        if os.getenv('HYDRA_ENCRYPT_SENSITIVE'):
-            overrides.setdefault('security', {})['encrypt_sensitive'] = os.getenv('HYDRA_ENCRYPT_SENSITIVE').lower() == 'true'
+        if encrypt := os.getenv('HYDRA_ENCRYPT_SENSITIVE'):
+            encrypt_bool = encrypt.lower() == 'true'
+            overrides.setdefault('security', {})['encrypt_sensitive'] = encrypt_bool
 
         return overrides
 
@@ -292,15 +293,18 @@ class ConfigManager:
                 elif config_path.suffix == '.json':
                     config = json.load(f)
                 else:
-                    raise ConfigurationError(f"Unsupported config file format: {config_path}")
+                    msg = f"Unsupported config file format: {config_path}"
+                    raise ConfigurationError(msg)
 
             # Decrypt sensitive values if needed
             return self._decrypt_sensitive_values(config or {})
 
         except (yaml.YAMLError, json.JSONDecodeError) as e:
-            raise ConfigurationError(f"Invalid configuration file {config_path}: {e}")
+            msg = f"Invalid configuration file {config_path}: {e}"
+            raise ConfigurationError(msg) from e
         except Exception as e:
-            raise ConfigurationError(f"Error loading configuration file {config_path}: {e}")
+            msg = f"Error loading configuration file {config_path}: {e}"
+            raise ConfigurationError(msg) from e
 
     def _merge_configs(self):
         """Merge all configuration sources according to precedence."""
@@ -314,12 +318,15 @@ class ConfigManager:
         self._merged_config = merged
         self._validate_configuration(self._merged_config)
 
-    def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    def _deep_merge(
+        self, base: Dict[str, Any], override: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Deep merge two dictionaries, with override taking precedence."""
         result = deepcopy(base)
 
         for key, value in override.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            if (key in result and isinstance(result[key], dict) and 
+                isinstance(value, dict)):
                 result[key] = self._deep_merge(result[key], value)
             else:
                 result[key] = deepcopy(value)
@@ -331,7 +338,8 @@ class ConfigManager:
         try:
             validate(instance=config, schema=self.schema)
         except ValidationError as e:
-            raise ConfigurationError(f"Configuration validation failed: {e.message}") from e
+            msg = f"Configuration validation failed: {e.message}"
+            raise ConfigurationError(msg) from e
 
     def _encrypt_sensitive_values(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Encrypt sensitive configuration values."""
@@ -343,10 +351,17 @@ class ConfigManager:
 
         def encrypt_recursive(obj: Any, path: str = '') -> Any:
             if isinstance(obj, dict):
-                return {k: encrypt_recursive(v, f"{path}.{k}" if path else k) for k, v in obj.items()}
+                return {
+                    k: encrypt_recursive(v, f"{path}.{k}" if path else k) 
+                    for k, v in obj.items()
+                }
             elif isinstance(obj, list):
-                return [encrypt_recursive(item, f"{path}[{i}]") for i, item in enumerate(obj)]
-            elif isinstance(obj, str) and any(key in path.lower() for key in sensitive_keys):
+                return [
+                    encrypt_recursive(item, f"{path}[{i}]") 
+                    for i, item in enumerate(obj)
+                ]
+            elif (isinstance(obj, str) and 
+                  any(key in path.lower() for key in sensitive_keys)):
                 if not obj.startswith('encrypted:'):
                     encrypted = self._fernet.encrypt(obj.encode()).decode()
                     return f"encrypted:{encrypted}"
@@ -458,7 +473,9 @@ class ConfigManager:
         if callback in self._change_callbacks:
             self._change_callbacks.remove(callback)
 
-    def _notify_change_callbacks(self, old_config: Dict[str, Any], new_config: Dict[str, Any]):
+    def _notify_change_callbacks(
+        self, old_config: Dict[str, Any], new_config: Dict[str, Any]
+    ):
         """Notify all registered callbacks of configuration changes."""
         for callback in self._change_callbacks:
             try:
@@ -479,7 +496,8 @@ class ConfigManager:
             self._merged_config = migration_func(self._merged_config)
             self.set('version', to_version)
         else:
-            raise ConfigurationError(f"No migration path from {from_version} to {to_version}")
+            msg = f"No migration path from {from_version} to {to_version}"
+            raise ConfigurationError(msg)
 
     def _migrate_1_0_to_1_1(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Migrate configuration from version 1.0.0 to 1.1.0."""

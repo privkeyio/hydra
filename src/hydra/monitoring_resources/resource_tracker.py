@@ -55,7 +55,9 @@ class ResourceUsagePrediction:
         predicted = recent_avg * (1 + trend)
 
         # Calculate confidence based on variance
-        variance = sum((v - recent_avg) ** 2 for v in values[-10:]) / min(10, len(values))
+        variance = sum((v - recent_avg) ** 2 for v in values[-10:]) / min(
+            10, len(values)
+        )
         confidence_calc = 1.0 / (1.0 + variance / recent_avg) if recent_avg > 0 else 0.1
         confidence = max(0.1, min(0.95, confidence_calc))
 
@@ -97,7 +99,10 @@ class ResourceLimits:
         return violations
 
     def _trigger_throttling(self, metric: str, value: float, limit: float):
-        msg = f"Resource limit exceeded: {metric}={value:.2f} > {limit:.2f}, enabling throttling"
+        msg = (
+            f"Resource limit exceeded: {metric}={value:.2f} > {limit:.2f}, "
+            f"enabling throttling"
+        )
         logger.warning(msg)
         for callback in self.throttling_callbacks[metric]:
             try:
@@ -149,7 +154,8 @@ class APICallTracker:
             # Check rate limit
             limit = self.rate_limits.get(provider, self.rate_limits['default'])
             if len(self.call_history[key]) >= limit:
-                msg = f"Rate limit exceeded for {key}: {len(self.call_history[key])} >= {limit}"
+                count = len(self.call_history[key])
+                msg = f"Rate limit exceeded for {key}: {count} >= {limit}"
                 logger.warning(msg)
                 return False
 
@@ -200,7 +206,9 @@ class ResourceAlert:
 
         # Check for new alerts
         for threshold_name, threshold_value in self.thresholds.items():
-            metric_name = threshold_name.replace('_critical', '').replace('_warning', '')
+            metric_name = (
+                threshold_name.replace('_critical', '').replace('_warning', '')
+            )
             severity = 'critical' if '_critical' in threshold_name else 'warning'
 
             if metric_name in metrics and metrics[metric_name] > threshold_value:
@@ -303,7 +311,7 @@ class ResourceTracker:
         logger.info("Resource monitoring stopped")
 
     def _monitoring_loop(self):
-        """Main monitoring loop that runs in a separate thread."""
+        """Run the monitoring loop in a separate thread."""
         while self.running:
             try:
                 metrics = self._collect_system_metrics()
@@ -508,7 +516,7 @@ class ResourceDashboard:
         avg_metrics = {}
         for metric in ['cpu_percent', 'memory_percent', 'disk_percent']:
             values = [
-                h['metrics'].get(metric, 0) for h in historical 
+                h['metrics'].get(metric, 0) for h in historical
                 if metric in h.get('metrics', {})
             ]
             avg_metrics[f'{metric}_24h_avg'] = (

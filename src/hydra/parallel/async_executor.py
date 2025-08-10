@@ -193,7 +193,8 @@ class AsyncParallelExecutor:
 
     async def execute_ticket(self, ticket_id: str, tickets_path: str) -> bool:
         """Execute a single ticket asynchronously."""
-        start_delay = asyncio.create_task(asyncio.sleep(0.1 * hash(ticket_id) % 50 / 10))
+        delay_time = 0.1 * hash(ticket_id) % 50 / 10
+        start_delay = asyncio.create_task(asyncio.sleep(delay_time))
         await start_delay
 
         logger.info(f"Starting async execution of ticket {ticket_id}")
@@ -254,29 +255,34 @@ class AsyncParallelExecutor:
             self.orchestrators[ticket_id] = orchestrator
 
             # Build prompt
-            prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_id} from tickets.md - NOT any other ticket!
+            prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_id} from
+tickets.md - NOT any other ticket!
 
 Find and execute specifically "## Ticket {ticket_id}:" in tickets.md
 
-DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_id}.
+DO NOT work on any other ticket even if it appears first or seems easier.
+You are assigned ONLY to ticket {ticket_id}.
 
 PYTHON CODE QUALITY REQUIREMENTS:
 - Add module docstrings to all Python files
-- Include __init__.py in all new package directories  
+- Include __init__.py in all new package directories
 - Use proper type hints for all functions
 - Follow PEP 8 style guidelines
 - Avoid unused imports
 - Add error handling where appropriate
 
-Be minimalistic, surgical and future proof! 
+Be minimalistic, surgical and future proof!
 Avoid using any code or comments that may be construed as AI generated.
 Make sure you do a good job because other LLMs said your code sucked!
 
-When you finish, ensure acceptance criteria is met then update tickets.md and then run lint, build, test etc before we move on.
+When you finish, ensure acceptance criteria is met then update tickets.md
+and then run lint, build, test etc before we move on.
 
-DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
+DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be
+production quality, take your time.
 
-REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."""
+REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other
+tickets."""
 
             # Create and execute task
             task = orchestrator.create_task(
@@ -297,7 +303,8 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 from hydra.ticket_workflow import validate_acceptance_criteria
 
                 validation_passed = await asyncio.get_event_loop().run_in_executor(
-                    None, validate_acceptance_criteria, ticket_data, str(self.project_root)
+                    None, validate_acceptance_criteria, ticket_data,
+                    str(self.project_root)
                 )
 
                 if validation_passed:
@@ -307,7 +314,9 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     raise Exception("Acceptance criteria not met")
 
                 # Run quality fixes
-                logger.info(f"🔧 Running automatic quality fixes for ticket {ticket_id}")
+                logger.info(
+                    f"🔧 Running automatic quality fixes for ticket {ticket_id}"
+                )
                 from hydra.quality.auto_fixer import QualityAutoFixer
                 fixer = QualityAutoFixer(self.project_root)
                 fixes = await asyncio.get_event_loop().run_in_executor(

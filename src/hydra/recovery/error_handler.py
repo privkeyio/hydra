@@ -121,7 +121,11 @@ class FileRollbackStrategy(RecoveryStrategy):
     """Strategy for rolling back file system changes."""
 
     def __init__(self, backup_dir: Optional[Path] = None):
-        self.backup_dir = backup_dir or Path.home() / ".hydra" / "backups"
+        if backup_dir is None:
+            log_dir = Path.home() / ".hydra" / "logs"
+            self.backup_dir = log_dir.parent / "backups"
+        else:
+            self.backup_dir = backup_dir
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
     def can_recover(self, error_context: ErrorContext) -> bool:
@@ -266,9 +270,11 @@ class ErrorRecoveryManager:
         self.log_dir = log_dir or Path.home() / ".hydra" / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
+        backup_dir = self.log_dir.parent / "backups"
+
         self.strategies: List[RecoveryStrategy] = [
             RetryStrategy(),
-            FileRollbackStrategy(),
+            FileRollbackStrategy(backup_dir=backup_dir),
             ProcessRecoveryStrategy()
         ]
 
@@ -443,7 +449,7 @@ class ErrorRecoveryManager:
 
     async def create_checkpoint(self, operation_id: str, files_to_backup: List[Path]):
         """Create a checkpoint before risky operations."""
-        backup_dir = Path.home() / ".hydra" / "backups"
+        backup_dir = self.log_dir.parent / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
 
         backup_data = {

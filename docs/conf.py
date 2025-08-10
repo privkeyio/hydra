@@ -12,8 +12,14 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 project = "Hydra Agent System"
 copyright = "2024, Hydra Team"
 author = "Hydra Team"
-release = "1.0.0"
-version = "1.0.0"
+
+# Version info - automatically pulled from package
+import importlib.metadata
+try:
+    release = importlib.metadata.version('hydra-agents')
+except importlib.metadata.PackageNotFoundError:
+    release = "1.0.0"
+version = '.'.join(release.split('.')[:2])  # Major.minor version
 
 # -- General configuration ---------------------------------------------------
 extensions = [

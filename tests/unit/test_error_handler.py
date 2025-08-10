@@ -4,6 +4,7 @@ Unit tests for error recovery system.
 
 import asyncio
 import json
+import subprocess
 import tempfile
 import pytest
 from datetime import datetime, timedelta

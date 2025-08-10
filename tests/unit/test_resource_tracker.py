@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from hydra.monitoring.resource_tracker import (
+from hydra.monitoring_resources.resource_tracker import (
     ResourceTracker, ResourceDashboard, ResourceLimits, APICallTracker, 
     ResourceAlert, ResourceUsagePrediction
 )

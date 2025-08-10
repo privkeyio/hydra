@@ -360,7 +360,7 @@ class CodeExecutionValidator(SecurityPolicy):
             return RiskLevel.HIGH
 
         suspicious_found = any(
-            re.search(pattern, code, re.IGNORECASE) 
+            re.search(pattern, code, re.IGNORECASE)
             for pattern in self.suspicious_patterns
         )
         if suspicious_found:

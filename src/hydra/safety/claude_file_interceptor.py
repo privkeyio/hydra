@@ -61,9 +61,22 @@ class FileModification:
         changes = set()
         content = self.ticket_content.lower()
 
-        # Detect specific changes
+        # Detect specific changes with more granular analysis
         if 'import' in content or 'from' in content:
-            changes.add('imports')
+            # Make import changes more specific to avoid false conflicts
+            import_words = set()
+            words = content.split()
+            for i, word in enumerate(words):
+                if word == 'import' and i + 1 < len(words):
+                    import_words.add(f'import_{words[i+1]}')
+                elif word == 'from' and i + 1 < len(words):
+                    import_words.add(f'from_{words[i+1]}')
+            
+            if import_words:
+                changes.update(import_words)
+            else:
+                changes.add('imports')
+                
         if 'class' in content or 'def' in content:
             changes.add('definitions')
         if 'config' in content or 'setting' in content:
@@ -94,7 +107,32 @@ class FileModification:
         if self._affects_different_sections(other):
             return True
 
+        # If both have empty predicted changes, assume they might be compatible
+        # This handles the case where content analysis didn't detect specific change types
+        if not self.predicted_changes and not other.predicted_changes:
+            # Use a simple heuristic: if ticket content is very different, assume compatible
+            if self._has_low_content_similarity(other):
+                return True
+
         return False
+
+    def _has_low_content_similarity(self, other: 'FileModification') -> bool:
+        """Check if ticket content has low similarity, suggesting different modifications."""
+        # Simple word-based similarity check
+        self_words = set(self.ticket_content.lower().split())
+        other_words = set(other.ticket_content.lower().split())
+        
+        if not self_words and not other_words:
+            return False
+        
+        if not self_words or not other_words:
+            return True
+            
+        intersection = self_words & other_words
+        union = self_words | other_words
+        
+        similarity = len(intersection) / len(union) if union else 0
+        return similarity < 0.3  # Less than 30% similarity suggests different modifications
 
     def _affects_different_sections(self, other: 'FileModification') -> bool:
         """Check if modifications affect different file sections."""
@@ -466,22 +504,24 @@ class SmartFileLockManager:
 
     def _check_circular_dependency(self, agent1: str, agent2: str) -> bool:
         """Check for circular dependency between agents."""
-        visited = set()
-
-        def dfs(current: str, target: str, path: Set[str]) -> bool:
-            if current == target and len(path) > 1:
+        def has_path(start: str, target: str) -> bool:
+            if start == target:
                 return True
-            if current in visited or current in path:
-                return False
-
-            path.add(current)
-            for neighbor in self.wait_graph.get(current, set()):
-                if dfs(neighbor, target, path):
+            visited = set()
+            stack = [start]
+            
+            while stack:
+                current = stack.pop()
+                if current == target:
                     return True
-            path.remove(current)
+                if current in visited:
+                    continue
+                visited.add(current)
+                stack.extend(self.wait_graph.get(current, set()))
             return False
 
-        return dfs(agent1, agent2, set()) or dfs(agent2, agent1, set())
+        # Check if agent1 waits for agent2 AND agent2 waits for agent1
+        return has_path(agent1, agent2) and has_path(agent2, agent1)
 
     def _deadlock_monitor(self):
         """Monitor for deadlocks and resolve them."""
@@ -546,30 +586,37 @@ class SmartFileLockManager:
     def _find_cycle_agents(self, start_agent: str) -> Set[str]:
         """Find all agents involved in a deadlock cycle."""
         visited = set()
-        cycle = set()
+        rec_stack = set()
+        cycle_agents = set()
 
         def dfs(agent: str, path: List[str]) -> bool:
-            if agent in path:
-                # Found cycle
-                cycle_start = path.index(agent)
-                cycle.update(path[cycle_start:])
-                return True
-
-            if agent in visited:
-                return False
-
             visited.add(agent)
+            rec_stack.add(agent)
             path.append(agent)
 
             for neighbor in self.wait_graph.get(agent, set()):
-                if dfs(neighbor, path):
+                if neighbor in path:
+                    # Found cycle - add all agents in the cycle
+                    cycle_start = path.index(neighbor)
+                    cycle_agents.update(path[cycle_start:])
+                    cycle_agents.add(neighbor)
+                    return True
+                elif neighbor not in visited and dfs(neighbor, path):
                     return True
 
+            rec_stack.remove(agent)
             path.pop()
             return False
 
         dfs(start_agent, [])
-        return cycle
+        
+        # If no cycle found starting from start_agent, check all connected agents
+        if not cycle_agents:
+            for agent in self.wait_graph:
+                if agent not in visited:
+                    dfs(agent, [])
+        
+        return cycle_agents
 
     def _cleanup_wait_graph(self, agent_id: str):
         """Clean up wait graph after agent is removed."""
@@ -623,9 +670,12 @@ class SmartFileLockManager:
         total_predicted = self.conflict_stats['predicted_conflicts']
         false_conflicts = self.conflict_stats['false_conflicts']
 
-        false_conflict_rate = ((false_conflicts / total_predicted * 100) 
-                               if total_predicted > 0 else 0)
-        accuracy = 100 - false_conflict_rate
+        if total_predicted > 0:
+            false_conflict_rate = (false_conflicts / total_predicted * 100)
+            accuracy = 100 - false_conflict_rate
+        else:
+            false_conflict_rate = 0
+            accuracy = 0
 
         return {
             'predicted_conflicts': total_predicted,

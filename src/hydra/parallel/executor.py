@@ -18,7 +18,7 @@ from hydra.orchestrator.claude_code_orchestrator import (
 )
 from hydra.quality import QualityGateRunner
 from hydra.safety.file_lock import get_file_lock_manager
-from hydra.ticket_workflow import mark_ticket_completed, parse_ticket
+from hydra.ticket_workflow import mark_ticket_completed, mark_ticket_in_progress, parse_ticket
 
 
 class ExecutionStatus(Enum):
@@ -108,7 +108,9 @@ class ParallelExecutor:
         for ticket_id in ticket_ids:
             ticket_data = parse_ticket(tickets_path, ticket_id)
             if ticket_data:
-                if ticket_data.get('completed'):
+                # Check status field
+                ticket_status = ticket_data.get('status', 'TODO').upper()
+                if ticket_data.get('completed') or ticket_status == 'DONE':
                     # Track completed tickets but mark them as already done
                     node = TicketNode(
                         ticket_id=ticket_id,
@@ -197,6 +199,16 @@ class ParallelExecutor:
 
     def execute_ticket(self, ticket_id: str, tickets_path: str) -> bool:
         """Execute a single ticket."""
+        # Get thread info for debugging
+        thread_id = threading.current_thread().name
+        print(f"🧵 Thread {thread_id} assigned to Ticket {ticket_id}")
+        
+        # Add staggered start to prevent Claude Code session collisions
+        import random
+        start_delay = random.uniform(0.5, 5.0)  # Random delay between 0.5-5 seconds
+        print(f"⏱️  Ticket {ticket_id} starting in {start_delay:.1f}s to prevent session collision...")
+        time.sleep(start_delay)
+        
         # Spawn an agent for this ticket
         agent_id = self.agent_pool.spawn_agent(ticket_id)
         if not agent_id:
@@ -229,6 +241,9 @@ class ParallelExecutor:
         print(f"⏰ Started at: {time.strftime('%H:%M:%S')}")
         print('='*60)
 
+        # Mark ticket as IN_PROGRESS in tickets.md
+        mark_ticket_in_progress(tickets_path, ticket_id)
+
         try:
             # Parse ticket for full details
             ticket_data = parse_ticket(tickets_path, ticket_id)
@@ -249,37 +264,22 @@ class ParallelExecutor:
             orchestrator = ClaudeCodeOrchestrator()
             self.orchestrators[ticket_id] = orchestrator
 
-            # Build prompt with comprehensive instructions
-            prompt = f"""Execute ticket {ticket_id} in tickets.md
+            # Build prompt - Claude Code will read tickets.md directly from the working directory
+            prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_id} from tickets.md - NOT any other ticket!
 
-Task: {ticket_data['title']}
-Description: {ticket_data['description']}
+Find and execute specifically "## Ticket {ticket_id}:" in tickets.md
 
-Acceptance Criteria:
-{chr(10).join(f'- {criteria}' for criteria in ticket_data['acceptance_criteria'])}
+DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_id}.
 
-Working Directory: {self.project_root}
-
-CRITICAL INSTRUCTIONS:
 Be minimalistic, surgical and future proof! 
+Avoid using any code or comments that may be construed as AI generated.
+Make sure you do a good job because other LLMs said your code sucked!
 
-QUALITY REQUIREMENTS:
-- Avoid using any code or comments that may be construed as AI generated
-- Make sure you do a good job because other LLMs said your code sucked!
-- DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! 
-- This has to be production quality, take your time
-- Write code that looks like it was written by a senior developer
-- Use proper error handling and edge case management
-- Follow established patterns in the existing codebase
+When you finish, ensure acceptance criteria is met then update tickets.md and then run lint, build, test etc before we move on.
 
-COMPLETION PROCESS:
-1. Implement ALL requirements from the ticket
-2. Ensure every acceptance criteria is fully met
-3. Update tickets.md to mark your criteria as complete: [x]
-4. Run lint, build, test commands to validate your work
-5. Only finish when everything passes and is production-ready
+DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
 
-Take your time and deliver excellence!"""
+REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."""
 
             # Create task with the actual ticket_id for unique session naming
             task = orchestrator.create_task(
@@ -376,6 +376,7 @@ Take your time and deliver excellence!"""
         results = {}
 
         print(f"\n🌊 Executing wave with {len(wave)} tickets: {', '.join(wave)}")
+        print(f"🔧 Using {min(len(wave), self.max_workers)} parallel workers")
 
         # Update dashboard wave
         if self.dashboard_state:
@@ -387,6 +388,7 @@ Take your time and deliver excellence!"""
                     pass
 
         max_workers = min(len(wave), self.max_workers)
+        print(f"🚀 Submitting {len(wave)} tickets to ThreadPoolExecutor with {max_workers} workers")
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self.execute_ticket, ticket_id, tickets_path): ticket_id

@@ -104,6 +104,7 @@ def parse_ticket(tickets_path, ticket_identifier):
         'number': ticket_identifier,
         'title': lines[0].strip(),
         'description': '',
+        'status': 'TODO',  # Default status
         'model': 'sonnet',
         'acceptance_criteria': [],
         'dependencies': [],
@@ -120,7 +121,13 @@ def parse_ticket(tickets_path, ticket_identifier):
     
     for line in lines[1:]:
         line = line.strip()
-        if line.startswith('**Model:**'):
+        if line.startswith('**Status:**'):
+            status_text = line.replace('**Status:**', '').strip().upper()
+            ticket['status'] = status_text
+            # Mark as completed if status is DONE
+            if status_text == 'DONE':
+                ticket['completed'] = True
+        elif line.startswith('**Model:**'):
             model_text = line.replace('**Model:**', '').strip().lower()
             ticket['model'] = 'opus' if 'opus' in model_text else 'sonnet'
         elif line.startswith('**Dependencies:**'):
@@ -431,10 +438,13 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         return False
 
     # Check if ticket is already completed
-    if ticket['completed']:
+    if ticket['completed'] or ticket.get('status') == 'DONE':
         print("✅ Ticket already completed!")
-        print("ℹ️  Skipping execution as ticket is marked as COMPLETED")
+        print("ℹ️  Skipping execution as ticket is marked as DONE")
         return True
+
+    # Mark ticket as IN_PROGRESS
+    mark_ticket_in_progress(tickets_path, ticket_identifier)
 
     model_emoji = "🧠" if ticket['model'] == 'opus' else "⚡"
     print(f"{model_emoji} Model: {ticket['model'].upper()}")
@@ -475,39 +485,22 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
     # Detect project language/framework from context
     project_context = detect_project_context(tickets_path)
 
-    # Build comprehensive prompt for Claude Code CLI to execute
-    # Claude Code will handle all file creation and editing with enhanced instructions
-    prompt = f"""Execute ticket {ticket_identifier} in tickets.md
+    # Build prompt - Claude Code will read tickets.md directly
+    prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_identifier} from tickets.md - NOT any other ticket!
 
-Task: {ticket['title']}
-Description: {ticket['description']}
+Find and execute specifically "## Ticket {ticket_identifier}:" in tickets.md
 
-Acceptance Criteria that MUST be met:
-{chr(10).join(f'- {criteria}' for criteria in ticket['acceptance_criteria'])}
+DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_identifier}.
 
-Project Context: {project_context}
-Working Directory: {os.getcwd()}
-
-CRITICAL INSTRUCTIONS:
 Be minimalistic, surgical and future proof!
+Avoid using any code or comments that may be construed as AI generated.
+Make sure you do a good job because other LLMs said your code sucked!
 
-QUALITY REQUIREMENTS:
-- Avoid using any code or comments that may be construed as AI generated
-- Make sure you do a good job because other LLMs said your code sucked!
-- DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS!
-- This has to be production quality, take your time
-- Write code that looks like it was written by a senior developer
-- Use proper error handling and edge case management
-- Follow established patterns in the existing codebase
+When you finish, ensure acceptance criteria is met then update tickets.md and then run lint, build, test etc before we move on.
 
-COMPLETION PROCESS:
-1. Implement ALL requirements from the ticket
-2. Ensure every acceptance criteria is fully met  
-3. Update tickets.md to mark your criteria as complete: [x]
-4. Run lint, build, test commands to validate your work
-5. Only finish when everything passes and is production-ready
+DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
 
-Take your time and deliver excellence!"""
+REMINDER: You are working on Ticket {ticket_identifier} ONLY. Ignore all other tickets."""
 
     print("🚀 Executing with production standards...")
     print("   ✅ No AI-generated patterns")
@@ -586,6 +579,50 @@ Take your time and deliver excellence!"""
             del os.environ['LLM_TIMEOUT']
 
 
+def mark_ticket_in_progress(tickets_path, ticket_identifier):
+    """Mark ticket as IN_PROGRESS in tickets.md."""
+    if not os.path.exists(tickets_path):
+        return
+
+    # Normalize ticket ID to 3 digits if it's numeric
+    if ticket_identifier.isdigit():
+        ticket_identifier = ticket_identifier.zfill(3)
+
+    with open(tickets_path, 'r') as f:
+        content = f.read()
+
+    # Try multiple ticket header patterns
+    patterns = [
+        rf'(## Ticket {ticket_identifier}:.*?)(?=## Ticket|\Z)',
+        rf'(## TICKET-{ticket_identifier}:.*?)(?=## TICKET-|\Z)',
+        rf'(## Ticket-{ticket_identifier}:.*?)(?=## Ticket-|\Z)',
+        rf'(## #{ticket_identifier}:.*?)(?=## #|\Z)',
+        rf'(## {ticket_identifier}:.*?)(?=## |\Z)',
+    ]
+
+    updated_content = content
+    ticket_found = False
+
+    for pattern in patterns:
+        def replace_ticket(match):
+            ticket_content = match.group(1)
+            # Update Status field to IN_PROGRESS
+            updated_content = re.sub(r'\*\*Status:\*\*\s*\w+', '**Status:** IN_PROGRESS', ticket_content)
+            return updated_content
+
+        flags = re.DOTALL | re.IGNORECASE
+        new_content = re.sub(pattern, replace_ticket, updated_content, flags=flags)
+        if new_content != updated_content:
+            updated_content = new_content
+            ticket_found = True
+            break
+
+    if ticket_found:
+        with open(tickets_path, 'w') as f:
+            f.write(updated_content)
+        print(f"🔄 Updated {tickets_path} - marked ticket {ticket_identifier} as IN_PROGRESS")
+
+
 def mark_ticket_completed(tickets_path, ticket_identifier):
     """Mark ticket as completed in tickets.md."""
     if not os.path.exists(tickets_path):
@@ -617,6 +654,8 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
             ticket_content = match.group(1)
             # Replace - [ ] with - [x]
             updated_content = ticket_content.replace('- [ ]', '- [x]')
+            # Update Status field to DONE
+            updated_content = re.sub(r'\*\*Status:\*\*\s*\w+', '**Status:** DONE', updated_content)
             return updated_content
 
         flags = re.DOTALL | re.IGNORECASE
@@ -629,7 +668,7 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
     if ticket_found:
         with open(tickets_path, 'w') as f:
             f.write(updated_content)
-        update_msg = f"✅ Updated {tickets_path} - marked ticket {ticket_identifier} completed"
+        update_msg = f"✅ Updated {tickets_path} - marked ticket {ticket_identifier} as DONE"
         print(update_msg)
     else:
         print(f"⚠️  Could not find ticket {ticket_identifier} to mark as completed")

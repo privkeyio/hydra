@@ -140,7 +140,9 @@ class ClaudeTmuxProvider(LLMProvider):
                 print("⚠️  Claude Code initialization timeout - proceeding anyway")
 
             # Send the implementation prompt with explicit file creation permission
-            print("📝 Sending task to Claude Code...")
+            print(f"📝 Sending task to Claude Code in session {session_name}...")
+            print(f"🎯 Task: Working on Ticket {ticket_id}" if ticket_id else "🎯 Generic task")
+            
             # Make the prompt VERY explicit about using tools
             enhanced_prompt = f"""You have permission to use ALL tools to complete this task.
 Please use the Write, Edit, and Bash tools as needed to create and modify files.
@@ -153,6 +155,10 @@ You have full permission to create any files needed for this task.
 When asked about file creation, always select option 2 'Yes, and don't ask again this session'.
 
 SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) without explicit user approval."""
+            
+            # Log the first part of the prompt to verify it's ticket-specific
+            print(f"📋 Prompt preview: {prompt[:200]}..." if len(prompt) > 200 else f"📋 Full prompt: {prompt}")
+            
             self._send_to_session(session_name, enhanced_prompt)
 
             # Give Claude time to process the prompt

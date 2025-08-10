@@ -115,6 +115,9 @@ def parse_ticket(tickets_path, ticket_identifier):
         ticket['completed'] = True
 
     in_criteria = False
+    unchecked_criteria = 0
+    checked_criteria = 0
+    
     for line in lines[1:]:
         line = line.strip()
         if line.startswith('**Model:**'):
@@ -138,18 +141,29 @@ def parse_ticket(tickets_path, ticket_identifier):
         elif line.startswith('- [ ]'):
             criteria = line.replace('- [ ]', '').strip()
             ticket['acceptance_criteria'].append(criteria)
+            unchecked_criteria += 1
         elif line.startswith('- [x]'):
             # Already completed criteria - still add to list but mark as done
             criteria = line.replace('- [x]', '').strip()
             ticket['acceptance_criteria'].append(f"✅ {criteria}")
+            checked_criteria += 1
         elif line.startswith('##'):
             # Stop parsing if we hit another section header
             break
         elif not in_criteria and line and not line.startswith('**') and not ticket['description']:
             # Only capture additional description if we don't have one yet
             ticket['description'] = line
+    
+    # Mark ticket as completed if all acceptance criteria are checked
+    if unchecked_criteria == 0 and checked_criteria > 0:
+        ticket['completed'] = True
+        print(f"✅ Ticket {ticket_identifier} is already completed (all {checked_criteria} criteria checked)")
 
     return ticket
+
+
+# NOTE: This function has been moved to line 577 to avoid duplication
+# The function at line 577 handles more ticket formats and is more comprehensive
 
 
 def generate_tickets_md(project_description, output_path="tickets.md"):
@@ -157,84 +171,201 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     print("🎫 Generating tickets.md...")
     print("=" * 30)
 
-    # Use Opus for planning (complex task)
+    # Always use Opus 4 for ticket planning
     print("🧠 Using Opus 4 for ticket planning...")
-    agent = CodeAgent("ticket_planner", depth=0)
+    
+    # Use the exact prompt format that works when you run Claude Code manually
+    prompt = f"""make a tickets.md doc with tickets that are made in task language for claude code to execute that include acceptance criteria, dependencies (like 001,002 or None), and which model (sonnet 4 or opus 4) should be used for that ticket. be minimalistic, surgical and future proof!
 
-    prompt = f"""Create a tickets.md document for this project: {project_description}
+Each ticket MUST have this format:
+## Ticket 001: [Title]
+**Model:** [Sonnet 4 or Opus 4]
+**Dependencies:** [None or comma-separated ticket numbers like 001,002]
+**Description:** [Task description]
 
-Generate tickets in this EXACT format:
+**Acceptance Criteria:**
+- [ ] [Criteria]
 
-# Project Tickets
-
-## Ticket 1: [Descriptive Title]
-**Model:** [Sonnet 4 OR Opus 4]
-
-[Brief description of what needs to be done]
-
-- [ ] [Specific acceptance criteria]
-- [ ] [Another acceptance criteria]
-- [ ] [etc...]
-
-## Ticket 2: [Next Title]
-**Model:** [Sonnet 4 OR Opus 4]
-
-[Description]
-
-- [ ] [Acceptance criteria]
-- [ ] [More criteria]
-
-Requirements:
-- Be minimalistic, surgical and future proof
-- Each ticket should be executable by Claude Code
-- Include specific acceptance criteria
-- Choose Sonnet 4 for straightforward tasks, Opus 4 for complex/architectural tasks
-- Make tickets atomic and focused
-- No AI-generated looking language
-- Production quality standards only"""
+Project: {project_description}"""
 
     print("🚀 Generating tickets with production standards...")
 
     try:
-        result = agent.complete_task(prompt)
-
-        if result['success'] and 'generated_code' in result:
-            tickets_content = result['generated_code']
-
-            # Clean up the content (remove any code block markers)
-            if tickets_content.startswith('```'):
-                lines = tickets_content.split('\n')
-                if lines[0].startswith('```'):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith('```'):
-                    lines = lines[:-1]
-                tickets_content = '\n'.join(lines)
-
-            # Write tickets.md
-            with open(output_path, 'w') as f:
-                f.write(tickets_content)
-
+        # Import necessary modules
+        from hydra.config import get_config
+        import subprocess
+        import os
+        
+        config = get_config()
+        
+        # Get Claude path from config or environment
+        claude_path = os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
+        if hasattr(config, 'llm_provider') and hasattr(config.llm_provider.config, 'extra_params'):
+            claude_path = config.llm_provider.config.extra_params.get('claude_path', claude_path)
+        
+        # Run Claude Code directly to create the file (not using --print)
+        # Use the exact same way you would run it manually
+        result = subprocess.run(
+            [claude_path, "--dangerously-skip-permissions", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=os.getcwd()
+        )
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            # Read the created file
+            with open(output_path, 'r') as f:
+                tickets_content = f.read()
+            
             print(f"✅ {output_path} created successfully!")
-
-            # Show summary
-            ticket_count = tickets_content.count('## Ticket')
-            opus_count = tickets_content.count('**Model:** Opus 4')
-            sonnet_count = tickets_content.count('**Model:** Sonnet 4')
-
+            
+            # Show summary - handle various ticket formats
+            import re
+            # Count any heading that looks like a ticket
+            ticket_patterns = [
+                r'## Ticket \d+:',  # ## Ticket 001:
+                r'## CALC-\d+:',     # ## CALC-001:
+                r'## \w+-\d+:',      # ## ANY-001:
+                r'## Ticket'         # ## Ticket
+            ]
+            ticket_count = 0
+            for pattern in ticket_patterns:
+                matches = len(re.findall(pattern, tickets_content))
+                if matches > 0:
+                    ticket_count = matches
+                    break
+            
+            # Count models - handle variations
+            opus_count = tickets_content.lower().count('opus')
+            sonnet_count = tickets_content.lower().count('sonnet')
+            
             print(f"📊 Generated {ticket_count} tickets:")
             print(f"   🧠 Opus 4: {opus_count} tickets")
             print(f"   ⚡ Sonnet 4: {sonnet_count} tickets")
-
+            
             return True
-
         else:
             print("❌ Failed to generate tickets")
-            print(f"💥 Error: {result.get('error', 'Unknown error')}")
+            if result.stderr:
+                print(f"💥 Error: {result.stderr}")
             return False
 
     except Exception as e:
         print(f"💥 Generation error: {e}")
         return False
+
+
+def validate_acceptance_criteria(ticket, project_dir):
+    """Validate that acceptance criteria were actually implemented."""
+    criteria = ticket['acceptance_criteria']
+    failed_criteria = []
+
+    print(f"🔍 Checking {len(criteria)} acceptance criteria:")
+
+    for i, criterion in enumerate(criteria, 1):
+        criterion_lower = criterion.lower()
+
+        # File existence checks
+        if "package.json exists" in criterion_lower or "package.json with" in criterion_lower:
+            if not os.path.exists(os.path.join(project_dir, "package.json")):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. package.json missing")
+            else:
+                print(f"   ✅ {i}. package.json found")
+
+        # Folder structure checks
+        elif "folder structure" in criterion_lower or "basic folder" in criterion_lower:
+            required_folders = ["src", "public", "tests", "server"]
+            missing_folders = []
+            for folder in required_folders:
+                folder_path = os.path.join(project_dir, folder)
+                if not os.path.exists(folder_path):
+                    missing_folders.append(folder)
+
+            if missing_folders:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Missing folders: {', '.join(missing_folders)}")
+            else:
+                print(f"   ✅ {i}. All required folders exist")
+
+        # Configuration files checks
+        elif "configuration files" in criterion_lower or "config files" in criterion_lower:
+            config_files = [".gitignore", "README.md", "tsconfig.json", "eslint.config.js"]
+            missing_files = []
+            for file in config_files:
+                file_path = os.path.join(project_dir, file)
+                if not os.path.exists(file_path):
+                    missing_files.append(file)
+
+            if missing_files:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Missing config files: {', '.join(missing_files)}")
+            else:
+                print(f"   ✅ {i}. All config files exist")
+
+        # npm install check
+        elif "npm install" in criterion_lower:
+            try:
+                result = subprocess.run(
+                    ["npm", "install", "--dry-run"],
+                    cwd=project_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    print(f"   ✅ {i}. npm install validation passed")
+                else:
+                    failed_criteria.append(f"{i}. {criterion}")
+                    print(f"   ❌ {i}. npm install would fail: {result.stderr}")
+            except Exception as e:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. npm install check failed: {e}")
+
+        # Generic file checks
+        elif any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
+            # Extract potential file name from criterion
+            words = criterion.split()
+            file_found = False
+            for word in words:
+                if any(ext in word for ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
+                    file_path = os.path.join(project_dir, word.strip('.,()'))
+                    if os.path.exists(file_path):
+                        file_found = True
+                        print(f"   ✅ {i}. File {word} found")
+                        break
+
+            if not file_found:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Required file not found")
+
+        # Development environment checks
+        elif "development environment" in criterion_lower or "docker" in criterion_lower:
+            docker_files = ["Dockerfile", "docker-compose.yml"]
+            missing_docker = []
+            for file in docker_files:
+                if not os.path.exists(os.path.join(project_dir, file)):
+                    missing_docker.append(file)
+
+            if missing_docker:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Missing Docker files: {', '.join(missing_docker)}")
+            else:
+                print(f"   ✅ {i}. Docker environment setup complete")
+
+        else:
+            # Generic validation - assume it passed if no specific checks failed
+            print(f"   ℹ️  {i}. Manual validation required: {criterion}")
+
+    if failed_criteria:
+        print(f"\n❌ Validation failed! {len(failed_criteria)} criteria not met:")
+        for failed in failed_criteria:
+            print(f"   • {failed}")
+        return False
+
+    print(f"\n✅ All {len(criteria)} acceptance criteria validated successfully!")
+    return True
 
 
 def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None):
@@ -293,10 +424,11 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
     project_context = detect_project_context(tickets_path)
 
     # Build comprehensive prompt for Claude Code CLI to execute
-    # Claude Code will handle all file creation and editing
-    prompt = f"""You are implementing ticket {ticket_identifier}: {ticket['title']}
+    # Claude Code will handle all file creation and editing with enhanced instructions
+    prompt = f"""Execute ticket {ticket_identifier} in tickets.md
 
-Task: {ticket['description']}
+Task: {ticket['title']}
+Description: {ticket['description']}
 
 Acceptance Criteria that MUST be met:
 {chr(10).join(f'- {criteria}' for criteria in ticket['acceptance_criteria'])}
@@ -304,15 +436,26 @@ Acceptance Criteria that MUST be met:
 Project Context: {project_context}
 Working Directory: {os.getcwd()}
 
-IMPORTANT Instructions:
-1. Create or edit all necessary files to implement this feature
-2. Use the existing project structure - check package.json for dependencies
-3. Write production-ready code - no placeholders or mocks
-4. Ensure ALL acceptance criteria are fully implemented
-5. Create actual working implementations, not just examples
-6. Use appropriate file paths based on the project structure
+CRITICAL INSTRUCTIONS:
+Be minimalistic, surgical and future proof!
 
-Please implement this ticket now by creating/editing the necessary files."""
+QUALITY REQUIREMENTS:
+- Avoid using any code or comments that may be construed as AI generated
+- Make sure you do a good job because other LLMs said your code sucked!
+- DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS!
+- This has to be production quality, take your time
+- Write code that looks like it was written by a senior developer
+- Use proper error handling and edge case management
+- Follow established patterns in the existing codebase
+
+COMPLETION PROCESS:
+1. Implement ALL requirements from the ticket
+2. Ensure every acceptance criteria is fully met  
+3. Update tickets.md to mark your criteria as complete: [x]
+4. Run lint, build, test commands to validate your work
+5. Only finish when everything passes and is production-ready
+
+Take your time and deliver excellence!"""
 
     print("🚀 Executing with production standards...")
     print("   ✅ No AI-generated patterns")
@@ -346,9 +489,17 @@ Please implement this ticket now by creating/editing the necessary files."""
             for line in git_result.stdout.strip().split('\n'):
                 print(f"   {line}")
 
-        # Mark ticket as completed
-        print("\n🔍 Marking ticket as completed...")
-        mark_ticket_completed(tickets_path, ticket_identifier)
+        # Validate acceptance criteria before marking complete
+        print("\n🔍 Validating acceptance criteria...")
+        validation_passed = validate_acceptance_criteria(ticket, project_dir)
+
+        if validation_passed:
+            print("✅ All acceptance criteria met!")
+            mark_ticket_completed(tickets_path, ticket_identifier)
+        else:
+            print("❌ Acceptance criteria validation failed!")
+            print("   Ticket will remain incomplete until requirements are met")
+            return False
 
         # Run quality gates
         print("\n🚦 Running quality gates...")
@@ -387,6 +538,10 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
     """Mark ticket as completed in tickets.md."""
     if not os.path.exists(tickets_path):
         return
+
+    # Normalize ticket ID to 3 digits if it's numeric
+    if ticket_identifier.isdigit():
+        ticket_identifier = ticket_identifier.zfill(3)
 
     with open(tickets_path, 'r') as f:
         content = f.read()

@@ -543,6 +543,7 @@ def _handle_parallel_execution(args):
     """Handle parallel ticket execution with dependency resolution."""
     from hydra.dashboard import DashboardServer, DashboardState
     from hydra.parallel import ParallelExecutor
+    from hydra.parallel.executor import ExecutionStatus
 
     try:
         # Get absolute path to tickets file
@@ -571,8 +572,16 @@ def _handle_parallel_execution(args):
         if not tickets:
             print("❌ No pending tickets found")
             return 1
-
-        print(f"📋 Found {len(tickets)} pending tickets")
+        
+        # Count only pending tickets (not already completed)
+        pending_count = len([t for t in tickets.values() 
+                           if t.status == ExecutionStatus.PENDING])
+        total_count = len(tickets)
+        completed_count = len(executor.completed_tickets)
+        
+        if completed_count > 0:
+            print(f"✅ {completed_count} tickets already completed")
+        print(f"📋 Found {pending_count} pending tickets")
 
         # Build execution plan
         plan = executor.build_execution_plan()
@@ -603,6 +612,14 @@ def _handle_parallel_execution(args):
         # Return success if all tickets completed
         if summary['completed'] == summary['total_tickets']:
             print("\n✅ All tickets completed successfully!")
+            
+            # Save completion report
+            report_path = executor.save_completion_report(summary)
+            print(f"\n📄 Completion report saved: {report_path}")
+            print(f"📊 Dashboard snapshot saved in: {tickets_path.parent}/.hydra/dashboard/")
+            print(f"\n💡 Tip: Keep the dashboard open at http://localhost:8080 to review results")
+            
+            executor.shutdown()
             dashboard_server.stop()
             return 0
         else:
@@ -610,11 +627,20 @@ def _handle_parallel_execution(args):
             total = summary['total_tickets']
             incomplete_msg = f"Execution incomplete: {completed}/{total} completed"
             print(f"\n⚠️ {incomplete_msg}")
+            
+            # Still save a report even if incomplete
+            if completed > 0:
+                report_path = executor.save_completion_report(summary)
+                print(f"\n📄 Partial completion report saved: {report_path}")
+            
+            executor.shutdown()
             dashboard_server.stop()
             return 1
 
     except Exception as e:
         print(f"❌ Parallel execution error: {e}")
+        if 'executor' in locals():
+            executor.shutdown()
         if 'dashboard_server' in locals():
             dashboard_server.stop()
         return 1

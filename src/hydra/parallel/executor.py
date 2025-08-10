@@ -12,10 +12,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from hydra.agents.pool import AgentPool
 from hydra.orchestrator.claude_code_orchestrator import (
     ClaudeCodeOrchestrator,
 )
 from hydra.quality import QualityGateRunner
+from hydra.safety.file_lock import get_file_lock_manager
 from hydra.ticket_workflow import mark_ticket_completed, parse_ticket
 
 
@@ -68,6 +70,13 @@ class ParallelExecutor:
         self.running_tickets: Set[str] = set()
         self.orchestrators: Dict[str, ClaudeCodeOrchestrator] = {}
         self.dashboard_state = dashboard_state
+        
+        # Initialize agent pool for managing Claude Code terminals
+        self.agent_pool = AgentPool(max_agents=max_workers)
+        self.agent_pool.start()
+        
+        # Initialize file lock manager
+        self.file_lock_manager = get_file_lock_manager()
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md."""
@@ -79,10 +88,11 @@ class ParallelExecutor:
         # Find all ticket IDs
         import re
         ticket_patterns = [
-            r'### TICKET-(\d+):',
+            r'## Ticket (\d+):',  # Match "## Ticket 001:"
             r'## TICKET-(\d+):',
             r'## Ticket-(\d+):',
-            r'## Ticket (\d+):',
+            r'## \w+-(\d+):',     # Match any prefix like CALC-001
+            r'### TICKET-(\d+):',
             r'## #(\d+):',
             r'## (\d+):'
         ]
@@ -97,24 +107,36 @@ class ParallelExecutor:
         # Parse each ticket
         for ticket_id in ticket_ids:
             ticket_data = parse_ticket(tickets_path, ticket_id)
-            if ticket_data and not ticket_data.get('completed'):
-                node = TicketNode(
-                    ticket_id=ticket_id,
-                    title=ticket_data['title'],
-                    model=ticket_data['model'],
-                    dependencies=ticket_data.get('dependencies', []),
-                    status=ExecutionStatus.PENDING
-                )
-                tickets[ticket_id] = node
-
-                # Add to dashboard if available
-                if self.dashboard_state:
-                    self.dashboard_state.add_ticket(
-                        ticket_id,
-                        ticket_data['title'],
-                        ticket_data['model'],
-                        ticket_data.get('dependencies', [])
+            if ticket_data:
+                if ticket_data.get('completed'):
+                    # Track completed tickets but mark them as already done
+                    node = TicketNode(
+                        ticket_id=ticket_id,
+                        title=ticket_data['title'],
+                        model=ticket_data['model'],
+                        dependencies=ticket_data.get('dependencies', []),
+                        status=ExecutionStatus.COMPLETED
                     )
+                    tickets[ticket_id] = node
+                    self.completed_tickets.add(ticket_id)
+                else:
+                    node = TicketNode(
+                        ticket_id=ticket_id,
+                        title=ticket_data['title'],
+                        model=ticket_data['model'],
+                        dependencies=ticket_data.get('dependencies', []),
+                        status=ExecutionStatus.PENDING
+                    )
+                    tickets[ticket_id] = node
+
+                    # Add to dashboard if available
+                    if self.dashboard_state:
+                        self.dashboard_state.add_ticket(
+                            ticket_id,
+                            ticket_data['title'],
+                            ticket_data['model'],
+                            ticket_data.get('dependencies', [])
+                        )
 
         self.tickets = tickets
         return tickets
@@ -175,10 +197,18 @@ class ParallelExecutor:
 
     def execute_ticket(self, ticket_id: str, tickets_path: str) -> bool:
         """Execute a single ticket."""
+        # Spawn an agent for this ticket
+        agent_id = self.agent_pool.spawn_agent(ticket_id)
+        if not agent_id:
+            print(f"⚠️  No available agent slots for ticket {ticket_id}")
+            return False
+            
         with self.lock:
             if ticket_id in self.completed_tickets:
+                self.agent_pool.release_agent(agent_id)
                 return True
             if ticket_id in self.failed_tickets:
+                self.agent_pool.release_agent(agent_id)
                 return False
 
             self.running_tickets.add(ticket_id)
@@ -203,42 +233,80 @@ class ParallelExecutor:
             # Parse ticket for full details
             ticket_data = parse_ticket(tickets_path, ticket_id)
 
-            # Create orchestrator for this ticket
+            # Create model-specific orchestrator for this ticket
+            ticket_model = ticket_data.get('model', 'sonnet')  # Default to sonnet
+            print(f"🧠 Ticket {ticket_id} requires model: {ticket_model.upper()}")
+
+            # Set the model environment for this agent
+            import os
+            original_model = os.environ.get('CLAUDE_MODEL')
+
+            if ticket_model.lower() == 'opus':
+                os.environ['CLAUDE_MODEL'] = 'claude-opus-4-1-20250805'
+            else:
+                os.environ['CLAUDE_MODEL'] = 'claude-sonnet-4-20250514'
+
             orchestrator = ClaudeCodeOrchestrator()
             self.orchestrators[ticket_id] = orchestrator
 
-            # Build prompt
-            prompt = f"""Implement ticket {ticket_id}: {ticket_data['title']}
+            # Build prompt with comprehensive instructions
+            prompt = f"""Execute ticket {ticket_id} in tickets.md
 
-Task: {ticket_data['description']}
+Task: {ticket_data['title']}
+Description: {ticket_data['description']}
 
 Acceptance Criteria:
 {chr(10).join(f'- {criteria}' for criteria in ticket_data['acceptance_criteria'])}
 
 Working Directory: {self.project_root}
 
-Instructions:
-1. Create or edit all necessary files
-2. Use existing project structure
-3. Write production-ready code
-4. Ensure ALL acceptance criteria are met
-5. No placeholders or mocks
-"""
+CRITICAL INSTRUCTIONS:
+Be minimalistic, surgical and future proof! 
 
-            # Create task
+QUALITY REQUIREMENTS:
+- Avoid using any code or comments that may be construed as AI generated
+- Make sure you do a good job because other LLMs said your code sucked!
+- DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! 
+- This has to be production quality, take your time
+- Write code that looks like it was written by a senior developer
+- Use proper error handling and edge case management
+- Follow established patterns in the existing codebase
+
+COMPLETION PROCESS:
+1. Implement ALL requirements from the ticket
+2. Ensure every acceptance criteria is fully met
+3. Update tickets.md to mark your criteria as complete: [x]
+4. Run lint, build, test commands to validate your work
+5. Only finish when everything passes and is production-ready
+
+Take your time and deliver excellence!"""
+
+            # Create task with the actual ticket_id for unique session naming
             task = orchestrator.create_task(
                 description=f"Ticket {ticket_id}: {node.title}",
                 prompt=prompt,
                 working_directory=str(self.project_root),
-                timeout=300
+                timeout=300,
+                task_id=ticket_id  # Pass ticket ID for unique tmux session
             )
 
             # Execute task
             result = orchestrator.execute_task(task)
 
             if result.status.value == "completed":
-                # Mark ticket as completed
-                mark_ticket_completed(tickets_path, ticket_id)
+                # Validate acceptance criteria before marking complete
+                from hydra.ticket_workflow import validate_acceptance_criteria
+
+                validation_passed = validate_acceptance_criteria(ticket_data, str(self.project_root))
+
+                if validation_passed:
+                    # Mark ticket as completed only if validation passes
+                    mark_ticket_completed(tickets_path, ticket_id)
+                    print("✅ Acceptance criteria validated and ticket marked complete")
+                else:
+                    print("❌ Acceptance criteria validation failed - ticket remains incomplete")
+                    # Treat as failure if validation fails
+                    raise Exception("Acceptance criteria not met")
 
                 # Run quality gates
                 print(f"\n🚦 Running quality gates for ticket {ticket_id}...")
@@ -268,6 +336,9 @@ Instructions:
                 if not quality_passed:
                     print(f"⚠️  Quality gates failed for ticket {ticket_id}")
 
+                # Release the agent back to the pool and file locks
+                self.agent_pool.release_agent(agent_id)
+                self.file_lock_manager.release_all_locks(agent_id)
                 return True
             else:
                 raise Exception(f"Task failed: {result.error}")
@@ -288,7 +359,17 @@ Instructions:
                     )
 
             print(f"\n❌ Ticket {ticket_id} failed: {e}")
+            # Release the agent and locks even on failure
+            self.agent_pool.release_agent(agent_id)
+            self.file_lock_manager.release_all_locks(agent_id)
             return False
+        finally:
+            # Restore original model setting for other agents
+            if 'original_model' in locals():
+                if original_model:
+                    os.environ['CLAUDE_MODEL'] = original_model
+                elif 'CLAUDE_MODEL' in os.environ:
+                    del os.environ['CLAUDE_MODEL']
 
     def execute_wave(self, wave: List[str], tickets_path: str) -> Dict[str, bool]:
         """Execute a wave of tickets in parallel."""
@@ -326,6 +407,18 @@ Instructions:
     def execute_plan(self, plan: ExecutionPlan, tickets_path: str) -> Dict[str, Any]:
         """Execute the full execution plan."""
         start_time = time.time()
+        
+        # Initialize dashboard session
+        if self.dashboard_state:
+            import uuid
+            session_id = str(uuid.uuid4())[:8]
+            self.dashboard_state.start_session(
+                session_id=session_id,
+                tickets_path=tickets_path,
+                total_tickets=plan.total_tickets,
+                total_waves=len(plan.waves),
+                workers=self.max_workers
+            )
 
         print("\n📋 Execution Plan")
         print(f"{'='*60}")
@@ -445,6 +538,168 @@ Instructions:
         lines.append(f"{'='*60}")
 
         return "\n".join(lines)
+    
+    def save_completion_report(self, summary: Dict[str, Any]) -> str:
+        """Save a completion report and dashboard snapshot."""
+        # Create .hydra directory structure
+        hydra_dir = self.project_root / ".hydra"
+        hydra_dir.mkdir(exist_ok=True)
+        
+        reports_dir = hydra_dir / "reports"
+        reports_dir.mkdir(exist_ok=True)
+        
+        # Save completion report
+        report_file = reports_dir / f"completion_{int(time.time())}.md"
+        report_content = self.generate_report(summary)
+        
+        # Add extra information for the saved report
+        full_report = f"""# 🎉 Project Completion Report
+
+**Generated:** {time.strftime('%Y-%m-%d %H:%M:%S')}
+**Project:** {self.project_root}
+**Success Rate:** {summary['success_rate']:.1f}%
+
+{report_content}
+
+## 📊 Dashboard
+View the live dashboard at: http://localhost:8080
+Or check the saved dashboard snapshot in `.hydra/dashboard/`
+
+## 📁 Generated Files
+Check your project directory for all the generated calculator files.
+
+## ✅ All Tickets Completed!
+"""
+        
+        with open(report_file, 'w') as f:
+            f.write(full_report)
+        
+        # Save dashboard HTML snapshot if available
+        if self.dashboard_state:
+            dashboard_dir = hydra_dir / "dashboard" 
+            dashboard_dir.mkdir(exist_ok=True)
+            
+            snapshot_file = dashboard_dir / f"snapshot_{int(time.time())}.html"
+            # Create a static HTML snapshot
+            self._save_dashboard_snapshot(snapshot_file, summary)
+        
+        return str(report_file)
+    
+    def _save_dashboard_snapshot(self, snapshot_file: Path, summary: Dict[str, Any]):
+        """Save a static HTML dashboard snapshot."""
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Hydra Completion Dashboard</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e27;
+            color: #e4e4e7;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        h1 {{
+            color: #60a5fa;
+            text-align: center;
+        }}
+        .success-banner {{
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 20px 0;
+            font-size: 24px;
+            font-weight: bold;
+        }}
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }}
+        .stat-card {{
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #334155;
+        }}
+        .stat-label {{
+            font-size: 12px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }}
+        .stat-value {{
+            font-size: 32px;
+            font-weight: 600;
+            color: #f1f5f9;
+        }}
+        .tickets-list {{
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }}
+        .ticket-item {{
+            padding: 10px;
+            border-bottom: 1px solid #334155;
+        }}
+        .ticket-item:last-child {{
+            border-bottom: none;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Hydra Project Completion</h1>
+        
+        <div class="success-banner">
+            🎉 All {summary['total_tickets']} Tickets Completed Successfully!
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Total Tickets</div>
+                <div class="stat-value">{summary['total_tickets']}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Completed</div>
+                <div class="stat-value">{summary['completed']}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Success Rate</div>
+                <div class="stat-value">{summary['success_rate']:.0f}%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Time</div>
+                <div class="stat-value">{summary['duration']:.0f}s</div>
+            </div>
+        </div>
+        
+        <div class="tickets-list">
+            <h2>📋 Completed Tickets</h2>
+"""
+        for ticket_id, node in sorted(self.tickets.items()):
+            if node.status == ExecutionStatus.COMPLETED:
+                duration = ""
+                if node.start_time and node.end_time:
+                    duration = f" - {node.end_time - node.start_time:.1f}s"
+                html_content += f"""            <div class="ticket-item">✅ {ticket_id}: {node.title}{duration}</div>
+"""
+        
+        html_content += """        </div>
+    </div>
+</body>
+</html>"""
+        
+        with open(snapshot_file, 'w') as f:
+            f.write(html_content)
 
     def save_execution_log(
         self, summary: Dict[str, Any], log_dir: Optional[str] = None
@@ -481,3 +736,10 @@ Instructions:
             json.dump(log_data, f, indent=2)
 
         return str(log_file)
+    
+    def shutdown(self):
+        """Shutdown the executor and clean up resources."""
+        # Stop the agent pool
+        if hasattr(self, 'agent_pool'):
+            self.agent_pool.stop()
+            print("🛑 Agent pool shutdown complete")

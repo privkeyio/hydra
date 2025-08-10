@@ -83,7 +83,8 @@ class ClaudeCodeOrchestrator:
         description: str,
         prompt: str,
         working_directory: Optional[str] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        task_id: Optional[str] = None
     ) -> ClaudeCodeTask:
         """Create a new task for Claude Code to execute.
 
@@ -92,13 +93,14 @@ class ClaudeCodeOrchestrator:
             prompt: Full prompt for Claude Code
             working_directory: Directory to execute in (defaults to cwd)
             timeout: Task timeout in seconds
+            task_id: Optional specific task ID (e.g., ticket number)
 
         Returns:
             ClaudeCodeTask instance
 
         """
         task = ClaudeCodeTask(
-            task_id=str(uuid.uuid4())[:8],
+            task_id=task_id or str(uuid.uuid4())[:8],
             description=description,
             prompt=prompt,
             working_directory=working_directory or os.getcwd(),

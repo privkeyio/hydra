@@ -147,9 +147,28 @@ class DashboardServer:
         static_dir = Path(__file__).parent / 'static'
         static_dir.mkdir(exist_ok=True)
 
-        # Start server in background thread
-        self.server = HTTPServer((self.host, self.port), DashboardHandler)
-        self.server.dashboard_state = self.dashboard_state
+        # Try to start server with better error handling
+        try:
+            self.server = HTTPServer((self.host, self.port), DashboardHandler)
+            self.server.dashboard_state = self.dashboard_state
+        except OSError as e:
+            if e.errno == 98:  # Address already in use
+                logger.warning(f"Port {self.port} is already in use, trying to find an available port")
+                # Try a few alternative ports
+                for alt_port in [8081, 8082, 8083, 8084, 8085]:
+                    try:
+                        self.port = alt_port
+                        self.server = HTTPServer((self.host, self.port), DashboardHandler)
+                        self.server.dashboard_state = self.dashboard_state
+                        logger.info(f"Using alternative port {self.port}")
+                        break
+                    except OSError:
+                        continue
+                else:
+                    # If all ports are taken, raise the original error
+                    raise Exception(f"Could not find an available port. Try: lsof -ti:8080 | xargs kill -9")
+            else:
+                raise
 
         self.thread = threading.Thread(target=self._run_server, daemon=True)
         self.thread.start()
@@ -168,10 +187,19 @@ class DashboardServer:
     def stop(self):
         """Stop the dashboard server."""
         if self.server and self.running:
-            self.server.shutdown()
-            self.server.server_close()
-            self.running = False
-            logger.info("Dashboard server stopped")
+            try:
+                self.server.shutdown()
+                self.server.server_close()
+                self.running = False
+                logger.info("Dashboard server stopped")
+            except Exception as e:
+                logger.error(f"Error stopping server: {e}")
+                # Force close if graceful shutdown fails
+                try:
+                    self.server.socket.close()
+                except:
+                    pass
+                self.running = False
 
     def update_state(self, **kwargs):
         """Update dashboard state."""

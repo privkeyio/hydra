@@ -75,11 +75,14 @@ class ParallelExecutor:
         self.agent_pool = AgentPool(max_agents=max_workers)
         self.agent_pool.start()
         
-        # Initialize file lock manager
+        # Initialize file lock manager and smart interceptor
         self.file_lock_manager = get_file_lock_manager()
+        from hydra.safety.claude_file_interceptor import SmartFileLockManager
+        self.smart_lock_manager = SmartFileLockManager()
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md."""
+        self.tickets_path = tickets_path  # Store for smart scheduling
         tickets = {}
 
         with open(tickets_path, 'r') as f:
@@ -143,9 +146,54 @@ class ParallelExecutor:
         self.tickets = tickets
         return tickets
 
+    def _build_smart_execution_plan(self) -> ExecutionPlan:
+        """Build execution plan using smart conflict detection."""
+        print("🧠 Using smart scheduling to minimize file conflicts...")
+        
+        # Read ticket contents for analysis
+        tickets_content = {}
+        with open(self.tickets_path, 'r') as f:
+            content = f.read()
+            for ticket_id in self.tickets:
+                # Extract ticket content
+                import re
+                pattern = rf'## Ticket {ticket_id}:.*?(?=## Ticket \d+:|$)'
+                match = re.search(pattern, content, re.DOTALL)
+                if match:
+                    tickets_content[ticket_id] = match.group(0)
+        
+        # Use smart scheduler to create conflict-free waves
+        waves = self.smart_lock_manager.schedule_tickets_smartly(tickets_content)
+        
+        # Build dependency graph for reference
+        dependency_graph = {
+            ticket_id: node.dependencies 
+            for ticket_id, node in self.tickets.items()
+        }
+        
+        print(f"📊 Smart scheduling created {len(waves)} execution waves")
+        for i, wave in enumerate(waves, 1):
+            print(f"   Wave {i}: {', '.join(wave)}")
+        
+        return ExecutionPlan(
+            waves=waves,
+            dependency_graph=dependency_graph,
+            total_tickets=len(self.tickets),
+            max_parallel=self.max_workers
+        )
+    
     def build_execution_plan(self) -> ExecutionPlan:
         """Build an execution plan based on dependencies."""
-        # Build dependency graph
+        import os
+        
+        # Check if smart scheduling is enabled
+        use_smart_scheduling = os.environ.get('HYDRA_SMART_SCHEDULING', '0') == '1'
+        
+        if use_smart_scheduling and hasattr(self, 'smart_lock_manager'):
+            # Use smart scheduling to minimize conflicts
+            return self._build_smart_execution_plan()
+        
+        # Build dependency graph (standard approach)
         dependency_graph = {}
         reverse_deps = {}  # Track which tickets depend on each ticket
 

@@ -201,6 +201,9 @@ def create_parser():
     parallel_parser.add_argument(
         "--save-log", action="store_true", help="Save execution log"
     )
+    parallel_parser.add_argument(
+        "--async", action="store_true", help="Use async execution engine (experimental)"
+    )
 
     # Claude Code orchestration subcommand
     claude_parser = subparsers.add_parser(
@@ -541,29 +544,57 @@ def _handle_quality_gates(args):
 
 def _handle_parallel_execution(args):
     """Handle parallel ticket execution with dependency resolution."""
+    # Check if async mode is requested
+    if getattr(args, 'async', False):
+        return _handle_async_parallel_execution(args)
+    else:
+        return _handle_sync_parallel_execution(args)
+
+
+def _handle_sync_parallel_execution(args):
+    """Handle synchronous parallel ticket execution."""
     from hydra.dashboard import DashboardServer, DashboardState
     from hydra.parallel import ParallelExecutor
     from hydra.parallel.executor import ExecutionStatus
+    from hydra.production_config import get_production_config
 
     try:
+        # Load production configuration
+        config = get_production_config()
+        
+        # Override with command line arguments if provided
+        if hasattr(args, 'workers'):
+            config.max_parallel_tickets = args.workers
+        
+        # Apply environment variables from config
+        for key, value in config.to_env_vars().items():
+            os.environ[key] = value
+        
         # Get absolute path to tickets file
         tickets_path = Path(args.tickets).resolve()
         if not tickets_path.exists():
             print(f"❌ Tickets file not found: {tickets_path}")
             return 1
 
-        # Initialize dashboard
-        dashboard_state = DashboardState()
-        dashboard_server = DashboardServer(state=dashboard_state)
-        dashboard_server.start()
+        # Initialize dashboard if enabled
+        dashboard_state = None
+        dashboard_server = None
+        if config.enable_dashboard:
+            dashboard_state = DashboardState()
+            dashboard_server = DashboardServer(state=dashboard_state)
+            dashboard_server.start()
 
-        # Initialize executor with dashboard
+        # Initialize executor with production config
         project_root = tickets_path.parent
         executor = ParallelExecutor(
-            max_workers=args.workers,
+            max_workers=config.max_parallel_tickets,
             project_root=str(project_root),
             dashboard_state=dashboard_state
         )
+        
+        # Log configuration mode
+        print(f"🔧 Production Mode: File locking {'enabled' if config.enable_file_locking else 'disabled'}")
+        print(f"🔧 Smart scheduling: {'enabled' if config.enable_smart_scheduling else 'disabled'}")
 
         print(f"🎯 Loading tickets from: {tickets_path}")
 
@@ -643,6 +674,128 @@ def _handle_parallel_execution(args):
             executor.shutdown()
         if 'dashboard_server' in locals():
             dashboard_server.stop()
+        return 1
+
+
+def _handle_async_parallel_execution(args):
+    """Handle asynchronous parallel ticket execution."""
+    import asyncio
+    from hydra.dashboard import DashboardServer, DashboardState
+    from hydra.parallel import AsyncParallelExecutor
+    from hydra.parallel.async_executor import ExecutionStatus
+    from hydra.production_config import get_production_config
+
+    async def async_main():
+        try:
+            # Load production configuration
+            config = get_production_config()
+            
+            # Override with command line arguments
+            if hasattr(args, 'workers'):
+                config.max_parallel_tickets = args.workers
+            
+            # Apply environment variables from config
+            for key, value in config.to_env_vars().items():
+                os.environ[key] = value
+            
+            # Get absolute path to tickets file
+            tickets_path = Path(args.tickets).resolve()
+            if not tickets_path.exists():
+                print(f"❌ Tickets file not found: {tickets_path}")
+                return 1
+
+            # Initialize dashboard if enabled
+            dashboard_state = None
+            dashboard_server = None
+            if config.enable_dashboard:
+                dashboard_state = DashboardState()
+                dashboard_server = DashboardServer(state=dashboard_state)
+                dashboard_server.start()
+
+            # Initialize async executor
+            project_root = tickets_path.parent
+            executor = AsyncParallelExecutor(
+                max_concurrent=config.max_parallel_tickets,
+                project_root=str(project_root),
+                dashboard_state=dashboard_state
+            )
+            
+            # Log configuration mode
+            print(f"🔧 Production Mode: File locking {'enabled' if config.enable_file_locking else 'disabled'}")
+            print(f"⚡ Async Mode: Dynamic scheduling enabled")
+            print(f"🎯 Loading tickets from: {tickets_path}")
+
+            # Load tickets asynchronously
+            tickets = await executor.load_tickets(str(tickets_path))
+            if not tickets:
+                print("❌ No pending tickets found")
+                return 1
+            
+            # Count pending tickets
+            pending_count = len([t for t in tickets.values() 
+                               if t.status == ExecutionStatus.PENDING])
+            completed_count = len(executor.completed_tickets)
+            
+            if completed_count > 0:
+                print(f"✅ {completed_count} tickets already completed")
+            print(f"📋 Found {pending_count} pending tickets")
+
+            # Build dynamic execution plan
+            plan = executor.build_dynamic_execution_plan()
+
+            # Execute plan asynchronously
+            summary = await executor.execute_tickets_dynamically(str(tickets_path))
+
+            # Generate and print report
+            report = executor.generate_report(summary)
+            print(report)
+
+            # Save log if requested
+            if args.save_log:
+                log_file = await executor.save_execution_log(summary)
+                print(f"\n📄 Execution log saved: {log_file}")
+
+            # Return success if all tickets completed
+            if summary['completed'] == summary['total_tickets']:
+                print("\n✅ All tickets completed successfully!")
+                
+                # Save completion report
+                report_path = await executor.save_completion_report(summary)
+                print(f"\n📄 Async completion report saved: {report_path}")
+                print(f"\n💡 Tip: Async execution completed with dynamic scheduling")
+                
+                executor.shutdown()
+                if dashboard_server:
+                    dashboard_server.stop()
+                return 0
+            else:
+                completed = summary['completed']
+                total = summary['total_tickets']
+                print(f"\n⚠️ Execution incomplete: {completed}/{total} completed")
+                
+                # Still save a report even if incomplete
+                if completed > 0:
+                    report_path = await executor.save_completion_report(summary)
+                    print(f"\n📄 Partial completion report saved: {report_path}")
+                
+                executor.shutdown()
+                if dashboard_server:
+                    dashboard_server.stop()
+                return 1
+
+        except Exception as e:
+            print(f"❌ Async parallel execution error: {e}")
+            if 'executor' in locals():
+                executor.shutdown()
+            if 'dashboard_server' in locals():
+                dashboard_server.stop()
+            return 1
+
+    try:
+        # Run async main function
+        return asyncio.run(async_main())
+    except Exception as e:
+        print(f"❌ Failed to start async execution: {e}")
         return 1
 
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .base import LLMProvider
+from hydra.safety.claude_file_interceptor import ClaudeFileInterceptor
 
 
 class ClaudeTmuxProvider(LLMProvider):
@@ -92,6 +93,10 @@ class ClaudeTmuxProvider(LLMProvider):
         project_dir = kwargs.get('cwd', os.getcwd())
         ticket_id = kwargs.get('ticket_id', None)
         session_name = self._create_session_name(ticket_id)
+        
+        # Initialize file interceptor for this session
+        file_interceptor = ClaudeFileInterceptor()
+        agent_id = session_name  # Use session name as agent ID for locking
 
         # Kill any existing session with the same name
         self._kill_session(session_name)
@@ -279,19 +284,31 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                             import re
                             file_match = re.search(r'Reading[:\s]+([^\s]+)', new_content)
                             if file_match:
-                                print(f"👁️  Reading: {file_match.group(1)}")
+                                filepath = file_match.group(1)
+                                print(f"👁️  Reading: {filepath}")
+                                # No lock needed for read operations
                             else:
                                 print("👁️  Reading files...")
                         elif "Writing" in new_content or "Creating" in new_content:
                             file_match = re.search(r'(?:Writing|Creating)[:\s]+([^\s]+)', new_content)
                             if file_match:
-                                print(f"✍️  Writing: {file_match.group(1)}")
+                                filepath = file_match.group(1)
+                                # Acquire file lock for write operation
+                                if file_interceptor.acquire_file_lock(agent_id, filepath, 'write'):
+                                    print(f"✍️  Writing: {filepath} [locked]")
+                                else:
+                                    print(f"⏳ Waiting for lock on: {filepath}")
                             else:
                                 print("✍️  Writing new content...")
                         elif "Editing" in new_content:
                             file_match = re.search(r'Editing[:\s]+([^\s]+)', new_content)
                             if file_match:
-                                print(f"✏️  Editing: {file_match.group(1)}")
+                                filepath = file_match.group(1)
+                                # Acquire file lock for edit operation
+                                if file_interceptor.acquire_file_lock(agent_id, filepath, 'edit'):
+                                    print(f"✏️  Editing: {filepath} [locked]")
+                                else:
+                                    print(f"⏳ Waiting for lock on: {filepath}")
                             else:
                                 print("✏️  Editing files...")
                         elif "Running" in new_content or "Executing" in new_content:
@@ -506,6 +523,8 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
         except Exception as e:
             raise Exception(f"Claude tmux error: {str(e)}")
         finally:
+            # Release all file locks for this agent
+            file_interceptor.release_agent_locks(agent_id)
             # Kill the tmux session
             self._kill_session(session_name)
             # Clean up marker file

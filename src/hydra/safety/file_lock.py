@@ -21,7 +21,7 @@ class FileLockManager:
         self.agent_files: Dict[str, Set[str]] = {}  # agent_id -> set of files
         self.global_lock = threading.Lock()
         
-    def acquire_lock(self, file_path: str, agent_id: str, timeout: float = 30) -> bool:
+    def acquire_lock(self, agent_id: str, file_path: str, timeout: float = 30) -> bool:
         """Acquire a lock on a file for an agent.
         
         Args:
@@ -52,7 +52,7 @@ class FileLockManager:
                 
         return acquired
         
-    def release_lock(self, file_path: str, agent_id: str):
+    def release_lock(self, agent_id: str, file_path: str):
         """Release a lock on a file.
         
         Args:
@@ -86,7 +86,7 @@ class FileLockManager:
                 
         # Release locks outside the global lock to avoid deadlock
         for file_path in files_to_release:
-            self.release_lock(file_path, agent_id)
+            self.release_lock(agent_id, file_path)
             
     def is_locked(self, file_path: str) -> bool:
         """Check if a file is currently locked.
@@ -127,6 +127,15 @@ class FileLockManager:
         """
         with self.global_lock:
             return self.agent_files.get(agent_id, set()).copy()
+    
+    def get_locked_files(self) -> Set[str]:
+        """Get all currently locked files.
+        
+        Returns:
+            Set of all locked file paths
+        """
+        with self.global_lock:
+            return set(self.lock_holders.keys())
 
 
 # Global instance

@@ -18,7 +18,7 @@ from hydra.orchestrator.claude_code_orchestrator import (
 )
 from hydra.quality import QualityGateRunner
 from hydra.safety.file_lock import get_file_lock_manager
-from hydra.ticket_workflow import mark_ticket_completed, parse_ticket
+from hydra.ticket_workflow import mark_ticket_completed, mark_ticket_in_progress, parse_ticket
 
 
 class ExecutionStatus(Enum):
@@ -75,11 +75,14 @@ class ParallelExecutor:
         self.agent_pool = AgentPool(max_agents=max_workers)
         self.agent_pool.start()
         
-        # Initialize file lock manager
+        # Initialize file lock manager and smart interceptor
         self.file_lock_manager = get_file_lock_manager()
+        from hydra.safety.claude_file_interceptor import SmartFileLockManager
+        self.smart_lock_manager = SmartFileLockManager()
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md."""
+        self.tickets_path = tickets_path  # Store for smart scheduling
         tickets = {}
 
         with open(tickets_path, 'r') as f:
@@ -108,7 +111,9 @@ class ParallelExecutor:
         for ticket_id in ticket_ids:
             ticket_data = parse_ticket(tickets_path, ticket_id)
             if ticket_data:
-                if ticket_data.get('completed'):
+                # Check status field
+                ticket_status = ticket_data.get('status', 'TODO').upper()
+                if ticket_data.get('completed') or ticket_status == 'DONE':
                     # Track completed tickets but mark them as already done
                     node = TicketNode(
                         ticket_id=ticket_id,
@@ -141,9 +146,54 @@ class ParallelExecutor:
         self.tickets = tickets
         return tickets
 
+    def _build_smart_execution_plan(self) -> ExecutionPlan:
+        """Build execution plan using smart conflict detection."""
+        print("🧠 Using smart scheduling to minimize file conflicts...")
+        
+        # Read ticket contents for analysis
+        tickets_content = {}
+        with open(self.tickets_path, 'r') as f:
+            content = f.read()
+            for ticket_id in self.tickets:
+                # Extract ticket content
+                import re
+                pattern = rf'## Ticket {ticket_id}:.*?(?=## Ticket \d+:|$)'
+                match = re.search(pattern, content, re.DOTALL)
+                if match:
+                    tickets_content[ticket_id] = match.group(0)
+        
+        # Use smart scheduler to create conflict-free waves
+        waves = self.smart_lock_manager.schedule_tickets_smartly(tickets_content)
+        
+        # Build dependency graph for reference
+        dependency_graph = {
+            ticket_id: node.dependencies 
+            for ticket_id, node in self.tickets.items()
+        }
+        
+        print(f"📊 Smart scheduling created {len(waves)} execution waves")
+        for i, wave in enumerate(waves, 1):
+            print(f"   Wave {i}: {', '.join(wave)}")
+        
+        return ExecutionPlan(
+            waves=waves,
+            dependency_graph=dependency_graph,
+            total_tickets=len(self.tickets),
+            max_parallel=self.max_workers
+        )
+    
     def build_execution_plan(self) -> ExecutionPlan:
         """Build an execution plan based on dependencies."""
-        # Build dependency graph
+        import os
+        
+        # Check if smart scheduling is enabled
+        use_smart_scheduling = os.environ.get('HYDRA_SMART_SCHEDULING', '0') == '1'
+        
+        if use_smart_scheduling and hasattr(self, 'smart_lock_manager'):
+            # Use smart scheduling to minimize conflicts
+            return self._build_smart_execution_plan()
+        
+        # Build dependency graph (standard approach)
         dependency_graph = {}
         reverse_deps = {}  # Track which tickets depend on each ticket
 
@@ -197,6 +247,16 @@ class ParallelExecutor:
 
     def execute_ticket(self, ticket_id: str, tickets_path: str) -> bool:
         """Execute a single ticket."""
+        # Get thread info for debugging
+        thread_id = threading.current_thread().name
+        print(f"🧵 Thread {thread_id} assigned to Ticket {ticket_id}")
+        
+        # Add staggered start to prevent Claude Code session collisions
+        import random
+        start_delay = random.uniform(0.5, 5.0)  # Random delay between 0.5-5 seconds
+        print(f"⏱️  Ticket {ticket_id} starting in {start_delay:.1f}s to prevent session collision...")
+        time.sleep(start_delay)
+        
         # Spawn an agent for this ticket
         agent_id = self.agent_pool.spawn_agent(ticket_id)
         if not agent_id:
@@ -229,6 +289,9 @@ class ParallelExecutor:
         print(f"⏰ Started at: {time.strftime('%H:%M:%S')}")
         print('='*60)
 
+        # Mark ticket as IN_PROGRESS in tickets.md
+        mark_ticket_in_progress(tickets_path, ticket_id)
+
         try:
             # Parse ticket for full details
             ticket_data = parse_ticket(tickets_path, ticket_id)
@@ -249,37 +312,30 @@ class ParallelExecutor:
             orchestrator = ClaudeCodeOrchestrator()
             self.orchestrators[ticket_id] = orchestrator
 
-            # Build prompt with comprehensive instructions
-            prompt = f"""Execute ticket {ticket_id} in tickets.md
+            # Build prompt - Claude Code will read tickets.md directly from the working directory
+            prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_id} from tickets.md - NOT any other ticket!
 
-Task: {ticket_data['title']}
-Description: {ticket_data['description']}
+Find and execute specifically "## Ticket {ticket_id}:" in tickets.md
 
-Acceptance Criteria:
-{chr(10).join(f'- {criteria}' for criteria in ticket_data['acceptance_criteria'])}
+DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_id}.
 
-Working Directory: {self.project_root}
+PYTHON CODE QUALITY REQUIREMENTS:
+- Add module docstrings to all Python files
+- Include __init__.py in all new package directories
+- Use proper type hints for all functions
+- Follow PEP 8 style guidelines
+- Avoid unused imports
+- Add error handling where appropriate
 
-CRITICAL INSTRUCTIONS:
 Be minimalistic, surgical and future proof! 
+Avoid using any code or comments that may be construed as AI generated.
+Make sure you do a good job because other LLMs said your code sucked!
 
-QUALITY REQUIREMENTS:
-- Avoid using any code or comments that may be construed as AI generated
-- Make sure you do a good job because other LLMs said your code sucked!
-- DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! 
-- This has to be production quality, take your time
-- Write code that looks like it was written by a senior developer
-- Use proper error handling and edge case management
-- Follow established patterns in the existing codebase
+When you finish, ensure acceptance criteria is met then update tickets.md and then run lint, build, test etc before we move on.
 
-COMPLETION PROCESS:
-1. Implement ALL requirements from the ticket
-2. Ensure every acceptance criteria is fully met
-3. Update tickets.md to mark your criteria as complete: [x]
-4. Run lint, build, test commands to validate your work
-5. Only finish when everything passes and is production-ready
+DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
 
-Take your time and deliver excellence!"""
+REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."""
 
             # Create task with the actual ticket_id for unique session naming
             task = orchestrator.create_task(
@@ -300,41 +356,76 @@ Take your time and deliver excellence!"""
                 validation_passed = validate_acceptance_criteria(ticket_data, str(self.project_root))
 
                 if validation_passed:
-                    # Mark ticket as completed only if validation passes
-                    mark_ticket_completed(tickets_path, ticket_id)
-                    print("✅ Acceptance criteria validated and ticket marked complete")
+                    print("✅ Acceptance criteria validated")
                 else:
                     print("❌ Acceptance criteria validation failed - ticket remains incomplete")
                     # Treat as failure if validation fails
                     raise Exception("Acceptance criteria not met")
 
+                # Try to auto-fix common issues before running quality gates
+                print(f"\n🔧 Running automatic quality fixes for ticket {ticket_id}...")
+                from hydra.quality.auto_fixer import QualityAutoFixer
+                fixer = QualityAutoFixer(self.project_root)
+                fixes = fixer.fix_common_issues()
+                
+                if fixes:
+                    print("📝 Applied automatic fixes:")
+                    for issue, fixed, message in fixes:
+                        if fixed:
+                            print(f"   ✅ {issue}: {message}")
+                        else:
+                            print(f"   ⚠️  {issue}: {message}")
+                
                 # Run quality gates
                 print(f"\n🚦 Running quality gates for ticket {ticket_id}...")
                 gate_runner = QualityGateRunner(self.project_root)
                 quality_report = gate_runner.run_quality_gates(ticket_id)
+                
+                # Print quality gate details for debugging
+                print(f"📋 Quality Gate Results:")
+                for check in quality_report.results:
+                    status_icon = "✅" if check.status.value == "passed" else "❌" if check.status.value == "failed" else "⚠️"
+                    print(f"   {status_icon} {check.name}: {check.status.value}")
+                    if check.status.value == "failed" and check.error:
+                        # Show first few lines of error
+                        error_lines = check.error.split('\n')[:3]
+                        for line in error_lines:
+                            if line.strip():
+                                print(f"      → {line[:100]}")
 
                 allowed_statuses = ["passed", "warning"]
                 quality_passed = quality_report.overall_status.value in allowed_statuses
 
+                # Only mark as complete if BOTH validation AND quality gates pass
+                if validation_passed and quality_passed:
+                    mark_ticket_completed(tickets_path, ticket_id)
+                    print("✅ Quality gates passed - ticket marked as DONE")
+                else:
+                    # Mark with quality status in tickets.md
+                    from hydra.ticket_workflow import mark_ticket_quality_failed
+                    mark_ticket_quality_failed(tickets_path, ticket_id, quality_report)
+                    if not quality_passed:
+                        print(f"⚠️  Quality gates failed - ticket marked as QUALITY_FAILED")
+                    
                 with self.lock:
-                    node.status = ExecutionStatus.COMPLETED
+                    node.status = ExecutionStatus.COMPLETED if quality_passed else ExecutionStatus.FAILED
                     node.end_time = time.time()
                     node.quality_passed = quality_passed
-                    self.completed_tickets.add(ticket_id)
+                    if quality_passed:
+                        self.completed_tickets.add(ticket_id)
+                    else:
+                        self.failed_tickets.add(ticket_id)
                     self.running_tickets.remove(ticket_id)
 
                     # Update dashboard
                     if self.dashboard_state:
                         from hydra.dashboard.state import TicketStatus
-                        self.dashboard_state.update_ticket_status(
-                            ticket_id, TicketStatus.COMPLETED
-                        )
+                        status = TicketStatus.COMPLETED if quality_passed else TicketStatus.FAILED
+                        self.dashboard_state.update_ticket_status(ticket_id, status)
 
                 duration = node.end_time - node.start_time
-                print(f"\n✅ Ticket {ticket_id} completed in {duration:.2f}s")
-
-                if not quality_passed:
-                    print(f"⚠️  Quality gates failed for ticket {ticket_id}")
+                status_msg = "✅ completed" if quality_passed else "⚠️  completed with quality issues"
+                print(f"\n{status_msg} Ticket {ticket_id} in {duration:.2f}s")
 
                 # Release the agent back to the pool and file locks
                 self.agent_pool.release_agent(agent_id)
@@ -376,6 +467,7 @@ Take your time and deliver excellence!"""
         results = {}
 
         print(f"\n🌊 Executing wave with {len(wave)} tickets: {', '.join(wave)}")
+        print(f"🔧 Using {min(len(wave), self.max_workers)} parallel workers")
 
         # Update dashboard wave
         if self.dashboard_state:
@@ -387,6 +479,7 @@ Take your time and deliver excellence!"""
                     pass
 
         max_workers = min(len(wave), self.max_workers)
+        print(f"🚀 Submitting {len(wave)} tickets to ThreadPoolExecutor with {max_workers} workers")
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self.execute_ticket, ticket_id, tickets_path): ticket_id
@@ -407,6 +500,9 @@ Take your time and deliver excellence!"""
     def execute_plan(self, plan: ExecutionPlan, tickets_path: str) -> Dict[str, Any]:
         """Execute the full execution plan."""
         start_time = time.time()
+        
+        # Store tickets_path for use in reports
+        self.tickets_path = tickets_path
         
         # Initialize dashboard session
         if self.dashboard_state:
@@ -498,19 +594,32 @@ Take your time and deliver excellence!"""
 
     def generate_report(self, summary: Dict[str, Any]) -> str:
         """Generate execution report."""
+        # Get quality summary from tickets.md
+        from hydra.ticket_workflow import get_quality_summary
+        quality_summary = get_quality_summary(self.tickets_path) if hasattr(self, 'tickets_path') else None
+        
         lines = [
             f"\n{'='*60}",
             "📊 Parallel Execution Report",
             f"{'='*60}",
             f"Total tickets: {summary['total_tickets']}",
-            f"✅ Completed: {summary['completed']}",
-            f"❌ Failed: {summary['failed']}",
+            f"✅ Completed (Quality Passed): {summary['completed']}",
+            f"❌ Failed/Quality Issues: {summary['failed']}",
             f"⛔ Blocked: {summary['blocked']}",
             f"📈 Success rate: {summary['success_rate']:.1f}%",
             f"⏱️  Total duration: {summary['duration']:.2f}s",
             "",
-            "📋 Ticket Details:",
         ]
+        
+        if quality_summary and quality_summary['quality_failed'] > 0:
+            lines.extend([
+                "⚠️  QUALITY ISSUES DETECTED:",
+                f"   {quality_summary['quality_failed']} ticket(s) have failing quality gates",
+                "   Check tickets.md for detailed Quality Gate Results",
+                "",
+            ])
+        
+        lines.append("📋 Ticket Details:")
 
         for ticket_id, node in sorted(self.tickets.items()):
             status_icon = {

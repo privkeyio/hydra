@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+from hydra.utils.claude_path import get_claude_cli_path
 from .base import LLMProvider
 
 
@@ -14,7 +15,7 @@ class ClaudeCLIDirectProvider(LLMProvider):
 
     def validate_config(self):
         """Validate Claude CLI configuration."""
-        claude_path = self.config.extra_params.get('claude_path', '/home/kyle/.claude/local/claude')
+        claude_path = self.config.extra_params.get('claude_path', get_claude_cli_path())
 
         if not Path(claude_path).exists():
             # Try to find it

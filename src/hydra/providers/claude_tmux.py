@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .base import LLMProvider
+from hydra.safety.claude_file_interceptor import ClaudeFileInterceptor
+from hydra.utils.claude_path import get_claude_cli_path
 
 
 class ClaudeTmuxProvider(LLMProvider):
@@ -16,7 +18,7 @@ class ClaudeTmuxProvider(LLMProvider):
         """Validate Claude CLI and tmux configuration."""
         self.claude_path = self.config.extra_params.get(
             'claude_path',
-            os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
+            os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
         )
 
         if not Path(self.claude_path).exists():
@@ -92,6 +94,10 @@ class ClaudeTmuxProvider(LLMProvider):
         project_dir = kwargs.get('cwd', os.getcwd())
         ticket_id = kwargs.get('ticket_id', None)
         session_name = self._create_session_name(ticket_id)
+        
+        # Initialize file interceptor for this session
+        file_interceptor = ClaudeFileInterceptor()
+        agent_id = session_name  # Use session name as agent ID for locking
 
         # Kill any existing session with the same name
         self._kill_session(session_name)
@@ -140,7 +146,9 @@ class ClaudeTmuxProvider(LLMProvider):
                 print("⚠️  Claude Code initialization timeout - proceeding anyway")
 
             # Send the implementation prompt with explicit file creation permission
-            print("📝 Sending task to Claude Code...")
+            print(f"📝 Sending task to Claude Code in session {session_name}...")
+            print(f"🎯 Task: Working on Ticket {ticket_id}" if ticket_id else "🎯 Generic task")
+            
             # Make the prompt VERY explicit about using tools
             enhanced_prompt = f"""You have permission to use ALL tools to complete this task.
 Please use the Write, Edit, and Bash tools as needed to create and modify files.
@@ -153,6 +161,10 @@ You have full permission to create any files needed for this task.
 When asked about file creation, always select option 2 'Yes, and don't ask again this session'.
 
 SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) without explicit user approval."""
+            
+            # Log the first part of the prompt to verify it's ticket-specific
+            print(f"📋 Prompt preview: {prompt[:200]}..." if len(prompt) > 200 else f"📋 Full prompt: {prompt}")
+            
             self._send_to_session(session_name, enhanced_prompt)
 
             # Give Claude time to process the prompt
@@ -273,19 +285,31 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                             import re
                             file_match = re.search(r'Reading[:\s]+([^\s]+)', new_content)
                             if file_match:
-                                print(f"👁️  Reading: {file_match.group(1)}")
+                                filepath = file_match.group(1)
+                                print(f"👁️  Reading: {filepath}")
+                                # No lock needed for read operations
                             else:
                                 print("👁️  Reading files...")
                         elif "Writing" in new_content or "Creating" in new_content:
                             file_match = re.search(r'(?:Writing|Creating)[:\s]+([^\s]+)', new_content)
                             if file_match:
-                                print(f"✍️  Writing: {file_match.group(1)}")
+                                filepath = file_match.group(1)
+                                # Acquire file lock for write operation
+                                if file_interceptor.acquire_file_lock(agent_id, filepath, 'write'):
+                                    print(f"✍️  Writing: {filepath} [locked]")
+                                else:
+                                    print(f"⏳ Waiting for lock on: {filepath}")
                             else:
                                 print("✍️  Writing new content...")
                         elif "Editing" in new_content:
                             file_match = re.search(r'Editing[:\s]+([^\s]+)', new_content)
                             if file_match:
-                                print(f"✏️  Editing: {file_match.group(1)}")
+                                filepath = file_match.group(1)
+                                # Acquire file lock for edit operation
+                                if file_interceptor.acquire_file_lock(agent_id, filepath, 'edit'):
+                                    print(f"✏️  Editing: {filepath} [locked]")
+                                else:
+                                    print(f"⏳ Waiting for lock on: {filepath}")
                             else:
                                 print("✏️  Editing files...")
                         elif "Running" in new_content or "Executing" in new_content:
@@ -500,6 +524,8 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
         except Exception as e:
             raise Exception(f"Claude tmux error: {str(e)}")
         finally:
+            # Release all file locks for this agent
+            file_interceptor.release_agent_locks(agent_id)
             # Kill the tmux session
             self._kill_session(session_name)
             # Clean up marker file

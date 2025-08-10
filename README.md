@@ -3,7 +3,7 @@
   
   # HYDRA
   
-  **Multi-headed AI orchestration for autonomous code generation**
+  **Multi-agent orchestration system for autonomous software development**
 </div>
 
 ```
@@ -20,340 +20,121 @@
 
 ## What is Hydra?
 
-Hydra orchestrates Claude Code CLI and other AI models to autonomously build production software. Execute complex development workflows with parallel agents, automatic verification, and real-time monitoring.
-
-### Core Capabilities
-
-**Claude Code Orchestration**
-- Direct integration with Claude Code CLI through tmux
-- Session persistence and state management
-- Automatic file operation handling
-
-**Parallel Ticket Execution**
-- Dependency-aware task scheduling
-- Concurrent agent execution
-- Wave-based workflow optimization
-
-**Automatic Quality Assurance**
-- Acceptance criteria verification
-- Multi-language quality gates
-- Production safety guardrails
-
-**Real-time Monitoring**
-- Live web dashboard at `localhost:8080`
-- Server-sent events for instant updates
-- Session state persistence
-
----
+Hydra orchestrates multiple AI agents to build production software in parallel. Give it a project description, and it creates tickets that agents work on simultaneously - respecting dependencies, preventing conflicts, and ensuring quality.
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-git clone https://github.com/privkeyio/hydra.git
+git clone https://github.com/username/hydra.git
 cd hydra
 pip install -e .
 ```
 
-### Configure Claude
+**Requirements:** Python 3.11+, tmux, Claude CLI
+
+### Basic Setup
 
 ```bash
+# Set Claude CLI path
 export CLAUDE_CLI_PATH=/path/to/claude
-# or
+
+# Or use API key
 export ANTHROPIC_API_KEY=your_key
 ```
 
-### Execute Your First Task
+### Your First Project
 
 ```bash
-# Single task
-hydra claude execute "Build a FastAPI service with auth"
+# 1. Generate tickets from your idea
+hydra ticket create "Build a REST API with authentication, database, and tests"
 
-# Ticket-based workflow
-hydra ticket create "Build a complete web application"
-hydra ticket parallel --workers 4
-```
-
----
-
-## Ticket Workflow
-
-Hydra's ticket system enables complex project execution:
-
-### 1. Generate Tickets
-
-```bash
-hydra ticket create "Build a P2P chat application with encryption"
-```
-
-Creates `tickets.md` with dependency-aware tasks:
-
-```markdown
-## Ticket 001: Initialize project structure
-**Model:** Sonnet 4
-**Dependencies:** None
-
-## Ticket 002: Implement encryption module  
-**Model:** Opus 4
-**Dependencies:** 001
-
-## Ticket 003: Build networking layer
-**Model:** Opus 4
-**Dependencies:** 001, 002
-```
-
-### 2. Execute with Dashboard
-
-```bash
-hydra ticket parallel --workers 3
-```
-
-Opens real-time dashboard showing:
-- Progress visualization
-- Wave execution status  
-- Per-ticket metrics
-- Quality gate results
-
-### 3. Automatic Verification
-
-Each ticket undergoes:
-- Acceptance criteria validation
-- Quality gate checks (lint, test, build)
-- Dependency verification
-- State persistence
-
----
-
-## CLI Commands
-
-### Ticket Operations
-
-```bash
-# Create tickets from description
-hydra ticket create "Project description"
-
-# Execute single ticket
-hydra ticket execute 001
-
-# Parallel execution with dashboard
+# 2. Execute with parallel agents
 hydra ticket parallel --workers 4
 
-# Verify completion
-hydra ticket verify 001
-
-# Run quality gates
-hydra ticket quality 001
+# 3. Monitor progress
+open http://localhost:8080
 ```
 
-### Claude Code Orchestration
+## Core Commands
 
+### Single Task
 ```bash
-# Direct task execution
-hydra claude execute "Task description" --timeout 300
+hydra claude execute "Create a FastAPI service with JWT auth"
+```
 
-# Session management
-hydra claude session /path/to/project
+### Ticket Workflow
+```bash
+# Generate tickets
+hydra ticket create "project description"
+
+# Execute in parallel
+hydra ticket parallel --workers 4
+
+# Verify and fix incomplete work
+hydra ticket verify-parallel --workers 4
+```
+
+### Session Management
+```bash
+hydra claude session /project --name dev
 hydra claude list
-hydra claude attach session_name
-hydra claude kill session_name
-
-# State persistence
-hydra claude save session_name
-hydra claude restore session_name
+hydra claude attach dev
 ```
 
-### Template Operations
+## How It Works
 
-```bash
-# List available templates
-hydra template list
+1. **Create Tickets**: Break down your project into atomic tasks with dependencies
+2. **Parallel Execution**: Multiple agents work simultaneously on different tickets
+3. **Smart Coordination**: Dependency resolution, file locking, conflict prevention
+4. **Quality Gates**: Automatic testing, linting, and verification
+5. **Live Monitoring**: Real-time dashboard shows progress and logs
 
-# Create from template
-hydra template create fastapi_app ./my-app
-```
-
----
-
-## Python API
-
-```python
-from hydra.parallel import ParallelExecutor
-from hydra.dashboard import DashboardServer
-
-# Initialize with dashboard
-dashboard = DashboardServer()
-dashboard.start()
-
-# Execute tickets in parallel
-executor = ParallelExecutor(max_workers=4)
-tickets = executor.load_tickets("tickets.md")
-plan = executor.build_execution_plan()
-results = executor.execute_plan(plan, "tickets.md")
-```
-
----
-
-## Architecture
-
-```
-┌──────────────────────────────────────────┐
-│            HYDRA ORCHESTRATOR            │
-├──────────────────────────────────────────┤
-│                                          │
-│  ┌────────────┐      ┌────────────┐     │
-│  │   Claude   │      │  Parallel  │     │
-│  │   Code     │◄────►│  Executor  │     │
-│  │   (tmux)   │      │            │     │
-│  └────────────┘      └────────────┘     │
-│         ▲                   ▲            │
-│         │                   │            │
-│  ┌────────────┐      ┌────────────┐     │
-│  │  Session   │      │  Dashboard │     │
-│  │ Persistence│      │   Server   │     │
-│  └────────────┘      └────────────┘     │
-│         ▲                   ▲            │
-│         │                   │            │
-│  ┌────────────┐      ┌────────────┐     │
-│  │  Quality   │      │   Ticket   │     │
-│  │   Gates    │      │  Verifier  │     │
-│  └────────────┘      └────────────┘     │
-│                                          │
-└──────────────────────────────────────────┘
-```
-
----
-
-## Features
-
-### Ticket Verification
-- Pattern-based acceptance criteria checking
-- File existence validation
-- Function/endpoint detection
-- Automatic completion tracking
-
-### Session Persistence
-- Save/restore Claude Code sessions
-- File snapshot preservation
-- Task history tracking
-- State serialization
-
-### Quality Gates
-- Language-specific tool detection
-- Automatic lint/test/build execution
-- Python: ruff, pytest, mypy
-- JavaScript: eslint, jest, bun test
-- Rust: cargo check, clippy, test
-- Go: go vet, test, build
-
-### Parallel Execution
-- Dependency graph resolution
-- Wave-based scheduling
-- Concurrent agent management
-- Resource pool optimization
-
-### Progress Dashboard
-- Real-time execution monitoring
-- Server-sent events streaming
-- Ticket status visualization
-- Wave progress tracking
-
----
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# LLM Provider
-export LLM_PROVIDER=claude_tmux  # or venice, anthropic, openai
-export CLAUDE_CLI_PATH=/home/user/.claude/local/claude
-
-# Timeouts and Limits
-export LLM_TIMEOUT=300
-export MAX_WORKERS=4
-
-# Dashboard
-export DASHBOARD_PORT=8080
-```
-
-### Project Configuration
-
-Create `CLAUDE.md` in your project:
+## Example Ticket
 
 ```markdown
-## Project Context
-Node.js application using Hyperswarm
+## Ticket 001: Setup API
+**Model:** sonnet
+**Dependencies:** None
+**Description:** Create FastAPI application
 
-## Quality Commands
-- Lint: bun run lint
-- Test: bun test
-- Build: bun run build
-
-## Conventions
-- Use TypeScript
-- Functional programming style
-- No console.log in production
+**Acceptance Criteria:**
+- [ ] Create main.py with FastAPI app
+- [ ] Add health check endpoint
+- [ ] Setup error handling
 ```
 
----
+## Documentation
 
-## Development
+- 📚 **[Full Documentation](docs/)** - Complete reference and guides
+- 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - System design and components
+- 🔧 **[API Reference](docs/API_REFERENCE.md)** - Python API and integration
+- 💡 **[Examples](examples/)** - Real-world use cases
 
-### Testing
+## Testing Commands
 
-```bash
-# Unit tests
-pytest tests/unit/ -v
-
-# Integration tests
-pytest tests/integration/
-
-# With coverage
-pytest --cov=hydra --cov-report=html
-```
-
-### Linting
+Try these to see Hydra in action:
 
 ```bash
-ruff check src/
-ruff format src/
-```
-
----
-
-## Examples
-
-### Build Complete Application
-
-```bash
-# Generate tickets for full-stack app
-hydra ticket create "Build a real-time collaborative editor with React frontend, 
-FastAPI backend, WebSocket sync, and PostgreSQL storage"
-
-# Execute with 4 parallel workers
+# Build a complete web app
+hydra ticket create "Build a todo app with React frontend and FastAPI backend"
 hydra ticket parallel --workers 4
 
-# Monitor at http://localhost:8080
+# Verify all work is complete
+hydra ticket verify-parallel --workers 4
+
+# Check the results
+ls -la
+cat tickets.md
 ```
-
-### Complex Refactoring
-
-```bash
-# Direct Claude Code execution
-hydra claude execute "Refactor the entire codebase to use async/await 
-patterns, add comprehensive error handling, and implement retry logic 
-for all external API calls" --timeout 600
-```
-
----
 
 ## License
 
-Proprietary. Internal use only.
+Proprietary software. All rights reserved.
 
 ---
 
-Built with precision. No shortcuts. Production ready.
+Built for production. No compromises.
 
-**HYDRA** - When one head isn't enough.
+**HYDRA** - Orchestrating the future of autonomous development.

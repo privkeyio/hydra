@@ -138,7 +138,19 @@ class HydraConfig:
             extra_params = llm_config.get('extra_params', {})
             config.extra_params['claude_path'] = (
                 extra_params.get('claude_path') or
-                os.getenv('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
+                os.getenv('CLAUDE_CLI_PATH', 'claude')
+            )
+
+        elif provider_type == 'claude_session':
+            # Configuration for Claude Code session provider with backend auto-discovery
+            extra_params = llm_config.get('extra_params', {})
+            config.extra_params['claude_path'] = (
+                extra_params.get('claude_path') or
+                os.getenv('CLAUDE_CLI_PATH', 'claude')
+            )
+            config.extra_params['preferred_backend'] = (
+                extra_params.get('preferred_backend') or
+                os.getenv('SESSION_BACKEND', None)  # tmux, direct_process, docker
             )
 
         elif provider_type == 'mock':

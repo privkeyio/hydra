@@ -11,6 +11,7 @@ from typing import Dict, List, Set, Tuple
 
 from hydra.agents.base import CodeAgent
 from hydra.monitoring import monitoring
+from hydra.utils.claude_path import get_claude_cli_path
 
 
 def detect_project_context(tickets_path):
@@ -104,6 +105,7 @@ def parse_ticket(tickets_path, ticket_identifier):
         'number': ticket_identifier,
         'title': lines[0].strip(),
         'description': '',
+        'status': 'TODO',  # Default status
         'model': 'sonnet',
         'acceptance_criteria': [],
         'dependencies': [],
@@ -120,7 +122,17 @@ def parse_ticket(tickets_path, ticket_identifier):
     
     for line in lines[1:]:
         line = line.strip()
-        if line.startswith('**Model:**'):
+        if line.startswith('**Status:**'):
+            status_text = line.replace('**Status:**', '').strip().upper()
+            ticket['status'] = status_text
+            # Mark as completed if status is DONE
+            if status_text == 'DONE':
+                ticket['completed'] = True
+            # Don't mark as completed if quality failed
+            elif status_text == 'QUALITY_FAILED':
+                ticket['completed'] = False
+                ticket['quality_failed'] = True
+        elif line.startswith('**Model:**'):
             model_text = line.replace('**Model:**', '').strip().lower()
             ticket['model'] = 'opus' if 'opus' in model_text else 'sonnet'
         elif line.startswith('**Dependencies:**'):
@@ -199,7 +211,7 @@ Project: {project_description}"""
         config = get_config()
         
         # Get Claude path from config or environment
-        claude_path = os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
+        claude_path = os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
         if hasattr(config, 'llm_provider') and hasattr(config.llm_provider.config, 'extra_params'):
             claude_path = config.llm_provider.config.extra_params.get('claude_path', claude_path)
         
@@ -266,8 +278,60 @@ def validate_acceptance_criteria(ticket, project_dir):
     for i, criterion in enumerate(criteria, 1):
         criterion_lower = criterion.lower()
 
+        # Check for specific file paths mentioned in criteria
+        # Look for patterns like "src/hydra/providers/interactive_base.py" or ".hydra directory"
+        import re
+        
+        # Check for Python files
+        file_path_pattern = r'(?:src/[a-zA-Z0-9_/]+\.py|tests/[a-zA-Z0-9_/]+\.py|docs/[a-zA-Z0-9_/]+)'
+        file_matches = re.findall(file_path_pattern, criterion)
+        
+        # Check for directory mentions like ".hydra directory"
+        dir_pattern = r'\.hydra directory|\.hydra/[a-zA-Z0-9_/]+'
+        dir_matches = re.findall(dir_pattern, criterion)
+        
+        # Check for specific file mentions
+        if "interactive_base.py" in criterion:
+            file_path = "src/hydra/providers/interactive_base.py"
+            full_path = os.path.join(project_dir, file_path)
+            if not os.path.exists(full_path):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Required file missing: {file_path}")
+            else:
+                print(f"   ✅ {i}. File exists: {file_path}")
+        elif "security_manager.py" in criterion or "SecurityManager" in criterion:
+            file_path = "src/hydra/safety/security_manager.py"
+            full_path = os.path.join(project_dir, file_path)
+            if not os.path.exists(full_path):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Required file missing: {file_path}")
+            else:
+                print(f"   ✅ {i}. SecurityManager exists")
+        elif "hydra_state.py" in criterion or "HydraStateManager" in criterion:
+            file_path = "src/hydra/persistence/hydra_state.py"
+            full_path = os.path.join(project_dir, file_path)
+            if not os.path.exists(full_path):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Required file missing: {file_path}")
+            else:
+                print(f"   ✅ {i}. HydraStateManager exists")
+        elif ".hydra directory" in criterion:
+            hydra_dir = os.path.join(project_dir, ".hydra")
+            if not os.path.exists(hydra_dir):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. .hydra directory missing")
+            else:
+                print(f"   ✅ {i}. .hydra directory exists")
+        elif file_matches:
+            for file_path in file_matches:
+                full_path = os.path.join(project_dir, file_path)
+                if not os.path.exists(full_path):
+                    failed_criteria.append(f"{i}. {criterion}")
+                    print(f"   ❌ {i}. Required file missing: {file_path}")
+                else:
+                    print(f"   ✅ {i}. File exists: {file_path}")
         # File existence checks
-        if "package.json exists" in criterion_lower or "package.json with" in criterion_lower:
+        elif "package.json exists" in criterion_lower or "package.json with" in criterion_lower:
             if not os.path.exists(os.path.join(project_dir, "package.json")):
                 failed_criteria.append(f"{i}. {criterion}")
                 print(f"   ❌ {i}. package.json missing")
@@ -379,10 +443,13 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         return False
 
     # Check if ticket is already completed
-    if ticket['completed']:
+    if ticket['completed'] or ticket.get('status') == 'DONE':
         print("✅ Ticket already completed!")
-        print("ℹ️  Skipping execution as ticket is marked as COMPLETED")
+        print("ℹ️  Skipping execution as ticket is marked as DONE")
         return True
+
+    # Mark ticket as IN_PROGRESS
+    mark_ticket_in_progress(tickets_path, ticket_identifier)
 
     model_emoji = "🧠" if ticket['model'] == 'opus' else "⚡"
     print(f"{model_emoji} Model: {ticket['model'].upper()}")
@@ -404,58 +471,75 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         os.environ['LLM_TIMEOUT'] = str(timeout_override)
         print(f"⏱️  Using extended timeout: {timeout_override}s")
 
-    # Use the tmux Claude provider for ticket implementation
+    # Use provider factory to get the configured provider
+    from hydra.config import get_config
+    from hydra.providers.factory import ProviderFactory
     from hydra.providers.base import LLMConfig
-    from hydra.providers.claude_tmux import ClaudeTmuxProvider
-
-    # Create tmux provider config
-    config = LLMConfig(
-        provider_type='claude_tmux',
-        timeout=timeout_override or 300,
-        extra_params={
-            'claude_path': os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
-        }
-    )
-
-    # Create the tmux provider directly
-    provider = ClaudeTmuxProvider(config)
+    
+    # Get the provider type from environment or config
+    provider_type = os.environ.get('LLM_PROVIDER', 'claude_tmux')
+    
+    # Special handling for Claude tmux provider
+    if provider_type == 'claude_tmux':
+        from hydra.providers.claude_tmux import ClaudeTmuxProvider
+        config = LLMConfig(
+            provider_type='claude_tmux',
+            timeout=timeout_override or 300,
+            extra_params={
+                'claude_path': os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
+            }
+        )
+        provider = ClaudeTmuxProvider(config)
+    else:
+        # Use factory for other providers (venice, openai, anthropic, etc.)
+        config = get_config()
+        provider = ProviderFactory.create_provider(provider_type, config.llm_provider.config)
+        print(f"🔧 Using {provider_type} provider for ticket execution")
 
     # Detect project language/framework from context
     project_context = detect_project_context(tickets_path)
 
-    # Build comprehensive prompt for Claude Code CLI to execute
-    # Claude Code will handle all file creation and editing with enhanced instructions
-    prompt = f"""Execute ticket {ticket_identifier} in tickets.md
+    # Build prompt based on provider type
+    project_dir = os.path.dirname(os.path.abspath(tickets_path))
+    
+    if provider_type == 'claude_tmux':
+        # Claude Code can read tickets.md directly
+        prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_identifier} from tickets.md - NOT any other ticket!
 
-Task: {ticket['title']}
+Find and execute specifically "## Ticket {ticket_identifier}:" in tickets.md
+
+DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_identifier}.
+
+Be minimalistic, surgical and future proof!
+Avoid using any code or comments that may be construed as AI generated.
+Make sure you do a good job because other LLMs said your code sucked!
+
+When you finish, ensure acceptance criteria is met then update tickets.md and then run lint, build, test etc before we move on.
+
+DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
+
+REMINDER: You are working on Ticket {ticket_identifier} ONLY. Ignore all other tickets."""
+    else:
+        # For other providers (Venice, OpenAI, etc), include ticket details in prompt
+        prompt = f"""You are implementing Ticket {ticket_identifier} with the following requirements:
+
+Title: {ticket['title']}
 Description: {ticket['description']}
 
-Acceptance Criteria that MUST be met:
-{chr(10).join(f'- {criteria}' for criteria in ticket['acceptance_criteria'])}
+Acceptance Criteria:
+{chr(10).join(f"- {c}" for c in ticket['acceptance_criteria'])}
 
 Project Context: {project_context}
-Working Directory: {os.getcwd()}
+Project Directory: {project_dir}
 
-CRITICAL INSTRUCTIONS:
-Be minimalistic, surgical and future proof!
+IMPORTANT REQUIREMENTS:
+1. Implement ONLY this specific ticket, nothing else
+2. Write production-quality code - no shortcuts or mocks
+3. Be minimalistic and surgical in your approach
+4. Ensure all acceptance criteria are met
+5. The code must be future-proof and maintainable
 
-QUALITY REQUIREMENTS:
-- Avoid using any code or comments that may be construed as AI generated
-- Make sure you do a good job because other LLMs said your code sucked!
-- DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS!
-- This has to be production quality, take your time
-- Write code that looks like it was written by a senior developer
-- Use proper error handling and edge case management
-- Follow established patterns in the existing codebase
-
-COMPLETION PROCESS:
-1. Implement ALL requirements from the ticket
-2. Ensure every acceptance criteria is fully met  
-3. Update tickets.md to mark your criteria as complete: [x]
-4. Run lint, build, test commands to validate your work
-5. Only finish when everything passes and is production-ready
-
-Take your time and deliver excellence!"""
+Please provide the complete implementation with all necessary files and code."""
 
     print("🚀 Executing with production standards...")
     print("   ✅ No AI-generated patterns")
@@ -464,13 +548,36 @@ Take your time and deliver excellence!"""
     print("   ✅ Production quality only")
 
     try:
-        # Execute via Claude Code CLI directly - it will handle all file operations
-        print("\n🤖 Invoking Claude Code CLI to implement ticket...")
-
-        # Use the tmux provider to send prompt to Claude Code
-        # Claude Code will create/edit all necessary files
-        project_dir = os.path.dirname(os.path.abspath(tickets_path))
-        provider.generate(prompt, cwd=project_dir, ticket_id=ticket_identifier)
+        # Execute based on provider type
+        if provider_type == 'claude_tmux':
+            print("\n🤖 Invoking Claude Code CLI to implement ticket...")
+            provider.generate(prompt, cwd=project_dir, ticket_id=ticket_identifier)
+        else:
+            print(f"\n🤖 Using {provider_type} to generate implementation...")
+            
+            # For API-based providers, use CodeAgent
+            from hydra.agents.base import CodeAgent
+            agent = CodeAgent(f"ticket_{ticket_identifier}_agent", provider=provider)
+            
+            # Generate the implementation
+            result = agent.generate_code(prompt)
+            
+            # Write the generated code to files
+            if 'code' in result:
+                # Parse the generated code and create/update files
+                # This is a simplified version - you might want to enhance this
+                # to handle multiple files, etc.
+                lines = result['code'].split('\n')
+                print(f"📝 Generated {len(lines)} lines of code")
+                
+                # For now, save to a file based on ticket context
+                output_file = f"ticket_{ticket_identifier}_implementation.py"
+                output_path = os.path.join(project_dir, output_file)
+                
+                with open(output_path, 'w') as f:
+                    f.write(result['code'])
+                
+                print(f"💾 Saved implementation to {output_file}")
 
         # Claude Code has executed and created/modified files
         print(f"\n✅ Ticket {ticket_identifier} implementation complete!")
@@ -534,6 +641,124 @@ Take your time and deliver excellence!"""
             del os.environ['LLM_TIMEOUT']
 
 
+def mark_ticket_in_progress(tickets_path, ticket_identifier):
+    """Mark ticket as IN_PROGRESS in tickets.md."""
+    if not os.path.exists(tickets_path):
+        return
+
+    # Normalize ticket ID to 3 digits if it's numeric
+    if ticket_identifier.isdigit():
+        ticket_identifier = ticket_identifier.zfill(3)
+
+    with open(tickets_path, 'r') as f:
+        content = f.read()
+
+    # Try multiple ticket header patterns
+    patterns = [
+        rf'(## Ticket {ticket_identifier}:.*?)(?=## Ticket|\Z)',
+        rf'(## TICKET-{ticket_identifier}:.*?)(?=## TICKET-|\Z)',
+        rf'(## Ticket-{ticket_identifier}:.*?)(?=## Ticket-|\Z)',
+        rf'(## #{ticket_identifier}:.*?)(?=## #|\Z)',
+        rf'(## {ticket_identifier}:.*?)(?=## |\Z)',
+    ]
+
+    updated_content = content
+    ticket_found = False
+
+    for pattern in patterns:
+        def replace_ticket(match):
+            ticket_content = match.group(1)
+            # Update Status field to IN_PROGRESS
+            updated_content = re.sub(r'\*\*Status:\*\*\s*\w+', '**Status:** IN_PROGRESS', ticket_content)
+            return updated_content
+
+        flags = re.DOTALL | re.IGNORECASE
+        new_content = re.sub(pattern, replace_ticket, updated_content, flags=flags)
+        if new_content != updated_content:
+            updated_content = new_content
+            ticket_found = True
+            break
+
+    if ticket_found:
+        with open(tickets_path, 'w') as f:
+            f.write(updated_content)
+        print(f"🔄 Updated {tickets_path} - marked ticket {ticket_identifier} as IN_PROGRESS")
+
+
+def mark_ticket_quality_failed(tickets_path, ticket_identifier, quality_report=None):
+    """Mark ticket as having quality issues in tickets.md."""
+    if not os.path.exists(tickets_path):
+        return
+
+    # Normalize ticket ID to 3 digits if it's numeric
+    if ticket_identifier.isdigit():
+        ticket_identifier = ticket_identifier.zfill(3)
+
+    with open(tickets_path, 'r') as f:
+        content = f.read()
+
+    # Try multiple ticket header patterns
+    patterns = [
+        rf'(## Ticket {ticket_identifier}:.*?)(?=## Ticket|\Z)',
+        rf'(## TICKET-{ticket_identifier}:.*?)(?=## TICKET-|\Z)',
+        rf'(## Ticket-{ticket_identifier}:.*?)(?=## Ticket-|\Z)',
+        rf'(## #{ticket_identifier}:.*?)(?=## #|\Z)',
+        rf'(## {ticket_identifier}:.*?)(?=## |\Z)',
+    ]
+
+    updated_content = content
+    ticket_found = False
+
+    for pattern in patterns:
+        def replace_ticket(match):
+            ticket_content = match.group(1)
+            # Update Status field to QUALITY_FAILED
+            updated_content = re.sub(r'\*\*Status:\*\*\s*\w+', '**Status:** QUALITY_FAILED', ticket_content)
+            
+            # Add quality gate summary if provided
+            if quality_report and "**Quality Gate Results:**" not in updated_content:
+                # Find the acceptance criteria section and add quality results after it
+                lines = updated_content.split('\n')
+                insert_idx = -1
+                for i, line in enumerate(lines):
+                    if "**Acceptance Criteria:**" in line:
+                        # Find the end of acceptance criteria
+                        for j in range(i+1, len(lines)):
+                            if lines[j].startswith("## ") or (lines[j] and not lines[j].startswith("- ")):
+                                insert_idx = j
+                                break
+                        if insert_idx == -1:
+                            insert_idx = len(lines)
+                        break
+                
+                if insert_idx > 0:
+                    quality_summary = [
+                        "",
+                        "**Quality Gate Results:** ❌ FAILED",
+                        f"- Linting: {'✅' if hasattr(quality_report, 'linting_passed') and quality_report.linting_passed else '❌'}",
+                        f"- Type checking: {'✅' if hasattr(quality_report, 'type_checking_passed') and quality_report.type_checking_passed else '❌'}",
+                        f"- Tests: {'✅' if hasattr(quality_report, 'tests_passed') and quality_report.tests_passed else '❌'}",
+                        f"- Security: {'✅' if hasattr(quality_report, 'security_passed') and quality_report.security_passed else '❌'}",
+                        ""
+                    ]
+                    lines = lines[:insert_idx] + quality_summary + lines[insert_idx:]
+                    updated_content = '\n'.join(lines)
+            
+            return updated_content
+
+        flags = re.DOTALL | re.IGNORECASE
+        new_content = re.sub(pattern, replace_ticket, updated_content, flags=flags)
+        if new_content != updated_content:
+            updated_content = new_content
+            ticket_found = True
+            break
+
+    if ticket_found:
+        with open(tickets_path, 'w') as f:
+            f.write(updated_content)
+        print(f"⚠️  Updated {tickets_path} - marked ticket {ticket_identifier} as QUALITY_FAILED")
+
+
 def mark_ticket_completed(tickets_path, ticket_identifier):
     """Mark ticket as completed in tickets.md."""
     if not os.path.exists(tickets_path):
@@ -565,6 +790,8 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
             ticket_content = match.group(1)
             # Replace - [ ] with - [x]
             updated_content = ticket_content.replace('- [ ]', '- [x]')
+            # Update Status field to DONE
+            updated_content = re.sub(r'\*\*Status:\*\*\s*\w+', '**Status:** DONE', updated_content)
             return updated_content
 
         flags = re.DOTALL | re.IGNORECASE
@@ -577,7 +804,7 @@ def mark_ticket_completed(tickets_path, ticket_identifier):
     if ticket_found:
         with open(tickets_path, 'w') as f:
             f.write(updated_content)
-        update_msg = f"✅ Updated {tickets_path} - marked ticket {ticket_identifier} completed"
+        update_msg = f"✅ Updated {tickets_path} - marked ticket {ticket_identifier} as DONE"
         print(update_msg)
     else:
         print(f"⚠️  Could not find ticket {ticket_identifier} to mark as completed")
@@ -728,6 +955,53 @@ def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
     except Exception as e:
         print(f"💥 Error executing ticket {ticket_id}: {e}")
         return False
+
+
+def get_quality_summary(tickets_path="tickets.md"):
+    """Get a summary of ticket quality statuses."""
+    tickets = parse_all_tickets(tickets_path)
+    
+    summary = {
+        'total': len(tickets),
+        'todo': 0,
+        'in_progress': 0,
+        'done': 0,
+        'quality_failed': 0
+    }
+    
+    for ticket_id, ticket_data in tickets.items():
+        status = ticket_data.get('status', 'TODO').upper()
+        if status == 'DONE':
+            summary['done'] += 1
+        elif status == 'IN_PROGRESS':
+            summary['in_progress'] += 1
+        elif status == 'QUALITY_FAILED':
+            summary['quality_failed'] += 1
+        else:
+            summary['todo'] += 1
+    
+    return summary
+
+
+def print_quality_summary(tickets_path="tickets.md"):
+    """Print a quality status summary."""
+    summary = get_quality_summary(tickets_path)
+    
+    print("\n📊 Ticket Quality Summary")
+    print("=" * 40)
+    print(f"Total Tickets: {summary['total']}")
+    print(f"  ✅ Done (Quality Passed): {summary['done']}")
+    print(f"  ⚠️  Quality Failed: {summary['quality_failed']}")
+    print(f"  🔄 In Progress: {summary['in_progress']}")
+    print(f"  📋 TODO: {summary['todo']}")
+    
+    if summary['quality_failed'] > 0:
+        print(f"\n⚠️  {summary['quality_failed']} ticket(s) need quality fixes!")
+        print("   Check tickets.md for Quality Gate Results details")
+    
+    success_rate = (summary['done'] / summary['total'] * 100) if summary['total'] > 0 else 0
+    print(f"\n🎯 Success Rate: {success_rate:.1f}%")
+    print("=" * 40)
 
 
 def run_all_tickets(tickets_path="tickets.md", max_parallel=3):

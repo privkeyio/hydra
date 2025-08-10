@@ -1,0 +1,82 @@
+patterns:
+  - name: openai_api_key_prompt
+    pattern: 'OpenAI API key|Enter API key|API key required'
+    match_type: substring
+    response_strategy: prompt_user
+    safety_override: true
+    tags: [openai, api_key, authentication, security]
+    metadata:
+      tool: openai
+      category: authentication
+      sensitive: true
+
+  - name: anthropic_api_key_prompt
+    pattern: 'Anthropic API key|Claude API key|ANTHROPIC_API_KEY'
+    match_type: substring
+    response_strategy: prompt_user
+    safety_override: true
+    tags: [anthropic, claude, api_key, authentication, security]
+    metadata:
+      tool: anthropic
+      category: authentication
+      sensitive: true
+
+  - name: model_selection_prompt
+    pattern: 'Choose model|Select model|Which model|Available models'
+    match_type: substring
+    response_strategy: custom_response
+    response_text: 'claude-3-sonnet'
+    tags: [ai, model, selection, configuration]
+    metadata:
+      category: model_selection
+      default_choice: true
+
+  - name: token_limit_warning
+    pattern: 'token limit|context length|maximum tokens|truncating'
+    match_type: substring
+    response_strategy: auto_approve
+    response_text: 'continue'
+    tags: [ai, tokens, limits, context]
+    metadata:
+      category: token_management
+      non_critical: true
+
+  - name: rate_limit_notice
+    pattern: 'rate limit|too many requests|API limit|quota exceeded'
+    match_type: substring
+    response_strategy: auto_approve
+    response_text: 'wait'
+    tags: [ai, rate_limit, api, quota]
+    metadata:
+      category: api_limits
+      requires_wait: true
+
+  - name: ai_safety_warning
+    pattern: 'content policy|safety guidelines|harmful content|inappropriate request'
+    match_type: substring
+    response_strategy: deny
+    safety_override: true
+    tags: [ai, safety, content_policy, ethics]
+    metadata:
+      category: safety
+      compliance: true
+
+  - name: temperature_setting_prompt
+    pattern: 'temperature setting|creativity level|randomness'
+    match_type: substring
+    response_strategy: custom_response
+    response_text: '0.2'
+    tags: [ai, temperature, configuration, parameters]
+    metadata:
+      category: model_parameters
+      conservative_setting: true
+
+  - name: context_continuation_prompt
+    pattern: 'continue conversation|maintain context|remember previous'
+    match_type: substring
+    response_strategy: auto_approve
+    response_text: 'yes'
+    tags: [ai, context, memory, conversation]
+    metadata:
+      category: context_management
+      maintain_state: true

@@ -15,7 +15,8 @@ llm:
   
   # Claude CLI specific configuration
   extra_params:
-    claude_path: "/home/kyle/.claude/local/claude"
+    # claude_path will be dynamically resolved if not set
+    # claude_path: "~/.claude/local/claude"
     cli_flags: ""  # Additional CLI flags if needed
 
 # Agent Configuration

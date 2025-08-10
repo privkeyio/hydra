@@ -13,6 +13,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from hydra.utils.claude_path import get_claude_cli_path
+
 from hydra.providers.base import LLMConfig
 from hydra.providers.claude_tmux import ClaudeTmuxProvider
 
@@ -56,7 +58,7 @@ class ClaudeCodeOrchestrator:
 
         """
         self.claude_path = claude_path or os.environ.get(
-            'CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude'
+            'CLAUDE_CLI_PATH', get_claude_cli_path()
         )
         self.default_timeout = default_timeout
         self.active_sessions = {}

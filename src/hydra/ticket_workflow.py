@@ -266,8 +266,60 @@ def validate_acceptance_criteria(ticket, project_dir):
     for i, criterion in enumerate(criteria, 1):
         criterion_lower = criterion.lower()
 
+        # Check for specific file paths mentioned in criteria
+        # Look for patterns like "src/hydra/providers/interactive_base.py" or ".hydra directory"
+        import re
+        
+        # Check for Python files
+        file_path_pattern = r'(?:src/[a-zA-Z0-9_/]+\.py|tests/[a-zA-Z0-9_/]+\.py|docs/[a-zA-Z0-9_/]+)'
+        file_matches = re.findall(file_path_pattern, criterion)
+        
+        # Check for directory mentions like ".hydra directory"
+        dir_pattern = r'\.hydra directory|\.hydra/[a-zA-Z0-9_/]+'
+        dir_matches = re.findall(dir_pattern, criterion)
+        
+        # Check for specific file mentions
+        if "interactive_base.py" in criterion:
+            file_path = "src/hydra/providers/interactive_base.py"
+            full_path = os.path.join(project_dir, file_path)
+            if not os.path.exists(full_path):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Required file missing: {file_path}")
+            else:
+                print(f"   ✅ {i}. File exists: {file_path}")
+        elif "security_manager.py" in criterion or "SecurityManager" in criterion:
+            file_path = "src/hydra/safety/security_manager.py"
+            full_path = os.path.join(project_dir, file_path)
+            if not os.path.exists(full_path):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Required file missing: {file_path}")
+            else:
+                print(f"   ✅ {i}. SecurityManager exists")
+        elif "hydra_state.py" in criterion or "HydraStateManager" in criterion:
+            file_path = "src/hydra/persistence/hydra_state.py"
+            full_path = os.path.join(project_dir, file_path)
+            if not os.path.exists(full_path):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. Required file missing: {file_path}")
+            else:
+                print(f"   ✅ {i}. HydraStateManager exists")
+        elif ".hydra directory" in criterion:
+            hydra_dir = os.path.join(project_dir, ".hydra")
+            if not os.path.exists(hydra_dir):
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. .hydra directory missing")
+            else:
+                print(f"   ✅ {i}. .hydra directory exists")
+        elif file_matches:
+            for file_path in file_matches:
+                full_path = os.path.join(project_dir, file_path)
+                if not os.path.exists(full_path):
+                    failed_criteria.append(f"{i}. {criterion}")
+                    print(f"   ❌ {i}. Required file missing: {file_path}")
+                else:
+                    print(f"   ✅ {i}. File exists: {file_path}")
         # File existence checks
-        if "package.json exists" in criterion_lower or "package.json with" in criterion_lower:
+        elif "package.json exists" in criterion_lower or "package.json with" in criterion_lower:
             if not os.path.exists(os.path.join(project_dir, "package.json")):
                 failed_criteria.append(f"{i}. {criterion}")
                 print(f"   ❌ {i}. package.json missing")

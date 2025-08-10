@@ -1,0 +1,62 @@
+patterns:
+  - name: claude_code_permission_request
+    pattern: 'Do you want me to proceed\?|Should I continue with|Would you like me to continue|May I proceed'
+    match_type: regex
+    response_strategy: prompt_user
+    tags: [claude, permission, interactive]
+    metadata:
+      tool: claude
+      category: permission
+      description: Claude Code asking for permission to proceed
+
+  - name: claude_file_creation_prompt
+    pattern: 'I need to create.*file|Should I create.*file|Would you like me to create.*file'
+    match_type: regex
+    response_strategy: auto_approve
+    response_text: 'yes'
+    tags: [claude, file_operation, creation]
+    metadata:
+      tool: claude
+      category: file_ops
+      safe: true
+
+  - name: claude_file_overwrite_warning
+    pattern: 'This file already exists|File.*already exists|Overwrite.*file'
+    match_type: regex
+    response_strategy: prompt_user
+    tags: [claude, file_operation, overwrite, warning]
+    metadata:
+      tool: claude
+      category: file_ops
+      requires_caution: true
+
+  - name: claude_dangerous_operation_warning
+    pattern: 'This operation is dangerous|Warning:.*dangerous|This could cause damage'
+    match_type: regex
+    response_strategy: deny
+    safety_override: true
+    tags: [claude, warning, dangerous, safety]
+    metadata:
+      tool: claude
+      category: safety
+      danger_level: high
+
+  - name: claude_exit_plan_mode
+    pattern: 'exit plan mode|ready to code|implementation steps'
+    match_type: substring
+    response_strategy: auto_approve
+    response_text: 'yes'
+    tags: [claude, mode_change, planning]
+    metadata:
+      tool: claude
+      category: workflow
+
+  - name: claude_model_selection
+    pattern: 'Which model|Select model|Choose model'
+    match_type: substring
+    response_strategy: custom_response
+    response_text: 'sonnet-4'
+    tags: [claude, model, configuration]
+    metadata:
+      tool: claude
+      category: setup

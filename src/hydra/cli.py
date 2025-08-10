@@ -205,6 +205,32 @@ def create_parser():
         "--async", action="store_true", help="Use async execution engine (experimental)"
     )
 
+    # Batch execution
+    batch_parser = ticket_subparsers.add_parser(
+        "batch", help="Execute compatible tickets in batches to reduce session overhead"
+    )
+    batch_parser.add_argument(
+        "--tickets", default="tickets.md", help="Tickets file (default: tickets.md)"
+    )
+    batch_parser.add_argument(
+        "--workers", type=int, default=3, help="Max parallel workers (default: 3)"
+    )
+    batch_parser.add_argument(
+        "--max-batch-size", type=int, default=5, help="Maximum tickets per batch (default: 5)"
+    )
+    batch_parser.add_argument(
+        "--max-complexity", type=int, default=100, help="Maximum complexity score per batch (default: 100)"
+    )
+    batch_parser.add_argument(
+        "--min-batch-tickets", type=int, default=2, help="Minimum tickets to create a batch (default: 2)"
+    )
+    batch_parser.add_argument(
+        "--disable-batching", action="store_true", help="Disable batching (run individual tickets)"
+    )
+    batch_parser.add_argument(
+        "--save-log", action="store_true", help="Save execution log"
+    )
+
     # Claude Code orchestration subcommand
     claude_parser = subparsers.add_parser(
         "claude", help="Claude Code CLI orchestration"
@@ -799,6 +825,133 @@ def _handle_async_parallel_execution(args):
         return 1
 
 
+def _handle_batch_execution(args):
+    """Handle batch ticket execution with reduced session overhead."""
+    import asyncio
+    from hydra.dashboard import DashboardServer, DashboardState
+    from hydra.parallel.batch_executor import BatchExecutor, BatchConfig
+    from hydra.production_config import get_production_config
+
+    async def batch_main():
+        try:
+            # Load production configuration
+            config = get_production_config()
+            
+            # Override with command line arguments
+            if hasattr(args, 'workers'):
+                config.max_parallel_tickets = args.workers
+            
+            # Apply environment variables from config
+            for key, value in config.to_env_vars().items():
+                os.environ[key] = value
+            
+            # Get absolute path to tickets file
+            tickets_path = Path(args.tickets).resolve()
+            if not tickets_path.exists():
+                print(f"❌ Tickets file not found: {tickets_path}")
+                return 1
+
+            # Initialize dashboard if enabled
+            dashboard_state = None
+            dashboard_server = None
+            if config.enable_dashboard:
+                dashboard_state = DashboardState()
+                dashboard_server = DashboardServer(state=dashboard_state)
+                dashboard_server.start()
+
+            # Configure batch processing
+            batch_config = BatchConfig(
+                max_batch_size=getattr(args, 'max_batch_size', 5),
+                max_complexity_score=getattr(args, 'max_complexity', 100),
+                min_tickets_for_batch=getattr(args, 'min_batch_tickets', 2),
+                enable_batching=not getattr(args, 'disable_batching', False)
+            )
+
+            # Initialize batch executor
+            project_root = tickets_path.parent
+            executor = BatchExecutor(
+                batch_config=batch_config,
+                max_concurrent=config.max_parallel_tickets,
+                project_root=str(project_root),
+                dashboard_state=dashboard_state
+            )
+            
+            print(f"📦 Batch Processing Mode: {'enabled' if batch_config.enable_batching else 'disabled'}")
+            print(f"🎯 Max batch size: {batch_config.max_batch_size}")
+            print(f"🎯 Loading tickets from: {tickets_path}")
+
+            # Load tickets and analyze for batching
+            tickets = await executor.load_tickets(str(tickets_path))
+            if not tickets:
+                print("❌ No pending tickets found")
+                return 1
+            
+            pending_count = len([t for t in tickets.values() 
+                               if t.status.name == "PENDING"])
+            completed_count = len(executor.completed_tickets)
+            
+            if completed_count > 0:
+                print(f"✅ {completed_count} tickets already completed")
+            print(f"📋 Found {pending_count} pending tickets")
+            
+            if batch_config.enable_batching and len(executor.batches) > 0:
+                print(f"📦 Created {len(executor.batches)} batch groups:")
+                for batch_id, batch in executor.batches.items():
+                    print(f"   {batch_id}: {len(batch.ticket_ids)} tickets ({batch.model})")
+
+            # Execute with batch processing
+            summary = await executor.execute_tickets_dynamically(str(tickets_path))
+
+            # Generate and print report
+            report = executor.generate_report(summary)
+            print(report)
+
+            # Save log if requested
+            if args.save_log:
+                log_file = await executor.save_execution_log(summary)
+                print(f"\n📄 Execution log saved: {log_file}")
+
+            # Return success if all tickets completed
+            if summary['completed'] == summary['total_tickets']:
+                print("\n✅ All tickets completed successfully!")
+                
+                # Save completion report
+                report_path = await executor.save_completion_report(summary)
+                print(f"\n📄 Batch completion report saved: {report_path}")
+                
+                if summary.get('overhead_reduction', 0) > 0:
+                    print(f"⚡ Session overhead reduced by {summary['overhead_reduction']:.1f}%!")
+                
+                executor.shutdown()
+                if dashboard_server:
+                    dashboard_server.stop()
+                return 0
+            else:
+                completed = summary['completed']
+                total = summary['total_tickets']
+                print(f"\n⚠️ Execution incomplete: {completed}/{total} completed")
+                
+                executor.shutdown()
+                if dashboard_server:
+                    dashboard_server.stop()
+                return 1
+
+        except Exception as e:
+            print(f"❌ Batch execution error: {e}")
+            if 'executor' in locals():
+                executor.shutdown()
+            if 'dashboard_server' in locals():
+                dashboard_server.stop()
+            return 1
+
+    try:
+        # Run batch processing asynchronously
+        return asyncio.run(batch_main())
+    except Exception as e:
+        print(f"❌ Failed to start batch execution: {e}")
+        return 1
+
+
 def _handle_auto_workflow(args):
     """Handle automated workflow with dependency-aware parallel execution."""
     try:
@@ -844,6 +997,8 @@ def handle_ticket_command(args):
         return _handle_quality_gates(args)
     elif args.ticket_action == "parallel":
         return _handle_parallel_execution(args)
+    elif args.ticket_action == "batch":
+        return _handle_batch_execution(args)
     elif args.ticket_action == "auto":
         return _handle_auto_workflow(args)
     else:

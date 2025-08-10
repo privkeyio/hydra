@@ -1,0 +1,69 @@
+patterns:
+  - name: tmux_session_creation
+    pattern: 'create new session\?|start tmux session|new tmux session'
+    match_type: substring
+    response_strategy: auto_approve
+    response_text: 'yes'
+    tags: [tmux, session, terminal]
+    metadata:
+      tool: tmux
+      category: session_management
+      safe: true
+
+  - name: tmux_session_attach
+    pattern: 'attach to session|tmux attach|join session'
+    match_type: substring
+    response_strategy: auto_approve
+    response_text: 'yes'
+    tags: [tmux, session, terminal, attach]
+    metadata:
+      tool: tmux
+      category: session_management
+
+  - name: tmux_kill_session
+    pattern: 'kill.*session|tmux kill|end session'
+    match_type: regex
+    response_strategy: prompt_user
+    tags: [tmux, session, terminal, kill]
+    metadata:
+      tool: tmux
+      category: session_management
+      destructive: true
+
+  - name: screen_session_prompt
+    pattern: 'screen.*session|create screen|start screen'
+    match_type: regex
+    response_strategy: auto_approve
+    response_text: 'yes'
+    tags: [screen, session, terminal]
+    metadata:
+      tool: screen
+      category: session_management
+
+  - name: generic_yes_no_prompt
+    pattern: '\(y/n\)|\[y/N\]|\[Y/n\]|\(yes/no\)'
+    match_type: regex
+    response_strategy: prompt_user
+    tags: [generic, confirmation, interactive]
+    metadata:
+      category: user_confirmation
+      common_pattern: true
+
+  - name: generic_continue_prompt
+    pattern: 'Press.*to continue|Continue\?|Press any key'
+    match_type: regex
+    response_strategy: auto_approve
+    response_text: '\n'
+    tags: [generic, continue, interactive]
+    metadata:
+      category: user_confirmation
+      non_destructive: true
+
+  - name: process_termination
+    pattern: 'kill.*process|terminate.*process|stop.*process'
+    match_type: regex
+    response_strategy: prompt_user
+    tags: [process, termination, system]
+    metadata:
+      category: process_management
+      impact: moderate

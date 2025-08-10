@@ -1,0 +1,80 @@
+patterns:
+  - name: password_prompt
+    pattern: 'password:|Password:|Enter password|sudo password'
+    match_type: regex
+    response_strategy: prompt_user
+    safety_override: true
+    tags: [system, security, authentication, password]
+    metadata:
+      category: security
+      sensitive: true
+      requires_user_input: true
+
+  - name: sudo_password_prompt
+    pattern: '\[sudo\].*password|sudo:.*password'
+    match_type: regex
+    response_strategy: prompt_user
+    safety_override: true
+    tags: [system, sudo, security, authentication]
+    metadata:
+      category: security
+      sensitive: true
+      elevated_privileges: true
+
+  - name: ssh_host_verification
+    pattern: 'The authenticity of host|Are you sure you want to continue connecting'
+    match_type: substring
+    response_strategy: prompt_user
+    tags: [ssh, security, host_verification]
+    metadata:
+      tool: ssh
+      category: security
+      first_connection: true
+
+  - name: package_installation_confirm
+    pattern: 'Do you want to continue.*\[Y/n\]|Continue with installation\?|Install.*packages\?'
+    match_type: regex
+    response_strategy: auto_approve
+    response_text: 'Y'
+    tags: [package_manager, installation, system]
+    metadata:
+      category: package_management
+      safe: true
+
+  - name: destructive_operation_warning
+    pattern: 'WARNING:.*destructive|This will delete|Are you sure.*delete|Permanently remove'
+    match_type: regex
+    response_strategy: deny
+    safety_override: true
+    tags: [system, destructive, dangerous, deletion]
+    metadata:
+      category: destructive_ops
+      danger_level: high
+
+  - name: disk_format_warning
+    pattern: 'format.*disk|fdisk.*warning|This will erase.*disk'
+    match_type: regex
+    response_strategy: deny
+    safety_override: true
+    tags: [system, disk, format, destructive, dangerous]
+    metadata:
+      category: destructive_ops
+      danger_level: critical
+
+  - name: service_restart_confirmation
+    pattern: 'restart.*service|systemctl.*restart|service.*restart'
+    match_type: regex
+    response_strategy: prompt_user
+    tags: [system, service, restart, management]
+    metadata:
+      category: service_management
+      impact: moderate
+
+  - name: firewall_modification
+    pattern: 'iptables.*add|ufw.*allow|firewall.*rule'
+    match_type: regex
+    response_strategy: prompt_user
+    tags: [system, firewall, security, network]
+    metadata:
+      category: security
+      network_security: true

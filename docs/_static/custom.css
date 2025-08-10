@@ -1,0 +1,98 @@
+/* Custom CSS for Hydra documentation */
+
+/* Improve code block styling */
+.highlight {
+    background: #f8f9fa;
+    border-left: 3px solid #007acc;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+/* Style admonitions */
+.admonition {
+    margin: 15px 0;
+    padding: 10px 15px;
+    border-left: 4px solid #007acc;
+    background-color: #f0f7ff;
+}
+
+.admonition.warning {
+    border-left-color: #ff9800;
+    background-color: #fff8e1;
+}
+
+.admonition.danger {
+    border-left-color: #f44336;
+    background-color: #ffebee;
+}
+
+/* Improve table styling */
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 15px 0;
+}
+
+table th,
+table td {
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+table th {
+    background-color: #f5f5f5;
+    font-weight: 600;
+}
+
+/* Code spans in text */
+code {
+    background-color: #f5f5f5;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', monospace;
+}
+
+/* Improve navigation styling */
+.wy-nav-content {
+    max-width: 1200px;
+}
+
+/* Custom logo area */
+.wy-side-nav-search {
+    background-color: #2c3e50;
+}
+
+/* Improve section headers */
+h1, h2, h3 {
+    color: #2c3e50;
+    margin-top: 30px;
+    margin-bottom: 15px;
+}
+
+/* API documentation specific styling */
+.py.class,
+.py.function,
+.py.method {
+    margin-bottom: 20px;
+}
+
+.py.class > dt,
+.py.function > dt,
+.py.method > dt {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    padding: 10px;
+    margin-bottom: 5px;
+}
+
+/* Version badge */
+.version-badge {
+    display: inline-block;
+    background-color: #007acc;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}

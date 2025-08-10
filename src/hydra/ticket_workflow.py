@@ -1,3 +1,5 @@
+"""Ticket Workflow module."""
+
 #!/usr/bin/env python3
 """Kyle's ticket-based development workflow integrated into Hydra."""
 
@@ -9,9 +11,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Set, Tuple
 
-from hydra.agents.base import CodeAgent
 from hydra.monitoring import monitoring
-from hydra.utils.claude_path import get_claude_cli_path
 
 
 def detect_project_context(tickets_path):
@@ -106,7 +106,7 @@ def parse_ticket(tickets_path, ticket_identifier):
         'title': lines[0].strip(),
         'description': '',
         'status': 'TODO',  # Default status
-        'model': 'sonnet',
+        'model': 'balanced',  # Default to balanced model
         'acceptance_criteria': [],
         'dependencies': [],
         'completed': False
@@ -119,7 +119,7 @@ def parse_ticket(tickets_path, ticket_identifier):
     in_criteria = False
     unchecked_criteria = 0
     checked_criteria = 0
-    
+
     for line in lines[1:]:
         line = line.strip()
         if line.startswith('**Status:**'):
@@ -133,8 +133,18 @@ def parse_ticket(tickets_path, ticket_identifier):
                 ticket['completed'] = False
                 ticket['quality_failed'] = True
         elif line.startswith('**Model:**'):
+            # Use model mapper to handle both legacy and new model categories
+            from hydra.providers.model_mapper import get_model_mapper
+            mapper = get_model_mapper()
             model_text = line.replace('**Model:**', '').strip().lower()
-            ticket['model'] = 'opus' if 'opus' in model_text else 'sonnet'
+
+            # Map to model category (fast, balanced, smart, coder)
+            category = mapper.get_model_category(model_text)
+            if category:
+                ticket['model'] = category.value
+            else:
+                # Default to balanced if unknown
+                ticket['model'] = 'balanced'
         elif line.startswith('**Dependencies:**'):
             # Parse simplified dependency format: "001,002,003" or "None"
             deps_text = line.replace('**Dependencies:**', '').strip()
@@ -165,7 +175,7 @@ def parse_ticket(tickets_path, ticket_identifier):
         elif not in_criteria and line and not line.startswith('**') and not ticket['description']:
             # Only capture additional description if we don't have one yet
             ticket['description'] = line
-    
+
     # Mark ticket as completed if all acceptance criteria are checked
     if unchecked_criteria == 0 and checked_criteria > 0:
         ticket['completed'] = True
@@ -179,62 +189,93 @@ def parse_ticket(tickets_path, ticket_identifier):
 
 
 def generate_tickets_md(project_description, output_path="tickets.md"):
-    """Generate tickets.md from project description."""
+    """Generate tickets.md from project description using provider abstraction."""
     print("🎫 Generating tickets.md...")
     print("=" * 30)
 
-    # Always use Opus 4 for ticket planning
-    print("🧠 Using Opus 4 for ticket planning...")
-    
-    # Use the exact prompt format that works when you run Claude Code manually
-    prompt = f"""make a tickets.md doc with tickets that are made in task language for claude code to execute that include acceptance criteria, dependencies (like 001,002 or None), status, and which model (sonnet 4 or opus 4) should be used for that ticket. be minimalistic, surgical and future proof!
+    # Use provider abstraction instead of hardcoding Claude
+    from hydra.providers.model_mapper import get_model_mapper
+    from hydra.providers.provider_factory import create_provider_from_environment
+
+    # Get the provider and model mapper
+    provider = create_provider_from_environment()
+    mapper = get_model_mapper()
+
+    # Get the smart model for ticket planning (was "Opus 4")
+    smart_model = mapper.map_model("smart", provider.config.provider_type if hasattr(provider, 'config') and hasattr(provider.config, 'provider_type') else None)
+    print(f"🧠 Using {smart_model or 'smart model'} for ticket planning...")
+
+    # Adapt prompt to use generic model categories instead of specific Claude models
+    prompt = f"""make a tickets.md doc with tickets that are made in task language for LLM agents to execute that include acceptance criteria, dependencies (like 001,002 or None), status, and which model category (fast, balanced, smart, or coder) should be used for that ticket. be minimalistic, surgical and future proof!
 
 Each ticket MUST have this format:
 ## Ticket 001: [Title]
 **Status:** TODO
-**Model:** [Sonnet 4 or Opus 4]
+**Model:** [smart, balanced, fast, or coder]
 **Dependencies:** [None or comma-separated ticket numbers like 001,002]
-**Description:** [Task description]
+**Description:** [Task description - if this depends on other tickets, mention that it builds on their outputs]
+
+**Required Input Files:** (only include if Dependencies is not None)
+- [List files that will be created by dependency tickets that this ticket needs]
+
+**Context Requirements:** (only include if Dependencies is not None)
+- [Specific instructions about reading/using outputs from dependency tickets]
+- [E.g., "FIRST: Read design_doc.md from Ticket 001 to understand the architecture"]
 
 **Acceptance Criteria:**
-- [ ] [Criteria]
+- [ ] [Criteria that reference outputs from dependencies when applicable]
+
+IMPORTANT: For tickets with dependencies:
+- Always add a "Required Input Files" section listing what files from previous tickets are needed
+- Add "Context Requirements" explaining how to use the outputs from dependencies
+- In the Description, mention that the ticket "builds on" or "uses outputs from" its dependencies
+- In Acceptance Criteria, reference specific deliverables from dependencies when relevant
+
+Example for a dependent ticket:
+## Ticket 002: Implement API based on design
+**Status:** TODO
+**Model:** smart
+**Dependencies:** 001
+**Description:** Implement the REST API based on the design document from Ticket 001
+
+**Required Input Files:**
+- api_design.md (from Ticket 001)
+- database_schema.sql (from Ticket 001)
+
+**Context Requirements:**
+- FIRST: Read api_design.md to understand the endpoint specifications
+- Review database_schema.sql for data model implementation
+- Follow the patterns and conventions established in Ticket 001
+
+**Acceptance Criteria:**
+- [ ] Implement all endpoints specified in api_design.md
+- [ ] Use the database schema from database_schema.sql
+- [ ] Follow RESTful conventions outlined in the design
 
 Project: {project_description}"""
 
     print("🚀 Generating tickets with production standards...")
 
     try:
-        # Import necessary modules
-        from hydra.config import get_config
-        import subprocess
-        import os
-        
-        config = get_config()
-        
-        # Get Claude path from config or environment
-        claude_path = os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
-        if hasattr(config, 'llm_provider') and hasattr(config.llm_provider.config, 'extra_params'):
-            claude_path = config.llm_provider.config.extra_params.get('claude_path', claude_path)
-        
-        # Run Claude Code directly to create the file (not using --print)
-        # Use the exact same way you would run it manually
-        result = subprocess.run(
-            [claude_path, "--dangerously-skip-permissions", prompt],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            cwd=os.getcwd()
+        # Use provider abstraction to generate tickets
+        result = provider.generate(
+            prompt,  # Pass as positional argument
+            model=smart_model,
+            mode="ticket_generation",
+            output_path=output_path
         )
-        
-        if result.returncode == 0 and os.path.exists(output_path):
+
+        # Check if file was created successfully
+        if os.path.exists(output_path):
             # Read the created file
             with open(output_path, 'r') as f:
                 tickets_content = f.read()
-            
+
             print(f"✅ {output_path} created successfully!")
-            
+
             # Show summary - handle various ticket formats
             import re
+
             # Count any heading that looks like a ticket
             ticket_patterns = [
                 r'## Ticket \d+:',  # ## Ticket 001:
@@ -248,20 +289,26 @@ Project: {project_description}"""
                 if matches > 0:
                     ticket_count = matches
                     break
-            
-            # Count models - handle variations
-            opus_count = tickets_content.lower().count('opus')
-            sonnet_count = tickets_content.lower().count('sonnet')
-            
+
+            # Count models using generic categories
+            smart_count = tickets_content.lower().count('smart')
+            balanced_count = tickets_content.lower().count('balanced')
+            fast_count = tickets_content.lower().count('fast')
+            coder_count = tickets_content.lower().count('coder')
+
             print(f"📊 Generated {ticket_count} tickets:")
-            print(f"   🧠 Opus 4: {opus_count} tickets")
-            print(f"   ⚡ Sonnet 4: {sonnet_count} tickets")
-            
+            if smart_count > 0:
+                print(f"   🧠 Smart: {smart_count} tickets")
+            if balanced_count > 0:
+                print(f"   ⚡ Balanced: {balanced_count} tickets")
+            if fast_count > 0:
+                print(f"   💨 Fast: {fast_count} tickets")
+            if coder_count > 0:
+                print(f"   💻 Coder: {coder_count} tickets")
+
             return True
         else:
             print("❌ Failed to generate tickets")
-            if result.stderr:
-                print(f"💥 Error: {result.stderr}")
             return False
 
     except Exception as e:
@@ -282,15 +329,15 @@ def validate_acceptance_criteria(ticket, project_dir):
         # Check for specific file paths mentioned in criteria
         # Look for patterns like "src/hydra/providers/interactive_base.py" or ".hydra directory"
         import re
-        
+
         # Check for Python files
         file_path_pattern = r'(?:src/[a-zA-Z0-9_/]+\.py|tests/[a-zA-Z0-9_/]+\.py|docs/[a-zA-Z0-9_/]+)'
         file_matches = re.findall(file_path_pattern, criterion)
-        
+
         # Check for directory mentions like ".hydra directory"
         dir_pattern = r'\.hydra directory|\.hydra/[a-zA-Z0-9_/]+'
         dir_matches = re.findall(dir_pattern, criterion)
-        
+
         # Check for specific file mentions
         if "interactive_base.py" in criterion:
             file_path = "src/hydra/providers/interactive_base.py"
@@ -452,7 +499,14 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
     # Mark ticket as IN_PROGRESS
     mark_ticket_in_progress(tickets_path, ticket_identifier)
 
-    model_emoji = "🧠" if ticket['model'] == 'opus' else "⚡"
+    # Map model emoji based on category
+    model_emojis = {
+        'smart': '🧠',
+        'balanced': '⚡',
+        'fast': '💨',
+        'coder': '💻'
+    }
+    model_emoji = model_emojis.get(ticket['model'], '⚡')
     print(f"{model_emoji} Model: {ticket['model'].upper()}")
     print(f"📋 Task: {ticket['title']}")
     print(f"📝 Description: {ticket['description'][:100]}...")
@@ -472,37 +526,29 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         os.environ['LLM_TIMEOUT'] = str(timeout_override)
         print(f"⏱️  Using extended timeout: {timeout_override}s")
 
-    # Use provider factory to get the configured provider
-    from hydra.config import get_config
-    from hydra.providers.factory import ProviderFactory
-    from hydra.providers.base import LLMConfig
-    
-    # Get the provider type from environment or config
-    provider_type = os.environ.get('LLM_PROVIDER', 'claude_tmux')
-    
-    # Special handling for Claude tmux provider
-    if provider_type == 'claude_tmux':
-        from hydra.providers.claude_tmux import ClaudeTmuxProvider
-        config = LLMConfig(
-            provider_type='claude_tmux',
-            timeout=timeout_override or 300,
-            extra_params={
-                'claude_path': os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
-            }
-        )
-        provider = ClaudeTmuxProvider(config)
+    # Use provider factory with model mapping
+    from hydra.providers.model_mapper import get_model_mapper
+    from hydra.providers.provider_factory import create_provider_from_environment
+
+    # Get provider and map the model
+    provider = create_provider_from_environment()
+    mapper = get_model_mapper()
+
+    # Map the ticket's model category to provider-specific model
+    provider_type = provider.config.provider_type if hasattr(provider, 'config') and hasattr(provider.config, 'provider_type') else os.environ.get('LLM_PROVIDER', 'claude_tmux')
+    ticket_model = mapper.map_model(ticket['model'], provider_type)
+
+    if ticket_model:
+        print(f"🔧 Using {provider_type} provider with model: {ticket_model}")
     else:
-        # Use factory for other providers (venice, openai, anthropic, etc.)
-        config = get_config()
-        provider = ProviderFactory.create_provider(provider_type, config.llm_provider.config)
-        print(f"🔧 Using {provider_type} provider for ticket execution")
+        print(f"🔧 Using {provider_type} provider with default model")
 
     # Detect project language/framework from context
     project_context = detect_project_context(tickets_path)
 
     # Build prompt based on provider type
     project_dir = os.path.dirname(os.path.abspath(tickets_path))
-    
+
     if provider_type == 'claude_tmux':
         # Claude Code can read tickets.md directly
         prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_identifier} from tickets.md - NOT any other ticket!
@@ -549,36 +595,42 @@ Please provide the complete implementation with all necessary files and code."""
     print("   ✅ Production quality only")
 
     try:
-        # Execute based on provider type
-        if provider_type == 'claude_tmux':
-            print("\n🤖 Invoking Claude Code CLI to implement ticket...")
-            provider.generate(prompt, cwd=project_dir, ticket_id=ticket_identifier)
-        else:
-            print(f"\n🤖 Using {provider_type} to generate implementation...")
-            
-            # For API-based providers, use CodeAgent
-            from hydra.agents.base import CodeAgent
-            agent = CodeAgent(f"ticket_{ticket_identifier}_agent", provider=provider)
-            
-            # Generate the implementation
-            result = agent.generate_code(prompt)
-            
-            # Write the generated code to files
+        # Execute using provider abstraction
+        print(f"\n🤖 Using {provider_type} provider to implement ticket...")
+
+        # Provider should handle execution appropriately
+        result = provider.generate(
+            prompt,  # Pass as positional argument
+            model=ticket_model,
+            mode="ticket_execution",
+            cwd=project_dir,
+            ticket_id=ticket_identifier,
+            ticket=ticket
+        )
+
+        # Handle result based on provider capabilities
+        if isinstance(result, dict):
             if 'code' in result:
-                # Parse the generated code and create/update files
-                # This is a simplified version - you might want to enhance this
-                # to handle multiple files, etc.
+                # For API providers that return code
                 lines = result['code'].split('\n')
                 print(f"📝 Generated {len(lines)} lines of code")
-                
-                # For now, save to a file based on ticket context
+
+                # Save generated code to appropriate files
                 output_file = f"ticket_{ticket_identifier}_implementation.py"
                 output_path = os.path.join(project_dir, output_file)
-                
+
                 with open(output_path, 'w') as f:
                     f.write(result['code'])
-                
+
                 print(f"💾 Saved implementation to {output_file}")
+            elif 'files_created' in result:
+                # Provider created files directly
+                print(f"📝 Created/modified {len(result['files_created'])} files")
+                for file in result['files_created']:
+                    print(f"   ✅ {file}")
+        else:
+            # Provider executed directly (like Claude tmux)
+            print("✅ Provider executed task directly")
 
         # Claude Code has executed and created/modified files
         print(f"\n✅ Ticket {ticket_identifier} implementation complete!")
@@ -715,7 +767,7 @@ def mark_ticket_quality_failed(tickets_path, ticket_identifier, quality_report=N
             ticket_content = match.group(1)
             # Update Status field to QUALITY_FAILED
             updated_content = re.sub(r'\*\*Status:\*\*\s*\w+', '**Status:** QUALITY_FAILED', ticket_content)
-            
+
             # Add quality gate summary if provided
             if quality_report and "**Quality Gate Results:**" not in updated_content:
                 # Find the acceptance criteria section and add quality results after it
@@ -731,7 +783,7 @@ def mark_ticket_quality_failed(tickets_path, ticket_identifier, quality_report=N
                         if insert_idx == -1:
                             insert_idx = len(lines)
                         break
-                
+
                 if insert_idx > 0:
                     quality_summary = [
                         "",
@@ -744,7 +796,7 @@ def mark_ticket_quality_failed(tickets_path, ticket_identifier, quality_report=N
                     ]
                     lines = lines[:insert_idx] + quality_summary + lines[insert_idx:]
                     updated_content = '\n'.join(lines)
-            
+
             return updated_content
 
         flags = re.DOTALL | re.IGNORECASE
@@ -961,7 +1013,7 @@ def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
 def get_quality_summary(tickets_path="tickets.md"):
     """Get a summary of ticket quality statuses."""
     tickets = parse_all_tickets(tickets_path)
-    
+
     summary = {
         'total': len(tickets),
         'todo': 0,
@@ -969,7 +1021,7 @@ def get_quality_summary(tickets_path="tickets.md"):
         'done': 0,
         'quality_failed': 0
     }
-    
+
     for ticket_id, ticket_data in tickets.items():
         status = ticket_data.get('status', 'TODO').upper()
         if status == 'DONE':
@@ -980,14 +1032,14 @@ def get_quality_summary(tickets_path="tickets.md"):
             summary['quality_failed'] += 1
         else:
             summary['todo'] += 1
-    
+
     return summary
 
 
 def print_quality_summary(tickets_path="tickets.md"):
     """Print a quality status summary."""
     summary = get_quality_summary(tickets_path)
-    
+
     print("\n📊 Ticket Quality Summary")
     print("=" * 40)
     print(f"Total Tickets: {summary['total']}")
@@ -995,11 +1047,11 @@ def print_quality_summary(tickets_path="tickets.md"):
     print(f"  ⚠️  Quality Failed: {summary['quality_failed']}")
     print(f"  🔄 In Progress: {summary['in_progress']}")
     print(f"  📋 TODO: {summary['todo']}")
-    
+
     if summary['quality_failed'] > 0:
         print(f"\n⚠️  {summary['quality_failed']} ticket(s) need quality fixes!")
         print("   Check tickets.md for Quality Gate Results details")
-    
+
     success_rate = (summary['done'] / summary['total'] * 100) if summary['total'] > 0 else 0
     print(f"\n🎯 Success Rate: {success_rate:.1f}%")
     print("=" * 40)

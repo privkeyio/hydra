@@ -1,3 +1,5 @@
+"""Parallel Engine module."""
+
 import os
 import threading
 import time

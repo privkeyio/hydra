@@ -13,10 +13,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from hydra.utils.claude_path import get_claude_cli_path
-
 from hydra.providers.base import LLMConfig
 from hydra.providers.claude_tmux import ClaudeTmuxProvider
+from hydra.utils.claude_path import get_claude_cli_path
 
 
 class TaskStatus(Enum):

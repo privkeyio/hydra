@@ -1,9 +1,13 @@
+"""Cli module."""
+
 import click
+
 {% if config_format == 'yaml' %}import yaml{% endif %}
 {% if config_format == 'toml' %}import toml{% endif %}
 import json
-from rich.console import Console
 from pathlib import Path
+
+from rich.console import Console
 
 console = Console()
 

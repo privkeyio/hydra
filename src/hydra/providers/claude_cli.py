@@ -67,7 +67,7 @@ class ClaudeCLIProvider(LLMProvider):
         """Execute Claude CLI command and let it actually work with files."""
         # Get the current working directory for context
         cwd = os.getcwd()
-        
+
         if non_interactive:
             # Use --print flag for non-interactive mode (e.g., ticket generation)
             # Add --dangerously-skip-permissions for automated ticket generation
@@ -106,7 +106,7 @@ please say "{completion_msg}" at the end.
         # Auto-detect: if prompt mentions tickets.md or markdown, use non-interactive
         if 'tickets.md' in prompt.lower() or 'markdown' in prompt.lower():
             non_interactive = True
-            
+
         try:
             result = self._execute_claude_command(prompt, non_interactive=non_interactive)
 

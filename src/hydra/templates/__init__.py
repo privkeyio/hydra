@@ -1,3 +1,5 @@
+"""Init   module."""
+
 from .template_engine import Template, TemplateEngine, TemplateParameter
 from .validator import TemplateValidator
 

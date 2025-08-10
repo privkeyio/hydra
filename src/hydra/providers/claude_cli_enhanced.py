@@ -1,3 +1,5 @@
+"""Claude Cli Enhanced module."""
+
 import json
 import os
 import re

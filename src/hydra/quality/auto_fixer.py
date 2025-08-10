@@ -20,38 +20,39 @@ class QualityAutoFixer:
         
         Returns:
             List of (issue, fixed, message) tuples
+
         """
         fixes = []
-        
+
         # Fix 1: Add missing __init__.py files
         fixes.extend(self._add_missing_init_files())
-        
+
         # Fix 2: Run ruff with auto-fix
         fixes.extend(self._run_ruff_autofix())
-        
+
         # Fix 3: Fix import sorting
         fixes.extend(self._fix_import_sorting())
-        
+
         # Fix 4: Add minimal docstrings to new files
         fixes.extend(self._add_missing_docstrings())
-        
+
         return fixes
 
     def _add_missing_init_files(self) -> List[Tuple[str, bool, str]]:
         """Add missing __init__.py files to Python packages."""
         fixes = []
         src_dir = self.project_root / "src"
-        
+
         if not src_dir.exists():
             return fixes
-            
+
         for root, dirs, files in os.walk(src_dir):
             root_path = Path(root)
-            
+
             # Skip non-Python directories
             if '__pycache__' in root or '.git' in root:
                 continue
-                
+
             # Check if directory has Python files but no __init__.py
             py_files = [f for f in files if f.endswith('.py') and f != '__init__.py']
             if py_files and '__init__.py' not in files:
@@ -62,13 +63,13 @@ class QualityAutoFixer:
                     True,
                     "Created __init__.py"
                 ))
-        
+
         return fixes
 
     def _run_ruff_autofix(self) -> List[Tuple[str, bool, str]]:
         """Run ruff with auto-fix on new files."""
         fixes = []
-        
+
         try:
             # Run ruff with auto-fix
             result = subprocess.run(
@@ -78,7 +79,7 @@ class QualityAutoFixer:
                 cwd=self.project_root,
                 timeout=30
             )
-            
+
             if "fixed" in result.stdout.lower():
                 fixes.append((
                     "Linting issues",
@@ -105,13 +106,13 @@ class QualityAutoFixer:
                 False,
                 "Ruff not available"
             ))
-        
+
         return fixes
 
     def _fix_import_sorting(self) -> List[Tuple[str, bool, str]]:
         """Fix import sorting with isort."""
         fixes = []
-        
+
         try:
             result = subprocess.run(
                 ["isort", "src/", "--profile", "black"],
@@ -120,7 +121,7 @@ class QualityAutoFixer:
                 cwd=self.project_root,
                 timeout=30
             )
-            
+
             if result.returncode == 0:
                 fixes.append((
                     "Import sorting",
@@ -144,35 +145,35 @@ class QualityAutoFixer:
                 ))
             except:
                 pass
-        
+
         return fixes
 
     def _add_missing_docstrings(self) -> List[Tuple[str, bool, str]]:
         """Add minimal docstrings to files missing them."""
         fixes = []
         src_dir = self.project_root / "src"
-        
+
         if not src_dir.exists():
             return fixes
-            
+
         for root, _, files in os.walk(src_dir):
             root_path = Path(root)
-            
+
             for file in files:
                 if not file.endswith('.py'):
                     continue
-                    
+
                 file_path = root_path / file
                 try:
                     content = file_path.read_text()
-                    
+
                     # Check if file has module docstring
                     if not content.startswith('"""') and not content.startswith("'''"):
                         # Add minimal module docstring
                         module_name = file_path.stem.replace('_', ' ').title()
                         new_content = f'"""{module_name} module."""\n\n{content}'
                         file_path.write_text(new_content)
-                        
+
                         fixes.append((
                             f"Missing docstring in {file_path.relative_to(self.project_root)}",
                             True,
@@ -180,7 +181,7 @@ class QualityAutoFixer:
                         ))
                 except Exception:
                     pass
-        
+
         return fixes
 
     def run_post_fix_validation(self) -> bool:

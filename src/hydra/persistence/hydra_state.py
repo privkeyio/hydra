@@ -1,3 +1,5 @@
+"""Hydra State module."""
+
 import atexit
 import json
 import shutil

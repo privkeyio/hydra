@@ -4,7 +4,6 @@ Integrates WorkStealingScheduler with AsyncParallelExecutor for optimal load bal
 """
 
 import asyncio
-import json
 import logging
 import time
 import uuid
@@ -182,14 +181,14 @@ class WorkStealingAsyncExecutor:
                 if not unresolved_deps:
                     # Estimate task duration based on model and description
                     estimated_duration = self._estimate_task_duration(node)
-                    
+
                     task = Task(
                         task_id=ticket_id,
                         priority=self._calculate_task_priority(node),
                         estimated_duration=estimated_duration,
                         dependencies=node.dependencies
                     )
-                    
+
                     if self.work_stealing_scheduler.submit_task(task):
                         ready_count += 1
                         logger.debug(f"Submitted ticket {ticket_id} to work stealing scheduler")
@@ -209,19 +208,19 @@ class WorkStealingAsyncExecutor:
             'opus': 180.0,  # Opus tasks tend to be more complex
             'sonnet': 120.0  # Sonnet is faster
         }
-        
+
         model_key = node.model.lower()
         base_duration = base_durations.get(model_key, 120.0)
-        
+
         # Adjust based on title complexity
         complexity_keywords = ['refactor', 'implement', 'create', 'enhance', 'optimize']
         complexity_multiplier = 1.0
-        
+
         title_lower = node.title.lower()
         for keyword in complexity_keywords:
             if keyword in title_lower:
                 complexity_multiplier += 0.2
-        
+
         return base_duration * complexity_multiplier
 
     def _calculate_task_priority(self, node: TicketNode) -> int:
@@ -231,14 +230,14 @@ class WorkStealingAsyncExecutor:
             1 for other_node in self.tickets.values()
             if node.ticket_id in other_node.dependencies
         )
-        
+
         # Base priority + dependency bonus
         priority = 5 + (dependency_count * 2)
-        
+
         # Opus tasks get slight priority boost for quality
         if node.model.lower() == 'opus':
             priority += 1
-            
+
         return priority
 
     async def execute_ticket(self, ticket_id: str, worker_id: str, tickets_path: str) -> bool:
@@ -447,12 +446,12 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     )
 
             logger.error(f"❌ Ticket {ticket_id} failed: {e}")
-            
+
             # Update work stealing scheduler metrics for failed task
             task_obj = Task(task_id=ticket_id)
             task_obj.assigned_at = node.start_time if node.start_time else time.time()
             self.work_stealing_scheduler.complete_task(worker_id, task_obj, False)
-            
+
             self.agent_pool.release_agent(agent_id)
             self.file_lock_manager.release_all_locks(agent_id)
             return False
@@ -484,7 +483,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                         estimated_duration=estimated_duration,
                         dependencies=node.dependencies
                     )
-                    
+
                     if self.work_stealing_scheduler.submit_task(task):
                         logger.debug(f"Submitted dependent ticket {waiting_ticket} to work stealing scheduler")
 
@@ -518,21 +517,21 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
         async def worker_coroutine(worker_id: str):
             """Worker coroutine that processes tasks using work stealing."""
             logger.info(f"Worker {worker_id} started")
-            
+
             while True:
                 # Get task from work stealing scheduler
                 task = self.work_stealing_scheduler.get_task(worker_id)
-                
+
                 if task is None:
                     # No tasks available, check if we should continue
                     await asyncio.sleep(1.0)  # Brief wait before checking again
-                    
+
                     # Check if all work is done
                     active_tickets = len(self.running_tickets)
                     pending_tasks = sum(
                         len(queue) for queue in self.work_stealing_scheduler.worker_queues.values()
                     )
-                    
+
                     if active_tickets == 0 and pending_tasks == 0:
                         # No more work to do
                         break
@@ -580,21 +579,21 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
     def _calculate_efficiency_improvement(self, duration: float) -> Dict[str, Any]:
         """Calculate efficiency improvement from work stealing."""
         stealing_metrics = self.work_stealing_scheduler.get_metrics()
-        
+
         total_steals = sum(
             worker["tasks_stolen_to"] + worker["tasks_stolen_from"]
             for worker in stealing_metrics["worker_metrics"].values()
         )
-        
+
         load_distribution = self.work_stealing_scheduler.get_load_distribution()
         load_variance = sum(
-            (load - 100/len(load_distribution))**2 
+            (load - 100/len(load_distribution))**2
             for load in load_distribution.values()
         ) / len(load_distribution)
-        
+
         # Estimate improvement (simplified calculation)
         estimated_improvement = min(40, total_steals * 2 + max(0, 50 - load_variance))
-        
+
         return {
             "total_work_steals": total_steals,
             "load_variance": load_variance,
@@ -664,7 +663,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
             "",
             "👥 Worker Efficiency:",
         ])
-        
+
         worker_metrics = summary['work_stealing_metrics']['worker_metrics']
         for worker_id, metrics in worker_metrics.items():
             efficiency = metrics['efficiency_score']
@@ -682,7 +681,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
         """Shutdown the executor and clean up resources."""
         if hasattr(self, 'work_stealing_scheduler'):
             self.work_stealing_scheduler.stop()
-        
+
         if hasattr(self, 'agent_pool'):
             self.agent_pool.stop()
             logger.info("🛑 Work stealing async executor shutdown complete")

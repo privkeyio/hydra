@@ -1,3 +1,5 @@
+"""Project State module."""
+
 import hashlib
 import json
 import pickle

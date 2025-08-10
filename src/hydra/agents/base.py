@@ -1,3 +1,5 @@
+"""Base module."""
+
 import ast
 import json
 import logging

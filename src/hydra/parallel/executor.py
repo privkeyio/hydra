@@ -300,9 +300,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 validation_passed = validate_acceptance_criteria(ticket_data, str(self.project_root))
 
                 if validation_passed:
-                    # Mark ticket as completed only if validation passes
-                    mark_ticket_completed(tickets_path, ticket_id)
-                    print("✅ Acceptance criteria validated and ticket marked complete")
+                    print("✅ Acceptance criteria validated")
                 else:
                     print("❌ Acceptance criteria validation failed - ticket remains incomplete")
                     # Treat as failure if validation fails
@@ -316,25 +314,36 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 allowed_statuses = ["passed", "warning"]
                 quality_passed = quality_report.overall_status.value in allowed_statuses
 
+                # Only mark as complete if BOTH validation AND quality gates pass
+                if validation_passed and quality_passed:
+                    mark_ticket_completed(tickets_path, ticket_id)
+                    print("✅ Quality gates passed - ticket marked as DONE")
+                else:
+                    # Mark with quality status in tickets.md
+                    from hydra.ticket_workflow import mark_ticket_quality_failed
+                    mark_ticket_quality_failed(tickets_path, ticket_id, quality_report)
+                    if not quality_passed:
+                        print(f"⚠️  Quality gates failed - ticket marked as QUALITY_FAILED")
+                    
                 with self.lock:
-                    node.status = ExecutionStatus.COMPLETED
+                    node.status = ExecutionStatus.COMPLETED if quality_passed else ExecutionStatus.FAILED
                     node.end_time = time.time()
                     node.quality_passed = quality_passed
-                    self.completed_tickets.add(ticket_id)
+                    if quality_passed:
+                        self.completed_tickets.add(ticket_id)
+                    else:
+                        self.failed_tickets.add(ticket_id)
                     self.running_tickets.remove(ticket_id)
 
                     # Update dashboard
                     if self.dashboard_state:
                         from hydra.dashboard.state import TicketStatus
-                        self.dashboard_state.update_ticket_status(
-                            ticket_id, TicketStatus.COMPLETED
-                        )
+                        status = TicketStatus.COMPLETED if quality_passed else TicketStatus.FAILED
+                        self.dashboard_state.update_ticket_status(ticket_id, status)
 
                 duration = node.end_time - node.start_time
-                print(f"\n✅ Ticket {ticket_id} completed in {duration:.2f}s")
-
-                if not quality_passed:
-                    print(f"⚠️  Quality gates failed for ticket {ticket_id}")
+                status_msg = "✅ completed" if quality_passed else "⚠️  completed with quality issues"
+                print(f"\n{status_msg} Ticket {ticket_id} in {duration:.2f}s")
 
                 # Release the agent back to the pool and file locks
                 self.agent_pool.release_agent(agent_id)
@@ -409,6 +418,9 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
     def execute_plan(self, plan: ExecutionPlan, tickets_path: str) -> Dict[str, Any]:
         """Execute the full execution plan."""
         start_time = time.time()
+        
+        # Store tickets_path for use in reports
+        self.tickets_path = tickets_path
         
         # Initialize dashboard session
         if self.dashboard_state:
@@ -500,19 +512,32 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
 
     def generate_report(self, summary: Dict[str, Any]) -> str:
         """Generate execution report."""
+        # Get quality summary from tickets.md
+        from hydra.ticket_workflow import get_quality_summary
+        quality_summary = get_quality_summary(self.tickets_path) if hasattr(self, 'tickets_path') else None
+        
         lines = [
             f"\n{'='*60}",
             "📊 Parallel Execution Report",
             f"{'='*60}",
             f"Total tickets: {summary['total_tickets']}",
-            f"✅ Completed: {summary['completed']}",
-            f"❌ Failed: {summary['failed']}",
+            f"✅ Completed (Quality Passed): {summary['completed']}",
+            f"❌ Failed/Quality Issues: {summary['failed']}",
             f"⛔ Blocked: {summary['blocked']}",
             f"📈 Success rate: {summary['success_rate']:.1f}%",
             f"⏱️  Total duration: {summary['duration']:.2f}s",
             "",
-            "📋 Ticket Details:",
         ]
+        
+        if quality_summary and quality_summary['quality_failed'] > 0:
+            lines.extend([
+                "⚠️  QUALITY ISSUES DETECTED:",
+                f"   {quality_summary['quality_failed']} ticket(s) have failing quality gates",
+                "   Check tickets.md for detailed Quality Gate Results",
+                "",
+            ])
+        
+        lines.append("📋 Ticket Details:")
 
         for ticket_id, node in sorted(self.tickets.items()):
             status_icon = {

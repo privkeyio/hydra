@@ -127,6 +127,10 @@ def parse_ticket(tickets_path, ticket_identifier):
             # Mark as completed if status is DONE
             if status_text == 'DONE':
                 ticket['completed'] = True
+            # Don't mark as completed if quality failed
+            elif status_text == 'QUALITY_FAILED':
+                ticket['completed'] = False
+                ticket['quality_failed'] = True
         elif line.startswith('**Model:**'):
             model_text = line.replace('**Model:**', '').strip().lower()
             ticket['model'] = 'opus' if 'opus' in model_text else 'sonnet'
@@ -623,6 +627,80 @@ def mark_ticket_in_progress(tickets_path, ticket_identifier):
         print(f"🔄 Updated {tickets_path} - marked ticket {ticket_identifier} as IN_PROGRESS")
 
 
+def mark_ticket_quality_failed(tickets_path, ticket_identifier, quality_report=None):
+    """Mark ticket as having quality issues in tickets.md."""
+    if not os.path.exists(tickets_path):
+        return
+
+    # Normalize ticket ID to 3 digits if it's numeric
+    if ticket_identifier.isdigit():
+        ticket_identifier = ticket_identifier.zfill(3)
+
+    with open(tickets_path, 'r') as f:
+        content = f.read()
+
+    # Try multiple ticket header patterns
+    patterns = [
+        rf'(## Ticket {ticket_identifier}:.*?)(?=## Ticket|\Z)',
+        rf'(## TICKET-{ticket_identifier}:.*?)(?=## TICKET-|\Z)',
+        rf'(## Ticket-{ticket_identifier}:.*?)(?=## Ticket-|\Z)',
+        rf'(## #{ticket_identifier}:.*?)(?=## #|\Z)',
+        rf'(## {ticket_identifier}:.*?)(?=## |\Z)',
+    ]
+
+    updated_content = content
+    ticket_found = False
+
+    for pattern in patterns:
+        def replace_ticket(match):
+            ticket_content = match.group(1)
+            # Update Status field to QUALITY_FAILED
+            updated_content = re.sub(r'\*\*Status:\*\*\s*\w+', '**Status:** QUALITY_FAILED', ticket_content)
+            
+            # Add quality gate summary if provided
+            if quality_report and "**Quality Gate Results:**" not in updated_content:
+                # Find the acceptance criteria section and add quality results after it
+                lines = updated_content.split('\n')
+                insert_idx = -1
+                for i, line in enumerate(lines):
+                    if "**Acceptance Criteria:**" in line:
+                        # Find the end of acceptance criteria
+                        for j in range(i+1, len(lines)):
+                            if lines[j].startswith("## ") or (lines[j] and not lines[j].startswith("- ")):
+                                insert_idx = j
+                                break
+                        if insert_idx == -1:
+                            insert_idx = len(lines)
+                        break
+                
+                if insert_idx > 0:
+                    quality_summary = [
+                        "",
+                        "**Quality Gate Results:** ❌ FAILED",
+                        f"- Linting: {'✅' if hasattr(quality_report, 'linting_passed') and quality_report.linting_passed else '❌'}",
+                        f"- Type checking: {'✅' if hasattr(quality_report, 'type_checking_passed') and quality_report.type_checking_passed else '❌'}",
+                        f"- Tests: {'✅' if hasattr(quality_report, 'tests_passed') and quality_report.tests_passed else '❌'}",
+                        f"- Security: {'✅' if hasattr(quality_report, 'security_passed') and quality_report.security_passed else '❌'}",
+                        ""
+                    ]
+                    lines = lines[:insert_idx] + quality_summary + lines[insert_idx:]
+                    updated_content = '\n'.join(lines)
+            
+            return updated_content
+
+        flags = re.DOTALL | re.IGNORECASE
+        new_content = re.sub(pattern, replace_ticket, updated_content, flags=flags)
+        if new_content != updated_content:
+            updated_content = new_content
+            ticket_found = True
+            break
+
+    if ticket_found:
+        with open(tickets_path, 'w') as f:
+            f.write(updated_content)
+        print(f"⚠️  Updated {tickets_path} - marked ticket {ticket_identifier} as QUALITY_FAILED")
+
+
 def mark_ticket_completed(tickets_path, ticket_identifier):
     """Mark ticket as completed in tickets.md."""
     if not os.path.exists(tickets_path):
@@ -819,6 +897,53 @@ def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
     except Exception as e:
         print(f"💥 Error executing ticket {ticket_id}: {e}")
         return False
+
+
+def get_quality_summary(tickets_path="tickets.md"):
+    """Get a summary of ticket quality statuses."""
+    tickets = parse_all_tickets(tickets_path)
+    
+    summary = {
+        'total': len(tickets),
+        'todo': 0,
+        'in_progress': 0,
+        'done': 0,
+        'quality_failed': 0
+    }
+    
+    for ticket_id, ticket_data in tickets.items():
+        status = ticket_data.get('status', 'TODO').upper()
+        if status == 'DONE':
+            summary['done'] += 1
+        elif status == 'IN_PROGRESS':
+            summary['in_progress'] += 1
+        elif status == 'QUALITY_FAILED':
+            summary['quality_failed'] += 1
+        else:
+            summary['todo'] += 1
+    
+    return summary
+
+
+def print_quality_summary(tickets_path="tickets.md"):
+    """Print a quality status summary."""
+    summary = get_quality_summary(tickets_path)
+    
+    print("\n📊 Ticket Quality Summary")
+    print("=" * 40)
+    print(f"Total Tickets: {summary['total']}")
+    print(f"  ✅ Done (Quality Passed): {summary['done']}")
+    print(f"  ⚠️  Quality Failed: {summary['quality_failed']}")
+    print(f"  🔄 In Progress: {summary['in_progress']}")
+    print(f"  📋 TODO: {summary['todo']}")
+    
+    if summary['quality_failed'] > 0:
+        print(f"\n⚠️  {summary['quality_failed']} ticket(s) need quality fixes!")
+        print("   Check tickets.md for Quality Gate Results details")
+    
+    success_rate = (summary['done'] / summary['total'] * 100) if summary['total'] > 0 else 0
+    print(f"\n🎯 Success Rate: {success_rate:.1f}%")
+    print("=" * 40)
 
 
 def run_all_tickets(tickets_path="tickets.md", max_parallel=3):

@@ -6,6 +6,7 @@ without breaking existing functionality.
 import os
 import time
 from pathlib import Path
+from hydra.utils.claude_path import get_claude_cli_path
 from typing import Any, Dict, Optional, Set
 
 from .interactive_base import (
@@ -53,7 +54,7 @@ class ClaudeInteractiveAdapter(InteractiveAIProvider):
 
         # Check common installation paths
         common_paths = [
-            '/home/kyle/.claude/local/claude',
+            get_claude_cli_path(),
             '/usr/local/bin/claude',
             '/opt/claude/bin/claude'
         ]

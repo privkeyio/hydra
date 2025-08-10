@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from .base import LLMProvider
 from hydra.safety.claude_file_interceptor import ClaudeFileInterceptor
+from hydra.utils.claude_path import get_claude_cli_path
 
 
 class ClaudeTmuxProvider(LLMProvider):
@@ -17,7 +18,7 @@ class ClaudeTmuxProvider(LLMProvider):
         """Validate Claude CLI and tmux configuration."""
         self.claude_path = self.config.extra_params.get(
             'claude_path',
-            os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
+            os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
         )
 
         if not Path(self.claude_path).exists():

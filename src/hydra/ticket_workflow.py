@@ -11,6 +11,7 @@ from typing import Dict, List, Set, Tuple
 
 from hydra.agents.base import CodeAgent
 from hydra.monitoring import monitoring
+from hydra.utils.claude_path import get_claude_cli_path
 
 
 def detect_project_context(tickets_path):
@@ -210,7 +211,7 @@ Project: {project_description}"""
         config = get_config()
         
         # Get Claude path from config or environment
-        claude_path = os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
+        claude_path = os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
         if hasattr(config, 'llm_provider') and hasattr(config.llm_provider.config, 'extra_params'):
             claude_path = config.llm_provider.config.extra_params.get('claude_path', claude_path)
         
@@ -470,27 +471,40 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         os.environ['LLM_TIMEOUT'] = str(timeout_override)
         print(f"⏱️  Using extended timeout: {timeout_override}s")
 
-    # Use the tmux Claude provider for ticket implementation
+    # Use provider factory to get the configured provider
+    from hydra.config import get_config
+    from hydra.providers.factory import ProviderFactory
     from hydra.providers.base import LLMConfig
-    from hydra.providers.claude_tmux import ClaudeTmuxProvider
-
-    # Create tmux provider config
-    config = LLMConfig(
-        provider_type='claude_tmux',
-        timeout=timeout_override or 300,
-        extra_params={
-            'claude_path': os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
-        }
-    )
-
-    # Create the tmux provider directly
-    provider = ClaudeTmuxProvider(config)
+    
+    # Get the provider type from environment or config
+    provider_type = os.environ.get('LLM_PROVIDER', 'claude_tmux')
+    
+    # Special handling for Claude tmux provider
+    if provider_type == 'claude_tmux':
+        from hydra.providers.claude_tmux import ClaudeTmuxProvider
+        config = LLMConfig(
+            provider_type='claude_tmux',
+            timeout=timeout_override or 300,
+            extra_params={
+                'claude_path': os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
+            }
+        )
+        provider = ClaudeTmuxProvider(config)
+    else:
+        # Use factory for other providers (venice, openai, anthropic, etc.)
+        config = get_config()
+        provider = ProviderFactory.create_provider(provider_type, config.llm_provider.config)
+        print(f"🔧 Using {provider_type} provider for ticket execution")
 
     # Detect project language/framework from context
     project_context = detect_project_context(tickets_path)
 
-    # Build prompt - Claude Code will read tickets.md directly
-    prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_identifier} from tickets.md - NOT any other ticket!
+    # Build prompt based on provider type
+    project_dir = os.path.dirname(os.path.abspath(tickets_path))
+    
+    if provider_type == 'claude_tmux':
+        # Claude Code can read tickets.md directly
+        prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_identifier} from tickets.md - NOT any other ticket!
 
 Find and execute specifically "## Ticket {ticket_identifier}:" in tickets.md
 
@@ -505,6 +519,27 @@ When you finish, ensure acceptance criteria is met then update tickets.md and th
 DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
 
 REMINDER: You are working on Ticket {ticket_identifier} ONLY. Ignore all other tickets."""
+    else:
+        # For other providers (Venice, OpenAI, etc), include ticket details in prompt
+        prompt = f"""You are implementing Ticket {ticket_identifier} with the following requirements:
+
+Title: {ticket['title']}
+Description: {ticket['description']}
+
+Acceptance Criteria:
+{chr(10).join(f"- {c}" for c in ticket['acceptance_criteria'])}
+
+Project Context: {project_context}
+Project Directory: {project_dir}
+
+IMPORTANT REQUIREMENTS:
+1. Implement ONLY this specific ticket, nothing else
+2. Write production-quality code - no shortcuts or mocks
+3. Be minimalistic and surgical in your approach
+4. Ensure all acceptance criteria are met
+5. The code must be future-proof and maintainable
+
+Please provide the complete implementation with all necessary files and code."""
 
     print("🚀 Executing with production standards...")
     print("   ✅ No AI-generated patterns")
@@ -513,13 +548,36 @@ REMINDER: You are working on Ticket {ticket_identifier} ONLY. Ignore all other t
     print("   ✅ Production quality only")
 
     try:
-        # Execute via Claude Code CLI directly - it will handle all file operations
-        print("\n🤖 Invoking Claude Code CLI to implement ticket...")
-
-        # Use the tmux provider to send prompt to Claude Code
-        # Claude Code will create/edit all necessary files
-        project_dir = os.path.dirname(os.path.abspath(tickets_path))
-        provider.generate(prompt, cwd=project_dir, ticket_id=ticket_identifier)
+        # Execute based on provider type
+        if provider_type == 'claude_tmux':
+            print("\n🤖 Invoking Claude Code CLI to implement ticket...")
+            provider.generate(prompt, cwd=project_dir, ticket_id=ticket_identifier)
+        else:
+            print(f"\n🤖 Using {provider_type} to generate implementation...")
+            
+            # For API-based providers, use CodeAgent
+            from hydra.agents.base import CodeAgent
+            agent = CodeAgent(f"ticket_{ticket_identifier}_agent", provider=provider)
+            
+            # Generate the implementation
+            result = agent.generate_code(prompt)
+            
+            # Write the generated code to files
+            if 'code' in result:
+                # Parse the generated code and create/update files
+                # This is a simplified version - you might want to enhance this
+                # to handle multiple files, etc.
+                lines = result['code'].split('\n')
+                print(f"📝 Generated {len(lines)} lines of code")
+                
+                # For now, save to a file based on ticket context
+                output_file = f"ticket_{ticket_identifier}_implementation.py"
+                output_path = os.path.join(project_dir, output_file)
+                
+                with open(output_path, 'w') as f:
+                    f.write(result['code'])
+                
+                print(f"💾 Saved implementation to {output_file}")
 
         # Claude Code has executed and created/modified files
         print(f"\n✅ Ticket {ticket_identifier} implementation complete!")

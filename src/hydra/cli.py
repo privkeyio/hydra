@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from hydra.templates import TemplateEngine, TemplateValidator
+from hydra.utils.claude_path import get_claude_cli_path
 from hydra.ticket_workflow import (
     execute_single_ticket,
     generate_tickets_md,
@@ -69,6 +70,17 @@ def create_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Examples:\n  hydra \"Calculate fibonacci numbers\"\n  "
                "hydra template create flask_web_app ./my-app --project_name=MyApp"
+    )
+    
+    # Global provider override flags
+    parser.add_argument(
+        "--provider",
+        choices=["venice", "claude_tmux", "claude_code", "anthropic", "openai", "mock"],
+        help="Override the LLM provider (default: from env or config)"
+    )
+    parser.add_argument(
+        "--model",
+        help="Override the model (e.g., qwen-2.5-coder-32b, gpt-4)"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -1126,7 +1138,7 @@ REMINDER: Focus ONLY on Ticket {ticket_id}. Verify first, fix if needed, then ve
                 provider_type='claude_tmux',
                 timeout=300,  # Same timeout as ticket execution
                 extra_params={
-                    'claude_path': os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude'),
+                    'claude_path': os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path()),
                     'model': model  # Use the ticket's specified model
                 }
             )
@@ -1358,6 +1370,17 @@ def main():
     """Execute the main CLI entry point."""
     parser = create_parser()
     args = parser.parse_args()
+    
+    # Handle global provider/model overrides
+    if hasattr(args, 'provider') and args.provider:
+        # Map claude_code to claude_tmux for consistency
+        provider = 'claude_tmux' if args.provider == 'claude_code' else args.provider
+        os.environ['LLM_PROVIDER'] = provider
+        print(f"🔧 Using provider: {args.provider}")
+    
+    if hasattr(args, 'model') and args.model:
+        os.environ['LLM_MODEL'] = args.model
+        print(f"🔧 Using model: {args.model}")
 
     # Handle template commands
     if args.command == "template":

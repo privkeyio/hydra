@@ -2,6 +2,7 @@
 import os
 import subprocess
 from pathlib import Path
+from hydra.utils.claude_path import get_claude_cli_path
 from typing import Any, Dict
 
 from .base import LLMProvider
@@ -14,7 +15,7 @@ class ClaudeTerminalProvider(LLMProvider):
         """Validate Claude CLI configuration."""
         self.claude_path = self.config.extra_params.get(
             'claude_path',
-            os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude')
+            os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
         )
 
         if not Path(self.claude_path).exists():

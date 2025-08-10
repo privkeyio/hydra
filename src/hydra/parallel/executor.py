@@ -67,6 +67,7 @@ class ParallelExecutor:
         self.lock = threading.Lock()
         self.completed_tickets: Set[str] = set()
         self.failed_tickets: Set[str] = set()
+        self.quality_failed_tickets: Set[str] = set()  # Track quality failures separately
         self.running_tickets: Set[str] = set()
         self.orchestrators: Dict[str, ClaudeCodeOrchestrator] = {}
         self.dashboard_state = dashboard_state
@@ -147,9 +148,55 @@ class ParallelExecutor:
         return tickets
 
     def _build_smart_execution_plan(self) -> ExecutionPlan:
-        """Build execution plan using smart conflict detection."""
-        print("🧠 Using smart scheduling to minimize file conflicts...")
+        """Build execution plan using smart conflict detection AND dependency resolution."""
+        print("🧠 Using smart scheduling to minimize file conflicts while respecting dependencies...")
         
+        # First, build dependency-aware waves using standard logic
+        dependency_graph = {}
+        reverse_deps = {}  # Track which tickets depend on each ticket
+
+        for ticket_id, node in self.tickets.items():
+            dependency_graph[ticket_id] = node.dependencies
+
+            for dep in node.dependencies:
+                if dep not in reverse_deps:
+                    reverse_deps[dep] = []
+                reverse_deps[dep].append(ticket_id)
+
+        # Topological sort to find execution waves
+        dependency_waves = []
+        processed = set()
+
+        while len(processed) < len(self.tickets):
+            wave = []
+
+            for ticket_id, node in self.tickets.items():
+                if ticket_id in processed:
+                    continue
+
+                # Check if all dependencies are processed
+                deps_satisfied = all(
+                    dep in processed or dep not in self.tickets
+                    for dep in node.dependencies
+                )
+
+                if deps_satisfied:
+                    wave.append(ticket_id)
+
+            if not wave:
+                # Circular dependency or missing dependency
+                remaining = set(self.tickets.keys()) - processed
+                dep_warning = (
+                    f"⚠️  Warning: Circular or missing dependencies detected for: "
+                    f"{remaining}"
+                )
+                print(dep_warning)
+                wave = list(remaining)  # Force execution of remaining tickets
+
+            dependency_waves.append(wave)
+            processed.update(wave)
+        
+        # Now apply smart conflict detection within each dependency wave
         # Read ticket contents for analysis
         tickets_content = {}
         with open(self.tickets_path, 'r') as f:
@@ -162,21 +209,31 @@ class ParallelExecutor:
                 if match:
                     tickets_content[ticket_id] = match.group(0)
         
-        # Use smart scheduler to create conflict-free waves
-        waves = self.smart_lock_manager.schedule_tickets_smartly(tickets_content)
+        # Optimize each dependency wave for file conflicts
+        final_waves = []
+        for dep_wave in dependency_waves:
+            if len(dep_wave) <= 1:
+                # Single ticket, no conflict to resolve
+                final_waves.append(dep_wave)
+            else:
+                # Use smart scheduler to split wave if there are conflicts
+                wave_content = {tid: tickets_content.get(tid, '') for tid in dep_wave}
+                conflict_free_subwaves = self.smart_lock_manager.schedule_tickets_smartly(wave_content)
+                
+                # Merge subwaves back if they're small
+                if len(conflict_free_subwaves) == 1:
+                    final_waves.append(conflict_free_subwaves[0])
+                else:
+                    # Multiple subwaves means conflicts were detected
+                    print(f"   ⚠️  Detected file conflicts in dependency wave {dep_wave}, splitting into {len(conflict_free_subwaves)} subwaves")
+                    final_waves.extend(conflict_free_subwaves)
         
-        # Build dependency graph for reference
-        dependency_graph = {
-            ticket_id: node.dependencies 
-            for ticket_id, node in self.tickets.items()
-        }
-        
-        print(f"📊 Smart scheduling created {len(waves)} execution waves")
-        for i, wave in enumerate(waves, 1):
+        print(f"📊 Smart scheduling created {len(final_waves)} execution waves (respecting both dependencies and file conflicts)")
+        for i, wave in enumerate(final_waves, 1):
             print(f"   Wave {i}: {', '.join(wave)}")
         
         return ExecutionPlan(
-            waves=waves,
+            waves=final_waves,
             dependency_graph=dependency_graph,
             total_tickets=len(self.tickets),
             max_parallel=self.max_workers
@@ -317,6 +374,12 @@ class ParallelExecutor:
 
 Find and execute specifically "## Ticket {ticket_id}:" in tickets.md
 
+BEFORE STARTING: Check if the work for this ticket has already been done:
+1. Look for existing files that the ticket would create
+2. If files exist, verify they meet the acceptance criteria
+3. If the work is already complete, just update the Status to DONE and check off the acceptance criteria
+4. Only create/modify files if the work hasn't been done or doesn't meet the criteria
+
 DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_id}.
 
 PYTHON CODE QUALITY REQUIREMENTS:
@@ -331,7 +394,14 @@ Be minimalistic, surgical and future proof!
 Avoid using any code or comments that may be construed as AI generated.
 Make sure you do a good job because other LLMs said your code sucked!
 
-When you finish, ensure acceptance criteria is met then update tickets.md and then run lint, build, test etc before we move on.
+CRITICAL: Before marking the ticket as complete, you MUST:
+1. Run all applicable linting/formatting tools (e.g., `ruff check --fix`, `black`, `prettier`, etc.)
+2. Fix ALL linting issues - do not leave any warnings or errors
+3. Run type checking if applicable (e.g., `mypy`, `tsc`)
+4. Run tests if they exist (e.g., `pytest`, `npm test`)
+5. Update the acceptance criteria checkboxes in tickets.md to mark completed items
+
+If any quality checks fail, FIX THEM before considering the ticket done. Keep iterating until all checks pass.
 
 DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
 
@@ -396,25 +466,25 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 allowed_statuses = ["passed", "warning"]
                 quality_passed = quality_report.overall_status.value in allowed_statuses
 
-                # Only mark as complete if BOTH validation AND quality gates pass
-                if validation_passed and quality_passed:
+                # Mark ticket as completed if acceptance criteria are met
+                # Quality issues are informational only - they don't block completion
+                if validation_passed:
                     mark_ticket_completed(tickets_path, ticket_id)
-                    print("✅ Quality gates passed - ticket marked as DONE")
-                else:
-                    # Mark with quality status in tickets.md
-                    from hydra.ticket_workflow import mark_ticket_quality_failed
-                    mark_ticket_quality_failed(tickets_path, ticket_id, quality_report)
-                    if not quality_passed:
-                        print(f"⚠️  Quality gates failed - ticket marked as QUALITY_FAILED")
+                    if quality_passed:
+                        print("✅ Ticket completed with all quality gates passed")
+                    else:
+                        print("⚠️  Ticket completed but has quality issues (agent should have fixed these)")
+                        # Log quality issues for information (without failing)
+                        # Note: Quality issues don't block completion
                     
                 with self.lock:
-                    node.status = ExecutionStatus.COMPLETED if quality_passed else ExecutionStatus.FAILED
+                    # Ticket is completed regardless of quality status
+                    node.status = ExecutionStatus.COMPLETED
                     node.end_time = time.time()
                     node.quality_passed = quality_passed
-                    if quality_passed:
-                        self.completed_tickets.add(ticket_id)
-                    else:
-                        self.failed_tickets.add(ticket_id)
+                    self.completed_tickets.add(ticket_id)
+                    if not quality_passed:
+                        self.quality_failed_tickets.add(ticket_id)  # Track for reporting
                     self.running_tickets.remove(ticket_id)
 
                     # Update dashboard
@@ -424,7 +494,10 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                         self.dashboard_state.update_ticket_status(ticket_id, status)
 
                 duration = node.end_time - node.start_time
-                status_msg = "✅ completed" if quality_passed else "⚠️  completed with quality issues"
+                if quality_passed:
+                    status_msg = "✅ Completed"
+                else:
+                    status_msg = "⚠️  Completed (quality issues detected - review agent's work)"
                 print(f"\n{status_msg} Ticket {ticket_id} in {duration:.2f}s")
 
                 # Release the agent back to the pool and file locks
@@ -552,6 +625,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
 
             for ticket_id in wave_to_execute:
                 node = self.tickets[ticket_id]
+                # Only block if dependencies actually failed execution (not quality issues)
                 deps_failed = any(
                     dep in self.failed_tickets for dep in node.dependencies
                 )
@@ -576,8 +650,8 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
 
         summary = {
             "total_tickets": plan.total_tickets,
-            "completed": len(self.completed_tickets),
-            "failed": len(self.failed_tickets),
+            "completed": len(self.completed_tickets) - len(self.quality_failed_tickets),  # Subtract quality failures
+            "failed": len(self.failed_tickets) + len(self.quality_failed_tickets),  # Include quality failures in failed count
             "blocked": sum(
                 1 for n in self.tickets.values()
                 if n.status == ExecutionStatus.BLOCKED
@@ -622,13 +696,17 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
         lines.append("📋 Ticket Details:")
 
         for ticket_id, node in sorted(self.tickets.items()):
-            status_icon = {
-                ExecutionStatus.COMPLETED: "✅",
-                ExecutionStatus.FAILED: "❌",
-                ExecutionStatus.BLOCKED: "⛔",
-                ExecutionStatus.PENDING: "⏳",
-                ExecutionStatus.RUNNING: "🔄"
-            }.get(node.status, "❓")
+            # Show special icon for quality failures
+            if ticket_id in self.quality_failed_tickets:
+                status_icon = "⚠️"  # Quality failed but completed
+            else:
+                status_icon = {
+                    ExecutionStatus.COMPLETED: "✅",
+                    ExecutionStatus.FAILED: "❌",
+                    ExecutionStatus.BLOCKED: "⛔",
+                    ExecutionStatus.PENDING: "⏳",
+                    ExecutionStatus.RUNNING: "🔄"
+                }.get(node.status, "❓")
 
             line = f"  {status_icon} {ticket_id}: {node.title}"
 

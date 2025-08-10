@@ -279,6 +279,24 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                             print("🔔 Claude Code is asking for confirmation - auto-approving...")
                             self._send_to_session(session_name, "1")
                             time.sleep(2)  # Give Claude time to process
+                        elif "shift+tab to cycle" in new_content and "best available model" in new_content:
+                            # Check the CLAUDE_MODEL environment variable set by the executor
+                            import os
+                            required_model = os.environ.get('CLAUDE_MODEL', '')
+                            
+                            if 'opus' in required_model.lower():
+                                print("🤖 Claude Code showing model selection - selecting Opus 4...")
+                                # Cycle to Opus (usually need to press tab once or twice)
+                                self._send_to_session(session_name, "Tab")
+                                time.sleep(1)
+                                self._send_to_session(session_name, "Enter")
+                            elif 'sonnet' in required_model.lower():
+                                print("🤖 Claude Code showing model selection - selecting Sonnet 4...")
+                                self._send_to_session(session_name, "Enter")  # Default is usually Sonnet
+                            else:
+                                print(f"🤖 Claude Code showing model selection - using default (CLAUDE_MODEL={required_model})...")
+                                self._send_to_session(session_name, "Enter")
+                            time.sleep(2)  # Give Claude time to process
                         # Look for Claude Code tool usage patterns and show what it's doing
                         elif "Reading" in new_content:
                             # Extract file being read if possible

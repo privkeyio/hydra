@@ -187,10 +187,11 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     print("🧠 Using Opus 4 for ticket planning...")
     
     # Use the exact prompt format that works when you run Claude Code manually
-    prompt = f"""make a tickets.md doc with tickets that are made in task language for claude code to execute that include acceptance criteria, dependencies (like 001,002 or None), and which model (sonnet 4 or opus 4) should be used for that ticket. be minimalistic, surgical and future proof!
+    prompt = f"""make a tickets.md doc with tickets that are made in task language for claude code to execute that include acceptance criteria, dependencies (like 001,002 or None), status, and which model (sonnet 4 or opus 4) should be used for that ticket. be minimalistic, surgical and future proof!
 
 Each ticket MUST have this format:
 ## Ticket 001: [Title]
+**Status:** TODO
 **Model:** [Sonnet 4 or Opus 4]
 **Dependencies:** [None or comma-separated ticket numbers like 001,002]
 **Description:** [Task description]

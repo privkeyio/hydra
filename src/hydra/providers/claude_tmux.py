@@ -281,7 +281,6 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                             time.sleep(2)  # Give Claude time to process
                         elif "shift+tab to cycle" in new_content and "best available model" in new_content:
                             # Check the CLAUDE_MODEL environment variable set by the executor
-                            import os
                             required_model = os.environ.get('CLAUDE_MODEL', '')
                             
                             if 'opus' in required_model.lower():

@@ -1134,6 +1134,7 @@ REMINDER: Focus ONLY on Ticket {ticket_id}. Verify first, fix if needed, then ve
             from hydra.providers.claude_tmux import ClaudeTmuxProvider
             
             # Create tmux provider config with the ticket's specified model
+            import os  # Import os here for access to environ
             config = LLMConfig(
                 provider_type='claude_tmux',
                 timeout=300,  # Same timeout as ticket execution

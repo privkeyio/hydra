@@ -330,8 +330,10 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                     else:
                         print(f"{phase} ({elapsed}s)...")
 
-                # Check for file changes periodically
-                if int(time.time() - start_time) % 10 == 0:
+                # Check for file changes periodically - but only for THIS ticket's session
+                if int(time.time() - start_time) % 10 == 0 and ticket_id:
+                    # Only report on files likely related to this specific ticket
+                    # to avoid confusion with concurrent tickets
                     git_status = subprocess.run(
                         ["git", "status", "--short"],
                         capture_output=True,

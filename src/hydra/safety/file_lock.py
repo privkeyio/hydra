@@ -78,6 +78,7 @@ class FileLockManager:
         Args:
             agent_id: ID of the agent
         """
+        files_to_release = []
         with self.global_lock:
             if agent_id in self.agent_files:
                 # Copy the set to avoid modification during iteration

@@ -83,18 +83,8 @@ class AgentPool:
             Agent ID if spawned, None if pool is full
         """
         with self.lock:
-            # Check if we're at capacity
-            active_count = sum(1 for a in self.agents.values() 
-                             if a.status != AgentStatus.TERMINATING)
-            if active_count >= self.max_agents:
-                logger.warning(f"Agent pool full ({active_count}/{self.max_agents})")
-                return None
-                
-            # Create unique agent ID
+            # First, check if this specific ticket already has an agent
             agent_id = f"agent_{ticket_id}"
-            session_name = f"hydra_claude_{ticket_id}"
-            
-            # Check if session already exists
             if agent_id in self.agents:
                 logger.info(f"Reusing existing agent {agent_id}")
                 agent = self.agents[agent_id]
@@ -102,6 +92,35 @@ class AgentPool:
                 agent.ticket_id = ticket_id
                 agent.last_active = time.time()
                 return agent_id
+            
+            # Try to find an idle agent to reuse
+            for existing_id, agent in self.agents.items():
+                if agent.status == AgentStatus.IDLE:
+                    # Terminate the old idle session
+                    try:
+                        subprocess.run(
+                            ["tmux", "kill-session", "-t", agent.session_name],
+                            capture_output=True,
+                            timeout=5
+                        )
+                    except:
+                        pass
+                    
+                    # Remove the old agent
+                    del self.agents[existing_id]
+                    logger.info(f"Removed idle agent {existing_id} to make room")
+                    break
+            
+            # Check if we're at capacity after cleanup
+            active_count = sum(1 for a in self.agents.values() 
+                             if a.status != AgentStatus.TERMINATING)
+            if active_count >= self.max_agents:
+                logger.warning(f"Agent pool full ({active_count}/{self.max_agents})")
+                print(f"⚠️  Agent pool full ({active_count}/{self.max_agents})")
+                return None
+                
+            # Create unique agent ID and session name
+            session_name = f"hydra_claude_{ticket_id}"
                 
             # Create new agent
             agent = Agent(

@@ -96,8 +96,14 @@ class ClaudeTmuxProvider(LLMProvider):
         # Kill any existing session with the same name
         self._kill_session(session_name)
 
+        # Create .hydra folder if it doesn't exist
+        hydra_dir = Path(project_dir) / ".hydra"
+        hydra_dir.mkdir(exist_ok=True)
+        
         # Marker file to detect when Claude is done
-        done_marker = Path(project_dir) / f".hydra_done_{session_name}"
+        sessions_dir = hydra_dir / "sessions"
+        sessions_dir.mkdir(exist_ok=True)
+        done_marker = sessions_dir / f"done_{session_name}"
         if done_marker.exists():
             done_marker.unlink()
 
@@ -153,8 +159,8 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
             time.sleep(3)
 
             # Add instruction to create done marker (only if not already in prompt)
-            if f".hydra_done_{session_name}" not in prompt:
-                done_instruction = f"\nWhen you're completely done with all file operations, please create a file called .hydra_done_{session_name} to signal completion."
+            if f"done_{session_name}" not in prompt:
+                done_instruction = f"\nWhen you're completely done with all file operations, please create a file called .hydra/sessions/done_{session_name} to signal completion."
                 self._send_to_session(session_name, done_instruction)
 
             # Monitor for completion
@@ -341,15 +347,25 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                             parts = line.strip().split(maxsplit=1)
                             if len(parts) >= 2:
                                 filepath = parts[1]
-                                # Convert to absolute path and check if it's within project directory
-                                try:
-                                    file_abs_path = (project_path / filepath).resolve()
-                                    # Check if the file is within the project directory
-                                    if str(file_abs_path).startswith(str(project_path)):
+                                # Special case: if the path is just "./" it means the entire directory is untracked
+                                if filepath == "./":
+                                    # List actual files in the directory instead
+                                    try:
+                                        for f in Path(project_dir).iterdir():
+                                            if f.is_file() and f.name != "tickets.md":
+                                                changed_files.append(f"?? {f.name}")
+                                    except:
                                         changed_files.append(line)
-                                except (ValueError, OSError):
-                                    # Skip files that can't be resolved
-                                    pass
+                                else:
+                                    # Convert to absolute path and check if it's within project directory
+                                    try:
+                                        file_abs_path = (project_path / filepath).resolve()
+                                        # Check if the file is within the project directory
+                                        if str(file_abs_path).startswith(str(project_path)):
+                                            changed_files.append(line)
+                                    except (ValueError, OSError):
+                                        # Skip files that can't be resolved
+                                        pass
                     if changed_files:
                         # Show what files are being modified
                         print(f"📝 Working on {len(changed_files)} files:")
@@ -393,15 +409,25 @@ SAFETY NOTE: Do NOT perform any git operations (commit, push, merge, etc.) witho
                     parts = line.strip().split(maxsplit=1)
                     if len(parts) >= 2:
                         filepath = parts[1]
-                        # Convert to absolute path and check if it's within project directory
-                        try:
-                            file_abs_path = (project_path / filepath).resolve()
-                            # Check if the file is within the project directory
-                            if str(file_abs_path).startswith(str(project_path)):
+                        # Special case: if the path is just "./" it means the entire directory is untracked
+                        if filepath == "./":
+                            # List actual files in the directory instead
+                            try:
+                                for f in Path(project_dir).iterdir():
+                                    if f.is_file() and f.name != "tickets.md":
+                                        changed_files.append(f"?? {f.name}")
+                            except:
                                 changed_files.append(line)
-                        except (ValueError, OSError):
-                            # Skip files that can't be resolved
-                            pass
+                        else:
+                            # Convert to absolute path and check if it's within project directory
+                            try:
+                                file_abs_path = (project_path / filepath).resolve()
+                                # Check if the file is within the project directory
+                                if str(file_abs_path).startswith(str(project_path)):
+                                    changed_files.append(line)
+                            except (ValueError, OSError):
+                                # Skip files that can't be resolved
+                                pass
 
             if changed_files:
                 print("\n✅ Files successfully modified by Claude Code:")

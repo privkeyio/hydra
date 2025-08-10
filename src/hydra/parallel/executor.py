@@ -538,6 +538,168 @@ Take your time and deliver excellence!"""
         lines.append(f"{'='*60}")
 
         return "\n".join(lines)
+    
+    def save_completion_report(self, summary: Dict[str, Any]) -> str:
+        """Save a completion report and dashboard snapshot."""
+        # Create .hydra directory structure
+        hydra_dir = self.project_root / ".hydra"
+        hydra_dir.mkdir(exist_ok=True)
+        
+        reports_dir = hydra_dir / "reports"
+        reports_dir.mkdir(exist_ok=True)
+        
+        # Save completion report
+        report_file = reports_dir / f"completion_{int(time.time())}.md"
+        report_content = self.generate_report(summary)
+        
+        # Add extra information for the saved report
+        full_report = f"""# 🎉 Project Completion Report
+
+**Generated:** {time.strftime('%Y-%m-%d %H:%M:%S')}
+**Project:** {self.project_root}
+**Success Rate:** {summary['success_rate']:.1f}%
+
+{report_content}
+
+## 📊 Dashboard
+View the live dashboard at: http://localhost:8080
+Or check the saved dashboard snapshot in `.hydra/dashboard/`
+
+## 📁 Generated Files
+Check your project directory for all the generated calculator files.
+
+## ✅ All Tickets Completed!
+"""
+        
+        with open(report_file, 'w') as f:
+            f.write(full_report)
+        
+        # Save dashboard HTML snapshot if available
+        if self.dashboard_state:
+            dashboard_dir = hydra_dir / "dashboard" 
+            dashboard_dir.mkdir(exist_ok=True)
+            
+            snapshot_file = dashboard_dir / f"snapshot_{int(time.time())}.html"
+            # Create a static HTML snapshot
+            self._save_dashboard_snapshot(snapshot_file, summary)
+        
+        return str(report_file)
+    
+    def _save_dashboard_snapshot(self, snapshot_file: Path, summary: Dict[str, Any]):
+        """Save a static HTML dashboard snapshot."""
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Hydra Completion Dashboard</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e27;
+            color: #e4e4e7;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        h1 {{
+            color: #60a5fa;
+            text-align: center;
+        }}
+        .success-banner {{
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 20px 0;
+            font-size: 24px;
+            font-weight: bold;
+        }}
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }}
+        .stat-card {{
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #334155;
+        }}
+        .stat-label {{
+            font-size: 12px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }}
+        .stat-value {{
+            font-size: 32px;
+            font-weight: 600;
+            color: #f1f5f9;
+        }}
+        .tickets-list {{
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }}
+        .ticket-item {{
+            padding: 10px;
+            border-bottom: 1px solid #334155;
+        }}
+        .ticket-item:last-child {{
+            border-bottom: none;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Hydra Project Completion</h1>
+        
+        <div class="success-banner">
+            🎉 All {summary['total_tickets']} Tickets Completed Successfully!
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Total Tickets</div>
+                <div class="stat-value">{summary['total_tickets']}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Completed</div>
+                <div class="stat-value">{summary['completed']}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Success Rate</div>
+                <div class="stat-value">{summary['success_rate']:.0f}%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Time</div>
+                <div class="stat-value">{summary['duration']:.0f}s</div>
+            </div>
+        </div>
+        
+        <div class="tickets-list">
+            <h2>📋 Completed Tickets</h2>
+"""
+        for ticket_id, node in sorted(self.tickets.items()):
+            if node.status == ExecutionStatus.COMPLETED:
+                duration = ""
+                if node.start_time and node.end_time:
+                    duration = f" - {node.end_time - node.start_time:.1f}s"
+                html_content += f"""            <div class="ticket-item">✅ {ticket_id}: {node.title}{duration}</div>
+"""
+        
+        html_content += """        </div>
+    </div>
+</body>
+</html>"""
+        
+        with open(snapshot_file, 'w') as f:
+            f.write(html_content)
 
     def save_execution_log(
         self, summary: Dict[str, Any], log_dir: Optional[str] = None

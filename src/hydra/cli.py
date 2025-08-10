@@ -612,6 +612,13 @@ def _handle_parallel_execution(args):
         # Return success if all tickets completed
         if summary['completed'] == summary['total_tickets']:
             print("\n✅ All tickets completed successfully!")
+            
+            # Save completion report
+            report_path = executor.save_completion_report(summary)
+            print(f"\n📄 Completion report saved: {report_path}")
+            print(f"📊 Dashboard snapshot saved in: {tickets_path.parent}/.hydra/dashboard/")
+            print(f"\n💡 Tip: Keep the dashboard open at http://localhost:8080 to review results")
+            
             executor.shutdown()
             dashboard_server.stop()
             return 0
@@ -620,6 +627,12 @@ def _handle_parallel_execution(args):
             total = summary['total_tickets']
             incomplete_msg = f"Execution incomplete: {completed}/{total} completed"
             print(f"\n⚠️ {incomplete_msg}")
+            
+            # Still save a report even if incomplete
+            if completed > 0:
+                report_path = executor.save_completion_report(summary)
+                print(f"\n📄 Partial completion report saved: {report_path}")
+            
             executor.shutdown()
             dashboard_server.stop()
             return 1

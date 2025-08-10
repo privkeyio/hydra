@@ -216,19 +216,41 @@ def create_parser():
         "--workers", type=int, default=3, help="Max parallel workers (default: 3)"
     )
     batch_parser.add_argument(
-        "--max-batch-size", type=int, default=5, help="Maximum tickets per batch (default: 5)"
+        "--max-batch-size", type=int, default=5,
+        help="Maximum tickets per batch (default: 5)"
     )
     batch_parser.add_argument(
-        "--max-complexity", type=int, default=100, help="Maximum complexity score per batch (default: 100)"
+        "--max-complexity", type=int, default=100,
+        help="Maximum complexity score per batch (default: 100)"
     )
     batch_parser.add_argument(
-        "--min-batch-tickets", type=int, default=2, help="Minimum tickets to create a batch (default: 2)"
+        "--min-batch-tickets", type=int, default=2,
+        help="Minimum tickets to create a batch (default: 2)"
     )
     batch_parser.add_argument(
-        "--disable-batching", action="store_true", help="Disable batching (run individual tickets)"
+        "--disable-batching", action="store_true",
+        help="Disable batching (run individual tickets)"
     )
     batch_parser.add_argument(
         "--save-log", action="store_true", help="Save execution log"
+    )
+
+    # Verify and fix tickets in parallel
+    verify_parallel_parser = ticket_subparsers.add_parser(
+        "verify-parallel", help="Verify and fix unmet acceptance criteria in parallel"
+    )
+    verify_parallel_parser.add_argument(
+        "--tickets", default="tickets.md", help="Tickets file (default: tickets.md)"
+    )
+    verify_parallel_parser.add_argument(
+        "--workers", type=int, default=4, help="Max parallel workers (default: 4)"
+    )
+    verify_parallel_parser.add_argument(
+        "--save-report", help="Save verification report to file"
+    )
+    verify_parallel_parser.add_argument(
+        "--static-only", action="store_true",
+        help="Only use static analysis, skip model-based verification"
     )
 
     # Claude Code orchestration subcommand
@@ -587,15 +609,15 @@ def _handle_sync_parallel_execution(args):
     try:
         # Load production configuration
         config = get_production_config()
-        
+
         # Override with command line arguments if provided
         if hasattr(args, 'workers'):
             config.max_parallel_tickets = args.workers
-        
+
         # Apply environment variables from config
         for key, value in config.to_env_vars().items():
             os.environ[key] = value
-        
+
         # Get absolute path to tickets file
         tickets_path = Path(args.tickets).resolve()
         if not tickets_path.exists():
@@ -617,7 +639,7 @@ def _handle_sync_parallel_execution(args):
             project_root=str(project_root),
             dashboard_state=dashboard_state
         )
-        
+
         # Log configuration mode
         print(f"🔧 Production Mode: File locking {'enabled' if config.enable_file_locking else 'disabled'}")
         print(f"🔧 Smart scheduling: {'enabled' if config.enable_smart_scheduling else 'disabled'}")
@@ -629,13 +651,13 @@ def _handle_sync_parallel_execution(args):
         if not tickets:
             print("❌ No pending tickets found")
             return 1
-        
+
         # Count only pending tickets (not already completed)
-        pending_count = len([t for t in tickets.values() 
+        pending_count = len([t for t in tickets.values()
                            if t.status == ExecutionStatus.PENDING])
         total_count = len(tickets)
         completed_count = len(executor.completed_tickets)
-        
+
         if completed_count > 0:
             print(f"✅ {completed_count} tickets already completed")
         print(f"📋 Found {pending_count} pending tickets")
@@ -669,13 +691,13 @@ def _handle_sync_parallel_execution(args):
         # Return success if all tickets completed
         if summary['completed'] == summary['total_tickets']:
             print("\n✅ All tickets completed successfully!")
-            
+
             # Save completion report
             report_path = executor.save_completion_report(summary)
             print(f"\n📄 Completion report saved: {report_path}")
             print(f"📊 Dashboard snapshot saved in: {tickets_path.parent}/.hydra/dashboard/")
-            print(f"\n💡 Tip: Keep the dashboard open at http://localhost:8080 to review results")
-            
+            print("\n💡 Tip: Keep the dashboard open at http://localhost:8080 to review results")
+
             executor.shutdown()
             dashboard_server.stop()
             return 0
@@ -684,12 +706,12 @@ def _handle_sync_parallel_execution(args):
             total = summary['total_tickets']
             incomplete_msg = f"Execution incomplete: {completed}/{total} completed"
             print(f"\n⚠️ {incomplete_msg}")
-            
+
             # Still save a report even if incomplete
             if completed > 0:
                 report_path = executor.save_completion_report(summary)
                 print(f"\n📄 Partial completion report saved: {report_path}")
-            
+
             executor.shutdown()
             dashboard_server.stop()
             return 1
@@ -706,6 +728,7 @@ def _handle_sync_parallel_execution(args):
 def _handle_async_parallel_execution(args):
     """Handle asynchronous parallel ticket execution."""
     import asyncio
+
     from hydra.dashboard import DashboardServer, DashboardState
     from hydra.parallel import AsyncParallelExecutor
     from hydra.parallel.async_executor import ExecutionStatus
@@ -715,15 +738,15 @@ def _handle_async_parallel_execution(args):
         try:
             # Load production configuration
             config = get_production_config()
-            
+
             # Override with command line arguments
             if hasattr(args, 'workers'):
                 config.max_parallel_tickets = args.workers
-            
+
             # Apply environment variables from config
             for key, value in config.to_env_vars().items():
                 os.environ[key] = value
-            
+
             # Get absolute path to tickets file
             tickets_path = Path(args.tickets).resolve()
             if not tickets_path.exists():
@@ -745,10 +768,10 @@ def _handle_async_parallel_execution(args):
                 project_root=str(project_root),
                 dashboard_state=dashboard_state
             )
-            
+
             # Log configuration mode
             print(f"🔧 Production Mode: File locking {'enabled' if config.enable_file_locking else 'disabled'}")
-            print(f"⚡ Async Mode: Dynamic scheduling enabled")
+            print("⚡ Async Mode: Dynamic scheduling enabled")
             print(f"🎯 Loading tickets from: {tickets_path}")
 
             # Load tickets asynchronously
@@ -756,12 +779,12 @@ def _handle_async_parallel_execution(args):
             if not tickets:
                 print("❌ No pending tickets found")
                 return 1
-            
+
             # Count pending tickets
-            pending_count = len([t for t in tickets.values() 
+            pending_count = len([t for t in tickets.values()
                                if t.status == ExecutionStatus.PENDING])
             completed_count = len(executor.completed_tickets)
-            
+
             if completed_count > 0:
                 print(f"✅ {completed_count} tickets already completed")
             print(f"📋 Found {pending_count} pending tickets")
@@ -784,12 +807,12 @@ def _handle_async_parallel_execution(args):
             # Return success if all tickets completed
             if summary['completed'] == summary['total_tickets']:
                 print("\n✅ All tickets completed successfully!")
-                
+
                 # Save completion report
                 report_path = await executor.save_completion_report(summary)
                 print(f"\n📄 Async completion report saved: {report_path}")
-                print(f"\n💡 Tip: Async execution completed with dynamic scheduling")
-                
+                print("\n💡 Tip: Async execution completed with dynamic scheduling")
+
                 executor.shutdown()
                 if dashboard_server:
                     dashboard_server.stop()
@@ -798,12 +821,12 @@ def _handle_async_parallel_execution(args):
                 completed = summary['completed']
                 total = summary['total_tickets']
                 print(f"\n⚠️ Execution incomplete: {completed}/{total} completed")
-                
+
                 # Still save a report even if incomplete
                 if completed > 0:
                     report_path = await executor.save_completion_report(summary)
                     print(f"\n📄 Partial completion report saved: {report_path}")
-                
+
                 executor.shutdown()
                 if dashboard_server:
                     dashboard_server.stop()
@@ -828,23 +851,24 @@ def _handle_async_parallel_execution(args):
 def _handle_batch_execution(args):
     """Handle batch ticket execution with reduced session overhead."""
     import asyncio
+
     from hydra.dashboard import DashboardServer, DashboardState
-    from hydra.parallel.batch_executor import BatchExecutor, BatchConfig
+    from hydra.parallel.batch_executor import BatchConfig, BatchExecutor
     from hydra.production_config import get_production_config
 
     async def batch_main():
         try:
             # Load production configuration
             config = get_production_config()
-            
+
             # Override with command line arguments
             if hasattr(args, 'workers'):
                 config.max_parallel_tickets = args.workers
-            
+
             # Apply environment variables from config
             for key, value in config.to_env_vars().items():
                 os.environ[key] = value
-            
+
             # Get absolute path to tickets file
             tickets_path = Path(args.tickets).resolve()
             if not tickets_path.exists():
@@ -875,7 +899,7 @@ def _handle_batch_execution(args):
                 project_root=str(project_root),
                 dashboard_state=dashboard_state
             )
-            
+
             print(f"📦 Batch Processing Mode: {'enabled' if batch_config.enable_batching else 'disabled'}")
             print(f"🎯 Max batch size: {batch_config.max_batch_size}")
             print(f"🎯 Loading tickets from: {tickets_path}")
@@ -885,15 +909,15 @@ def _handle_batch_execution(args):
             if not tickets:
                 print("❌ No pending tickets found")
                 return 1
-            
-            pending_count = len([t for t in tickets.values() 
+
+            pending_count = len([t for t in tickets.values()
                                if t.status.name == "PENDING"])
             completed_count = len(executor.completed_tickets)
-            
+
             if completed_count > 0:
                 print(f"✅ {completed_count} tickets already completed")
             print(f"📋 Found {pending_count} pending tickets")
-            
+
             if batch_config.enable_batching and len(executor.batches) > 0:
                 print(f"📦 Created {len(executor.batches)} batch groups:")
                 for batch_id, batch in executor.batches.items():
@@ -914,14 +938,14 @@ def _handle_batch_execution(args):
             # Return success if all tickets completed
             if summary['completed'] == summary['total_tickets']:
                 print("\n✅ All tickets completed successfully!")
-                
+
                 # Save completion report
                 report_path = await executor.save_completion_report(summary)
                 print(f"\n📄 Batch completion report saved: {report_path}")
-                
+
                 if summary.get('overhead_reduction', 0) > 0:
                     print(f"⚡ Session overhead reduced by {summary['overhead_reduction']:.1f}%!")
-                
+
                 executor.shutdown()
                 if dashboard_server:
                     dashboard_server.stop()
@@ -930,7 +954,7 @@ def _handle_batch_execution(args):
                 completed = summary['completed']
                 total = summary['total_tickets']
                 print(f"\n⚠️ Execution incomplete: {completed}/{total} completed")
-                
+
                 executor.shutdown()
                 if dashboard_server:
                     dashboard_server.stop()
@@ -1001,8 +1025,235 @@ def handle_ticket_command(args):
         return _handle_batch_execution(args)
     elif args.ticket_action == "auto":
         return _handle_auto_workflow(args)
+    elif args.ticket_action == "verify-parallel":
+        return _handle_ticket_verification(args)
     else:
         print("Unknown ticket action")
+        return 1
+
+
+def _handle_ticket_verification(args):
+    """Handle parallel ticket verification and fixing."""
+    import json
+    import os
+    import time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from pathlib import Path
+
+    from hydra.monitoring import monitoring
+    from hydra.ticket_workflow import parse_all_tickets, parse_ticket
+
+    print("🔍 Parallel Ticket Verification & Fixing")
+    print("=" * 50)
+    print("📝 Verifying and fixing unmet acceptance criteria")
+    print("🤖 Each ticket will use its specified model (opus/sonnet)")
+    print("🔧 Will implement missing features to meet criteria")
+
+    # Set up monitoring
+    correlation_id = monitoring.set_correlation_id("verify_fix_tickets")
+    print(f"🔗 Session: {correlation_id}")
+
+    # Get tickets file path (same pattern as parallel command)
+    tickets_path = Path(args.tickets).resolve()
+    if not tickets_path.exists():
+        print(f"❌ Tickets file not found: {tickets_path}")
+        return 1
+
+    print(f"🎯 Loading tickets from: {tickets_path}")
+
+    # Parse all tickets
+    all_tickets = parse_all_tickets(str(tickets_path))
+    if not all_tickets:
+        print("❌ No tickets found")
+        return 1
+
+    # Get all tickets (including completed ones for verification)
+    print(f"📋 Found {len(all_tickets)} total tickets to verify")
+    print(f"👷 Using {args.workers} parallel workers")
+
+    # Results tracking
+    results = {}
+    successful_tickets = []
+    failed_tickets = []
+    fixed_tickets = []
+
+    def verify_and_fix_ticket(ticket_id, ticket_data):
+        """Verify ticket criteria and fix any unmet ones using the ticket's specified model."""
+        try:
+            title = ticket_data.get('title', 'Unknown')
+            model = ticket_data.get('model', 'sonnet')  # Use ticket's model, default to sonnet
+            model_emoji = "🧠" if model == 'opus' else "⚡"
+            
+            print(f"\n🔍 Verifying Ticket {ticket_id}: {title}")
+            print(f"   {model_emoji} Using {model.upper()} model")
+
+            # Build the verification and fixing prompt (similar to execute_single_ticket)
+            criteria_list = '\n'.join([f"- {c}" for c in ticket_data.get('acceptance_criteria', [])])
+            
+            prompt = f"""IMPORTANT: You MUST verify and fix ONLY Ticket {ticket_id} from tickets.md - NOT any other ticket!
+
+Find "## Ticket {ticket_id}:" in tickets.md and check its acceptance criteria.
+
+Your job is to:
+1. First CHECK if all acceptance criteria are already met
+2. If ANY criteria are NOT met, IMPLEMENT them immediately 
+3. After implementing, VERIFY again that criteria are now met
+4. Update tickets.md to mark completed criteria with [x]
+
+Ticket {ticket_id}: {title}
+Acceptance Criteria to verify/fix:
+{criteria_list}
+
+Be minimalistic, surgical and future proof!
+Avoid using any code or comments that may be construed as AI generated.
+Make sure you do a good job because other LLMs said your code sucked!
+
+DO NOT work on any other ticket even if it appears easier. You are assigned ONLY to ticket {ticket_id}.
+
+Once ALL acceptance criteria are met:
+- Update tickets.md to mark the criteria as completed  
+- Run any necessary tests/lints
+- Report success
+
+REMINDER: Focus ONLY on Ticket {ticket_id}. Verify first, fix if needed, then verify again."""
+
+            # Use the tmux provider for execution (same as ticket execution)
+            from hydra.providers.base import LLMConfig
+            from hydra.providers.claude_tmux import ClaudeTmuxProvider
+            
+            # Create tmux provider config with the ticket's specified model
+            config = LLMConfig(
+                provider_type='claude_tmux',
+                timeout=300,  # Same timeout as ticket execution
+                extra_params={
+                    'claude_path': os.environ.get('CLAUDE_CLI_PATH', '/home/kyle/.claude/local/claude'),
+                    'model': model  # Use the ticket's specified model
+                }
+            )
+            
+            # Create the tmux provider
+            provider = ClaudeTmuxProvider(config)
+            
+            # Execute verification and fixing
+            project_dir = str(tickets_path.parent)
+            print(f"   🚀 Verifying and fixing acceptance criteria...")
+            
+            # Execute via Claude Code - it will verify and fix as needed
+            provider.generate(prompt, cwd=project_dir, ticket_id=ticket_id)
+            
+            # Check if ticket was updated/fixed
+            updated_ticket = parse_ticket(str(tickets_path), ticket_id)
+            if updated_ticket:
+                completed_criteria = len([c for c in updated_ticket.get('acceptance_criteria', []) 
+                                        if c.startswith('✅')])
+                total_criteria = len(updated_ticket.get('acceptance_criteria', []))
+                
+                if completed_criteria == total_criteria and total_criteria > 0:
+                    print(f"   ✅ All {total_criteria} criteria verified and met!")
+                    successful_tickets.append(ticket_id)
+                    if ticket_id not in [t.get('number') for t in all_tickets.values() if t.get('completed')]:
+                        fixed_tickets.append(ticket_id)
+                else:
+                    print(f"   ⚠️ {completed_criteria}/{total_criteria} criteria met")
+                    if completed_criteria > 0:
+                        fixed_tickets.append(ticket_id)
+                    else:
+                        failed_tickets.append(ticket_id)
+            
+            return (ticket_id, True)
+
+        except Exception as e:
+            print(f"   ❌ Error verifying/fixing {ticket_id}: {e}")
+            failed_tickets.append(ticket_id)
+            return (ticket_id, False)
+
+    # Execute verification and fixing in parallel
+    start_time = time.time()
+
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        futures = {
+            executor.submit(verify_and_fix_ticket, tid, tdata): tid
+            for tid, tdata in all_tickets.items()
+        }
+
+        for future in as_completed(futures):
+            ticket_id = futures[future]
+            try:
+                tid, report = future.result()
+                if report:
+                    results[tid] = report
+            except Exception as e:
+                print(f"❌ Failed to verify {ticket_id}: {e}")
+
+    elapsed = time.time() - start_time
+
+    # Generate summary report
+    print("\n" + "=" * 50)
+    print("📊 Verification & Fixing Summary")
+    print("=" * 50)
+    print(f"⏱️  Total time: {elapsed:.2f}s")
+    print(f"📋 Tickets processed: {len(results)}/{len(all_tickets)}")
+    print(f"✅ Successfully verified/fixed: {len(successful_tickets)}")
+    print(f"🔧 Fixed during verification: {len(fixed_tickets)}")
+    print(f"❌ Failed to fix: {len(failed_tickets)}")
+
+    if successful_tickets:
+        print("\n✅ Successfully Verified/Fixed:")
+        for tid in successful_tickets:
+            print(f"   - {tid}: {all_tickets[tid].get('title', 'Unknown')}")
+
+    if fixed_tickets:
+        print("\n🔧 Fixed During Verification:")
+        for tid in fixed_tickets:
+            print(f"   - {tid}: {all_tickets[tid].get('title', 'Unknown')}")
+
+    if failed_tickets:
+        print("\n❌ Failed to Fix:")
+        for tid in failed_tickets:
+            print(f"   - {tid}: {all_tickets[tid].get('title', 'Unknown')}")
+
+    # Save detailed report if requested
+    if args.save_report:
+        report_data = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "summary": {
+                "total_tickets": len(all_tickets),
+                "processed": len(results),
+                "successful": len(successful_tickets),
+                "fixed": len(fixed_tickets),
+                "failed": len(failed_tickets),
+                "elapsed_seconds": elapsed
+            },
+            "tickets": {}
+        }
+
+        for tid, success in results.items():
+            status = "fixed" if tid in fixed_tickets else "successful" if tid in successful_tickets else "failed"
+            report_data["tickets"][tid] = {
+                "title": all_tickets[tid].get('title', 'Unknown'),
+                "model": all_tickets[tid].get('model', 'sonnet'),
+                "status": status,
+                "success": success
+            }
+
+        with open(args.save_report, 'w') as f:
+            json.dump(report_data, f, indent=2)
+        print(f"\n📄 Detailed report saved to: {args.save_report}")
+
+    # Show which tickets might need manual intervention
+    if failed_tickets and len(failed_tickets) <= 3:
+        print("\n💡 Failed tickets may need manual intervention:")
+        for tid in failed_tickets:
+            print(f"   • Ticket {tid}: Check acceptance criteria manually")
+
+    # Return exit code based on results
+    if len(failed_tickets) == 0:
+        print("\n✅ All tickets successfully verified/fixed!")
+        if len(fixed_tickets) > 0:
+            print(f"   🔧 {len(fixed_tickets)} tickets were fixed during verification")
+        return 0
+    else:
+        print(f"\n⚠️  {len(failed_tickets)} tickets could not be fixed")
         return 1
 
 

@@ -110,8 +110,7 @@ hydra claude attach dev
 - 📚 **[Full Documentation](docs/)** - Complete reference and guides
 - 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - System design and components
 - 🔧 **[API Reference](docs/API_REFERENCE.md)** - Python API and integration
-- 💡 **[Examples](docs/examples/)** - Real-world use cases
-- 🐛 **[Troubleshooting](docs/troubleshooting/)** - Common issues and solutions
+- 💡 **[Examples](examples/)** - Real-world use cases
 
 ## Testing Commands
 

@@ -271,6 +271,14 @@ Find and execute specifically "## Ticket {ticket_id}:" in tickets.md
 
 DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_id}.
 
+PYTHON CODE QUALITY REQUIREMENTS:
+- Add module docstrings to all Python files
+- Include __init__.py in all new package directories
+- Use proper type hints for all functions
+- Follow PEP 8 style guidelines
+- Avoid unused imports
+- Add error handling where appropriate
+
 Be minimalistic, surgical and future proof! 
 Avoid using any code or comments that may be construed as AI generated.
 Make sure you do a good job because other LLMs said your code sucked!
@@ -306,10 +314,36 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     # Treat as failure if validation fails
                     raise Exception("Acceptance criteria not met")
 
+                # Try to auto-fix common issues before running quality gates
+                print(f"\n🔧 Running automatic quality fixes for ticket {ticket_id}...")
+                from hydra.quality.auto_fixer import QualityAutoFixer
+                fixer = QualityAutoFixer(self.project_root)
+                fixes = fixer.fix_common_issues()
+                
+                if fixes:
+                    print("📝 Applied automatic fixes:")
+                    for issue, fixed, message in fixes:
+                        if fixed:
+                            print(f"   ✅ {issue}: {message}")
+                        else:
+                            print(f"   ⚠️  {issue}: {message}")
+                
                 # Run quality gates
                 print(f"\n🚦 Running quality gates for ticket {ticket_id}...")
                 gate_runner = QualityGateRunner(self.project_root)
                 quality_report = gate_runner.run_quality_gates(ticket_id)
+                
+                # Print quality gate details for debugging
+                print(f"📋 Quality Gate Results:")
+                for check in quality_report.results:
+                    status_icon = "✅" if check.status.value == "passed" else "❌" if check.status.value == "failed" else "⚠️"
+                    print(f"   {status_icon} {check.name}: {check.status.value}")
+                    if check.status.value == "failed" and check.error:
+                        # Show first few lines of error
+                        error_lines = check.error.split('\n')[:3]
+                        for line in error_lines:
+                            if line.strip():
+                                print(f"      → {line[:100]}")
 
                 allowed_statuses = ["passed", "warning"]
                 quality_passed = quality_report.overall_status.value in allowed_statuses

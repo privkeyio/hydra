@@ -161,7 +161,7 @@ class ClaudeTmuxProvider(BaseProvider):
                 'smart': 'opus',      # Complex tasks need Opus
                 'coder': 'opus',      # Complex coding needs Opus
                 'balanced': 'sonnet', # Balanced tasks use Sonnet
-                'fast': 'haiku'       # Simple tasks can use Haiku
+                'fast': 'sonnet'      # Fast tasks also use Sonnet (no Haiku)
             }
 
             claude_model = model_mapping.get(model_from_env, 'sonnet')  # Default to sonnet
@@ -213,8 +213,13 @@ class ClaudeTmuxProvider(BaseProvider):
                 f"1. Read the ticket carefully\n"
                 f"2. Create ALL files listed in 'Output Files' section\n"
                 f"3. Follow acceptance criteria exactly\n"
-                f"4. Be minimalistic and production-quality\n"
-                f"5. Update tickets.md when done"
+                f"4. Be minimalistic, surgical and future proof\n"
+                f"5. Avoid using any code or comments that may be construed as AI generated\n"
+                f"6. Make sure you do a good job because other LLMs said your code sucked\n"
+                f"7. When finished, ensure acceptance criteria is met then update tickets.md\n"
+                f"8. Run lint, build, test etc before marking complete\n"
+                f"9. DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS\n"
+                f"10. This has to be production quality, take your time"
             )
 
             debug_log("=" * 60)

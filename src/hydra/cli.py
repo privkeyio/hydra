@@ -1187,7 +1187,8 @@ def _handle_ticket_verification(args):
                 return (ticket_id, False)
 
             title = ticket_data.get('title', 'Unknown')
-            model = ticket_data.get('model', 'balanced')  # Use ticket's model, default to balanced
+            # For verify-parallel with Claude Code, default to balanced (sonnet 4)
+            model = ticket_data.get('model', 'balanced')  # Default to balanced (sonnet 4 for Claude)
             # Map model emoji based on category
             model_emojis = {
                 'smart': '🧠',

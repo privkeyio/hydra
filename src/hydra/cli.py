@@ -1218,15 +1218,21 @@ Ticket {ticket_id}: {title}
 Acceptance Criteria to verify/fix:
 {criteria_list}
 
-Be minimalistic, surgical and future proof!
-Avoid using any code or comments that may be construed as AI generated.
-Make sure you do a good job because other LLMs said your code sucked!
+Requirements:
+1. Be minimalistic, surgical and future proof
+2. Avoid using any code or comments that may be construed as AI generated
+3. Make sure you do a good job because other LLMs said your code sucked
+4. When finished, ensure acceptance criteria is met then update tickets.md
+5. Run lint, build, test etc before marking complete
+6. DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS
+7. This has to be production quality, take your time
 
 DO NOT work on any other ticket even if it appears easier. You are assigned ONLY to ticket {ticket_id}.
 
 Once ALL acceptance criteria are met:
-- Update tickets.md to mark the criteria as completed  
-- Run any necessary tests/lints
+- Update tickets.md to mark the criteria as completed with [x]
+- Update status to DONE if all criteria are met
+- Run any necessary tests/lints/builds
 - Report success
 
 REMINDER: Focus ONLY on Ticket {ticket_id}. Verify first, fix if needed, then verify again."""

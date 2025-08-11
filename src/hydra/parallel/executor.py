@@ -361,17 +361,16 @@ class ParallelExecutor:
             ticket_data = parse_ticket(tickets_path, ticket_id)
 
             # Create model-specific orchestrator for this ticket
-            ticket_model = ticket_data.get('model', 'sonnet')  # Default to sonnet
+            ticket_model = ticket_data.get('model', 'balanced').lower()  # Default to balanced
             print(f"🧠 Ticket {ticket_id} requires model: {ticket_model.upper()}")
 
             # Set the model environment for this agent
             import os
             original_model = os.environ.get('CLAUDE_MODEL')
 
-            if ticket_model.lower() == 'opus':
-                os.environ['CLAUDE_MODEL'] = 'claude-opus-4-1-20250805'
-            else:
-                os.environ['CLAUDE_MODEL'] = 'claude-sonnet-4-20250514'
+            # Set the model category for Claude to use
+            # The claude_tmux provider will map these to actual Claude models
+            os.environ['CLAUDE_MODEL'] = ticket_model
 
             orchestrator = ClaudeCodeOrchestrator()
             self.orchestrators[ticket_id] = orchestrator
@@ -389,19 +388,19 @@ class ParallelExecutor:
                 )
 
             # Build prompt - Claude Code will read tickets.md directly from the working directory
-            prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_id} from tickets.md - NOT any other ticket!
-
-Find and execute specifically "## Ticket {ticket_id}:" in tickets.md
+            prompt = f"""Please execute Ticket {ticket_id} from tickets.md.
 
 {dependency_context}
 
-BEFORE STARTING: Check if the work for this ticket has already been done:
-1. Look for existing files that the ticket would create
-2. If files exist, verify they meet the acceptance criteria
-3. If the work is already complete, just update the Status to DONE and check off the acceptance criteria
-4. Only create/modify files if the work hasn't been done or doesn't meet the criteria
+Steps to complete:
+1. Use the Read tool to open tickets.md
+2. Find "## Ticket {ticket_id}:" section
+3. Read the entire ticket including Output Files and Acceptance Criteria
+4. Create the files specified in "Output Files:" section using the Write tool
+5. Implement all the acceptance criteria
+6. Update tickets.md to mark the ticket Status as DONE and check off completed criteria
 
-DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_id}.
+Start by reading tickets.md to find Ticket {ticket_id}.
 
 PYTHON CODE QUALITY REQUIREMENTS:
 - Add module docstrings to all Python files
@@ -693,15 +692,34 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
 
             for ticket_id in wave_to_execute:
                 node = self.tickets[ticket_id]
-                # Only block if dependencies actually failed execution (not quality issues)
+                # Check if any dependencies failed or were blocked (transitive failure)
                 deps_failed = any(
                     dep in self.failed_tickets for dep in node.dependencies
                 )
+                
+                # Also check if dependencies were blocked (transitive failure from earlier deps)
+                deps_blocked = any(
+                    self.tickets.get(dep) and self.tickets[dep].status == ExecutionStatus.BLOCKED 
+                    for dep in node.dependencies
+                )
+                
+                # Check if dependencies are missing (not completed when they should be)
+                deps_missing = any(
+                    dep not in self.completed_tickets and 
+                    dep not in self.quality_failed_tickets
+                    for dep in node.dependencies
+                )
 
-                if deps_failed:
+                if deps_failed or deps_blocked or deps_missing:
                     blocked_tickets.append(ticket_id)
                     with self.lock:
                         node.status = ExecutionStatus.BLOCKED
+                        if deps_failed:
+                            node.error = f"Dependency failed: {[d for d in node.dependencies if d in self.failed_tickets]}"
+                        elif deps_blocked:
+                            node.error = f"Dependency blocked: {[d for d in node.dependencies if self.tickets.get(d) and self.tickets[d].status == ExecutionStatus.BLOCKED]}"
+                        else:
+                            node.error = f"Dependency not completed: {[d for d in node.dependencies if d not in self.completed_tickets and d not in self.quality_failed_tickets]}"
                 else:
                     ready_tickets.append(ticket_id)
 

@@ -373,8 +373,13 @@ Each ticket MUST have this format:
 **Dependencies:** [None or comma-separated ticket numbers like 001,002]
 **Description:** [Task description - if this depends on other tickets, mention that it builds on their outputs]
 
-**Required Input Files:** (only include if Dependencies is not None)
-- [List files that will be created by dependency tickets that this ticket needs]
+**Required Input Files:** (include for ALL tickets)
+- [For tickets with dependencies: List files from previous tickets]
+- [For tickets without dependencies: Write "None" or list any existing project files needed]
+
+**Output Files:** (include for ALL tickets that create files)
+- [List all files this ticket will create/generate]
+- [E.g., "analysis_report.md", "migration_design.md", "api_endpoints.py"]
 
 **Context Requirements:** (only include if Dependencies is not None)
 - [Specific instructions about reading/using outputs from dependency tickets]
@@ -382,12 +387,36 @@ Each ticket MUST have this format:
 
 **Acceptance Criteria:**
 - [ ] [Criteria that reference outputs from dependencies when applicable]
+- [ ] [Must include creation of any output files listed above]
 
-IMPORTANT: For tickets with dependencies:
-- Always add a "Required Input Files" section listing what files from previous tickets are needed
-- Add "Context Requirements" explaining how to use the outputs from dependencies
-- In the Description, mention that the ticket "builds on" or "uses outputs from" its dependencies
-- In Acceptance Criteria, reference specific deliverables from dependencies when relevant
+IMPORTANT RULES:
+1. ALL tickets MUST have a "Required Input Files" section (use "None" if no inputs needed)
+2. ALL tickets that create files MUST have an "Output Files" section listing what they produce
+3. For tickets with dependencies:
+   - List the specific output files from previous tickets in "Required Input Files"
+   - Add "Context Requirements" explaining how to use the outputs from dependencies
+   - In the Description, mention that the ticket "builds on" or "uses outputs from" its dependencies
+4. Match input/output files across tickets - outputs from one ticket should match inputs for dependent tickets
+
+Example for an independent ticket:
+## Ticket 001: Analyze current implementation
+**Status:** TODO
+**Model:** smart
+**Dependencies:** None
+**Description:** Deep analysis of current system implementation to understand all patterns and edge cases
+
+**Required Input Files:**
+- None (or list existing project files if needed)
+
+**Output Files:**
+- analysis_report.md
+- component_diagram.png
+- database_schema.sql
+
+**Acceptance Criteria:**
+- [ ] Document all system components in analysis_report.md
+- [ ] Create visual component diagram
+- [ ] Export current database schema to database_schema.sql
 
 Example for a dependent ticket:
 ## Ticket 002: Implement API based on design
@@ -397,18 +426,24 @@ Example for a dependent ticket:
 **Description:** Implement the REST API based on the design document from Ticket 001
 
 **Required Input Files:**
-- api_design.md (from Ticket 001)
+- analysis_report.md (from Ticket 001)
 - database_schema.sql (from Ticket 001)
 
+**Output Files:**
+- api_endpoints.py
+- api_tests.py
+- api_documentation.md
+
 **Context Requirements:**
-- FIRST: Read api_design.md to understand the endpoint specifications
+- FIRST: Read analysis_report.md to understand the system architecture
 - Review database_schema.sql for data model implementation
 - Follow the patterns and conventions established in Ticket 001
 
 **Acceptance Criteria:**
-- [ ] Implement all endpoints specified in api_design.md
+- [ ] Implement all endpoints based on analysis_report.md
 - [ ] Use the database schema from database_schema.sql
-- [ ] Follow RESTful conventions outlined in the design
+- [ ] Create comprehensive tests in api_tests.py
+- [ ] Document API in api_documentation.md
 
 Project: {project_description}"""
 
@@ -732,6 +767,11 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         print(f"🔧 Using {provider_type} provider with model: {ticket_model}")
     else:
         print(f"🔧 Using {provider_type} provider with default model")
+    
+    # For claude_tmux, set the CLAUDE_MODEL environment variable
+    if provider_type == 'claude_tmux' and ticket['model']:
+        os.environ['CLAUDE_MODEL'] = ticket['model']
+        print(f"📊 Set CLAUDE_MODEL={ticket['model']} for tmux provider")
 
     # Detect project language/framework from context
     project_context = detect_project_context(tickets_path)
@@ -771,6 +811,12 @@ Find and execute specifically "## Ticket {ticket_identifier}:" in tickets.md
 
 {workspace_info}
 {dependency_context}
+
+CRITICAL REQUIREMENTS:
+1. READ the ticket carefully, especially the "Output Files" section
+2. CREATE ALL FILES listed in the "Output Files" section with their exact names
+3. If the ticket says to create "migration_design.md", you MUST create that exact file
+4. Follow the acceptance criteria exactly - they often specify what files to create
 
 DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_identifier}.
 

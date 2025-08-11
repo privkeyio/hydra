@@ -8,6 +8,14 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+# Load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not installed, skip loading
+    pass
+
 from hydra.templates import TemplateEngine, TemplateValidator
 from hydra.ticket_workflow import (
     execute_single_ticket,

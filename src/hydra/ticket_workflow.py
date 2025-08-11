@@ -362,7 +362,9 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     print(f"🧠 Using {smart_model or 'smart model'} for ticket planning...")
 
     # Adapt prompt to use generic model categories instead of specific Claude models
-    prompt = f"""Create a file named 'tickets.md' in the current directory with tickets that are made in task language for LLM agents to execute that include acceptance criteria, dependencies (like 001,002 or None), status, and which model category (fast, balanced, smart, or coder) should be used for that ticket. be minimalistic, surgical and future proof!
+    # Extract just the filename from the full path for the prompt
+    output_filename = os.path.basename(output_path)
+    prompt = f"""Create a file named '{output_filename}' in the current directory with tickets that are made in task language for LLM agents to execute that include acceptance criteria, dependencies (like 001,002 or None), status, and which model category (fast, balanced, smart, or coder) should be used for that ticket. be minimalistic, surgical and future proof!
 
 Each ticket MUST have this format:
 ## Ticket 001: [Title]
@@ -413,12 +415,19 @@ Project: {project_description}"""
     print("🚀 Generating tickets with production standards...")
 
     try:
+        # Determine the working directory for ticket generation
+        # Use the directory of the output file as the working directory
+        output_dir = os.path.dirname(os.path.abspath(output_path))
+        
         # Use provider abstraction to generate tickets
+        # Increase timeout for ticket generation as it may take longer
+        provider.config.timeout = 120  # 2 minutes should be enough
+        
         result = provider.generate(
             prompt,  # Pass as positional argument
             model=smart_model,
             mode="ticket_generation",
-            output_path=output_path
+            cwd=output_dir  # Pass working directory for claude_tmux
         )
 
         # Check if file was created successfully

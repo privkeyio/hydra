@@ -130,18 +130,27 @@ class ClaudeTmuxProvider(BaseProvider):
         if done_marker.exists():
             done_marker.unlink()
 
-        # Set up debug logging early
-        debug_log_path = hydra_dir / "debug" / f"claude_{session_name}_{int(time.time())}.log"
-        debug_log_path.parent.mkdir(exist_ok=True)
-        self._current_debug_log_path = debug_log_path
+        # Check if debug mode is enabled via environment variable
+        debug_mode = os.environ.get('HYDRA_DEBUG', '').lower() in ['true', '1', 'yes']
+        
+        # Set up debug logging only if enabled
+        if debug_mode:
+            debug_log_path = hydra_dir / "debug" / f"claude_{session_name}_{int(time.time())}.log"
+            debug_log_path.parent.mkdir(exist_ok=True)
+            self._current_debug_log_path = debug_log_path
 
-        def debug_log(message):
-            """Log debug messages to file and console"""
-            timestamp = time.strftime("%H:%M:%S")
-            log_msg = f"[{timestamp}] {message}"
-            print(f"🔍 DEBUG: {log_msg}")
-            with open(self._current_debug_log_path, 'a') as f:
-                f.write(log_msg + "\n")
+            def debug_log(message):
+                """Log debug messages to file and console"""
+                timestamp = time.strftime("%H:%M:%S")
+                log_msg = f"[{timestamp}] {message}"
+                print(f"🔍 DEBUG: {log_msg}")
+                with open(self._current_debug_log_path, 'a') as f:
+                    f.write(log_msg + "\n")
+        else:
+            # No-op debug function when debug mode is disabled
+            def debug_log(message):
+                pass
+            self._current_debug_log_path = None
 
         # Store as instance method for use throughout
         self._debug_log = debug_log
@@ -421,27 +430,28 @@ class ClaudeTmuxProvider(BaseProvider):
 
                 time.sleep(1)
 
-            # Save full session output for debugging
-            final_output = self._capture_session_output(session_name)
-            session_log_path = hydra_dir / "debug" / f"full_session_{session_name}_{int(time.time())}.txt"
-            session_log_path.parent.mkdir(exist_ok=True)
-            with open(session_log_path, 'w') as f:
-                f.write(final_output)
-            debug_log(f"Full session saved to: {session_log_path}")
+            # Save full session output for debugging (only if debug mode is enabled)
+            if debug_mode:
+                final_output = self._capture_session_output(session_name)
+                session_log_path = hydra_dir / "debug" / f"full_session_{session_name}_{int(time.time())}.txt"
+                session_log_path.parent.mkdir(exist_ok=True)
+                with open(session_log_path, 'w') as f:
+                    f.write(final_output)
+                debug_log(f"Full session saved to: {session_log_path}")
 
-            # Debug summary
-            debug_log("=" * 60)
-            debug_log("SESSION SUMMARY:")
-            debug_log(f"Session: {session_name}")
-            debug_log(f"Duration: {time.time() - start_time:.2f}s")
-            debug_log(f"Ticket ID: {ticket_id}")
-            debug_log(f"Files detected by git: {git_status.stdout if 'git_status' in locals() else 'N/A'}")
-            debug_log(f"Debug log: {debug_log_path}")
-            debug_log(f"Full session: {session_log_path}")
-            print("\n📁 Debug logs saved to:")
-            print(f"   • {debug_log_path}")
-            print(f"   • {session_log_path}")
-            debug_log("=" * 60)
+                # Debug summary
+                debug_log("=" * 60)
+                debug_log("SESSION SUMMARY:")
+                debug_log(f"Session: {session_name}")
+                debug_log(f"Duration: {time.time() - start_time:.2f}s")
+                debug_log(f"Ticket ID: {ticket_id}")
+                debug_log(f"Files detected by git: {git_status.stdout if 'git_status' in locals() else 'N/A'}")
+                debug_log(f"Debug log: {self._current_debug_log_path}")
+                debug_log(f"Full session: {session_log_path}")
+                print("\n📁 Debug logs saved to:")
+                print(f"   • {self._current_debug_log_path}")
+                print(f"   • {session_log_path}")
+                debug_log("=" * 60)
 
             # Send exit command to Claude
             print("🛑 Ending Claude session...")

@@ -6,12 +6,168 @@
 import os
 import re
 import subprocess
+import tempfile
 import threading
+import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from hydra.monitoring import monitoring
+
+
+class SharedWorkspace:
+    """Manages a shared workspace for ticket execution sessions."""
+
+    def __init__(self, session_id: Optional[str] = None):
+        """Initialize shared workspace.
+        
+        Args:
+            session_id: Optional session ID, will generate one if not provided
+
+        """
+        self.session_id = session_id or str(uuid.uuid4())[:8]
+        self.workspace_path = os.path.join(
+            tempfile.gettempdir(),
+            f"hydra_session_{self.session_id}"
+        )
+        self._ensure_workspace_exists()
+
+    def _ensure_workspace_exists(self) -> None:
+        """Ensure the workspace directory exists."""
+        os.makedirs(self.workspace_path, exist_ok=True)
+
+        # Create standard subdirectories
+        subdirs = ["artifacts", "docs", "configs", "shared_data"]
+        for subdir in subdirs:
+            os.makedirs(os.path.join(self.workspace_path, subdir), exist_ok=True)
+
+        # Create session info file
+        info_file = os.path.join(self.workspace_path, "session_info.txt")
+        if not os.path.exists(info_file):
+            with open(info_file, 'w') as f:
+                import datetime
+                f.write(f"Session ID: {self.session_id}\n")
+                f.write(f"Created: {datetime.datetime.now().isoformat()}\n")
+                f.write("Purpose: Shared workspace for ticket execution\n")
+
+    def get_artifact_path(self, ticket_id: str, filename: str) -> str:
+        """Get path for a ticket artifact.
+        
+        Args:
+            ticket_id: Ticket identifier
+            filename: Name of the artifact file
+            
+        Returns:
+            Full path to the artifact
+
+        """
+        # Normalize ticket ID
+        if ticket_id.isdigit():
+            ticket_id = ticket_id.zfill(3)
+
+        ticket_dir = os.path.join(self.workspace_path, "artifacts", f"ticket_{ticket_id}")
+        os.makedirs(ticket_dir, exist_ok=True)
+        return os.path.join(ticket_dir, filename)
+
+    def save_artifact(self, ticket_id: str, filename: str, content: str) -> str:
+        """Save an artifact for a ticket.
+        
+        Args:
+            ticket_id: Ticket identifier
+            filename: Name of the artifact file
+            content: Content to save
+            
+        Returns:
+            Path where artifact was saved
+
+        """
+        artifact_path = self.get_artifact_path(ticket_id, filename)
+        with open(artifact_path, 'w') as f:
+            f.write(content)
+        return artifact_path
+
+    def list_ticket_artifacts(self, ticket_id: str) -> List[str]:
+        """List all artifacts for a ticket.
+        
+        Args:
+            ticket_id: Ticket identifier
+            
+        Returns:
+            List of artifact filenames
+
+        """
+        if ticket_id.isdigit():
+            ticket_id = ticket_id.zfill(3)
+
+        ticket_dir = os.path.join(self.workspace_path, "artifacts", f"ticket_{ticket_id}")
+        if not os.path.exists(ticket_dir):
+            return []
+
+        return [f for f in os.listdir(ticket_dir) if os.path.isfile(os.path.join(ticket_dir, f))]
+
+    def get_dependency_artifacts(self, dependencies: List[str]) -> Dict[str, List[str]]:
+        """Get artifacts from dependency tickets.
+        
+        Args:
+            dependencies: List of ticket IDs that are dependencies
+            
+        Returns:
+            Dictionary mapping ticket_id to list of artifact paths
+
+        """
+        artifacts = {}
+        for dep_id in dependencies:
+            dep_artifacts = self.list_ticket_artifacts(dep_id)
+            if dep_artifacts:
+                artifacts[dep_id] = [
+                    self.get_artifact_path(dep_id, artifact)
+                    for artifact in dep_artifacts
+                ]
+        return artifacts
+
+    def create_manifest(self, ticket_id: str, created_files: List[str]) -> None:
+        """Create a manifest of files created by a ticket.
+        
+        Args:
+            ticket_id: Ticket identifier
+            created_files: List of files created by the ticket
+
+        """
+        manifest_path = self.get_artifact_path(ticket_id, "manifest.txt")
+        with open(manifest_path, 'w') as f:
+            f.write(f"Files created by Ticket {ticket_id}:\n")
+            f.write("=" * 40 + "\n")
+            for file_path in created_files:
+                f.write(f"{file_path}\n")
+
+    def cleanup(self) -> None:
+        """Clean up the workspace directory."""
+        import shutil
+        if os.path.exists(self.workspace_path):
+            shutil.rmtree(self.workspace_path)
+            print(f"🧹 Cleaned up workspace: {self.workspace_path}")
+
+
+# Global workspace instance for session
+_shared_workspace: Optional[SharedWorkspace] = None
+
+
+def get_shared_workspace(session_id: Optional[str] = None) -> SharedWorkspace:
+    """Get or create the shared workspace for the session.
+    
+    Args:
+        session_id: Optional session ID for the workspace
+        
+    Returns:
+        SharedWorkspace instance
+
+    """
+    global _shared_workspace
+    if _shared_workspace is None:
+        _shared_workspace = SharedWorkspace(session_id)
+        print(f"📁 Created shared workspace: {_shared_workspace.workspace_path}")
+    return _shared_workspace
 
 
 def detect_project_context(tickets_path):
@@ -206,7 +362,11 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     print(f"🧠 Using {smart_model or 'smart model'} for ticket planning...")
 
     # Adapt prompt to use generic model categories instead of specific Claude models
-    prompt = f"""Create a file named 'tickets.md' in the current directory with tickets that are made in task language for LLM agents to execute that include acceptance criteria, dependencies (like 001,002 or None), status, and which model category (fast, balanced, smart, or coder) should be used for that ticket. be minimalistic, surgical and future proof!
+    # Extract just the filename from the full path for the prompt
+    output_filename = os.path.basename(output_path)
+    prompt = f"""Create a file named '{output_filename}' in the current directory with tickets that are made in task language for AI agents to execute that include acceptance criteria, ticket dependencies, and which model category (smart, balanced, fast, or coder) should be used for that ticket. Be minimalistic, surgical and future proof!
+    
+Note: For Claude Code specifically, use smart=opus 4, balanced=sonnet 4, fast=sonnet 4, coder=opus 4
 
 Each ticket MUST have this format:
 ## Ticket 001: [Title]
@@ -215,8 +375,13 @@ Each ticket MUST have this format:
 **Dependencies:** [None or comma-separated ticket numbers like 001,002]
 **Description:** [Task description - if this depends on other tickets, mention that it builds on their outputs]
 
-**Required Input Files:** (only include if Dependencies is not None)
-- [List files that will be created by dependency tickets that this ticket needs]
+**Required Input Files:** (include for ALL tickets)
+- [For tickets with dependencies: List files from previous tickets]
+- [For tickets without dependencies: Write "None" or list any existing project files needed]
+
+**Output Files:** (include for ALL tickets that create files)
+- [List all files this ticket will create/generate]
+- [E.g., "analysis_report.md", "migration_design.md", "api_endpoints.py"]
 
 **Context Requirements:** (only include if Dependencies is not None)
 - [Specific instructions about reading/using outputs from dependency tickets]
@@ -224,12 +389,36 @@ Each ticket MUST have this format:
 
 **Acceptance Criteria:**
 - [ ] [Criteria that reference outputs from dependencies when applicable]
+- [ ] [Must include creation of any output files listed above]
 
-IMPORTANT: For tickets with dependencies:
-- Always add a "Required Input Files" section listing what files from previous tickets are needed
-- Add "Context Requirements" explaining how to use the outputs from dependencies
-- In the Description, mention that the ticket "builds on" or "uses outputs from" its dependencies
-- In Acceptance Criteria, reference specific deliverables from dependencies when relevant
+IMPORTANT RULES:
+1. ALL tickets MUST have a "Required Input Files" section (use "None" if no inputs needed)
+2. ALL tickets that create files MUST have an "Output Files" section listing what they produce
+3. For tickets with dependencies:
+   - List the specific output files from previous tickets in "Required Input Files"
+   - Add "Context Requirements" explaining how to use the outputs from dependencies
+   - In the Description, mention that the ticket "builds on" or "uses outputs from" its dependencies
+4. Match input/output files across tickets - outputs from one ticket should match inputs for dependent tickets
+
+Example for an independent ticket:
+## Ticket 001: Analyze current implementation
+**Status:** TODO
+**Model:** smart
+**Dependencies:** None
+**Description:** Deep analysis of current system implementation to understand all patterns and edge cases
+
+**Required Input Files:**
+- None (or list existing project files if needed)
+
+**Output Files:**
+- analysis_report.md
+- component_diagram.png
+- database_schema.sql
+
+**Acceptance Criteria:**
+- [ ] Document all system components in analysis_report.md
+- [ ] Create visual component diagram
+- [ ] Export current database schema to database_schema.sql
 
 Example for a dependent ticket:
 ## Ticket 002: Implement API based on design
@@ -239,30 +428,43 @@ Example for a dependent ticket:
 **Description:** Implement the REST API based on the design document from Ticket 001
 
 **Required Input Files:**
-- api_design.md (from Ticket 001)
+- analysis_report.md (from Ticket 001)
 - database_schema.sql (from Ticket 001)
 
+**Output Files:**
+- api_endpoints.py
+- api_tests.py
+- api_documentation.md
+
 **Context Requirements:**
-- FIRST: Read api_design.md to understand the endpoint specifications
+- FIRST: Read analysis_report.md to understand the system architecture
 - Review database_schema.sql for data model implementation
 - Follow the patterns and conventions established in Ticket 001
 
 **Acceptance Criteria:**
-- [ ] Implement all endpoints specified in api_design.md
+- [ ] Implement all endpoints based on analysis_report.md
 - [ ] Use the database schema from database_schema.sql
-- [ ] Follow RESTful conventions outlined in the design
+- [ ] Create comprehensive tests in api_tests.py
+- [ ] Document API in api_documentation.md
 
 Project: {project_description}"""
 
     print("🚀 Generating tickets with production standards...")
 
     try:
+        # Determine the working directory for ticket generation
+        # Use the directory of the output file as the working directory
+        output_dir = os.path.dirname(os.path.abspath(output_path))
+        
         # Use provider abstraction to generate tickets
+        # Increase timeout for ticket generation as it may take longer
+        provider.config.timeout = 120  # 2 minutes should be enough
+        
         result = provider.generate(
             prompt,  # Pass as positional argument
             model=smart_model,
             mode="ticket_generation",
-            output_path=output_path
+            cwd=output_dir  # Pass working directory for claude_tmux
         )
 
         # Check if file was created successfully
@@ -480,8 +682,16 @@ def validate_acceptance_criteria(ticket, project_dir):
     return True
 
 
-def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None):
-    """Execute exactly like: 'execute ticket N in tickets.md'."""
+def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None, workspace: Optional[SharedWorkspace] = None):
+    """Execute exactly like: 'execute ticket N in tickets.md'.
+    
+    Args:
+        tickets_path: Path to tickets.md file
+        ticket_identifier: Ticket ID to execute
+        timeout_override: Optional timeout override
+        workspace: Optional shared workspace for the session
+
+    """
     print(f"🎫 Executing Ticket {ticket_identifier}")
     print("=" * 40)
 
@@ -495,6 +705,23 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         print("✅ Ticket already completed!")
         print("ℹ️  Skipping execution as ticket is marked as DONE")
         return True
+
+    # Get or create shared workspace
+    if workspace is None:
+        workspace = get_shared_workspace()
+
+    # Check for dependency artifacts if this ticket has dependencies
+    if ticket.get('dependencies'):
+        print("📦 Checking for dependency artifacts...")
+        dep_artifacts = workspace.get_dependency_artifacts(ticket['dependencies'])
+        if dep_artifacts:
+            print(f"   Found artifacts from {len(dep_artifacts)} dependency tickets:")
+            for dep_id, artifacts in dep_artifacts.items():
+                print(f"   • Ticket {dep_id}: {len(artifacts)} artifacts")
+                for artifact in artifacts[:3]:  # Show first 3
+                    print(f"     - {os.path.basename(artifact)}")
+                if len(artifacts) > 3:
+                    print(f"     ... and {len(artifacts) - 3} more")
 
     # Mark ticket as IN_PROGRESS
     mark_ticket_in_progress(tickets_path, ticket_identifier)
@@ -542,6 +769,11 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         print(f"🔧 Using {provider_type} provider with model: {ticket_model}")
     else:
         print(f"🔧 Using {provider_type} provider with default model")
+    
+    # For claude_tmux, set the CLAUDE_MODEL environment variable
+    if provider_type == 'claude_tmux' and ticket['model']:
+        os.environ['CLAUDE_MODEL'] = ticket['model']
+        print(f"📊 Set CLAUDE_MODEL={ticket['model']} for tmux provider")
 
     # Detect project language/framework from context
     project_context = detect_project_context(tickets_path)
@@ -549,13 +781,51 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
     # Build prompt based on provider type
     project_dir = os.path.dirname(os.path.abspath(tickets_path))
 
+    # Build workspace context for prompts
+    workspace_info = f"""
+SHARED WORKSPACE: {workspace.workspace_path}
+Session ID: {workspace.session_id}
+
+IMPORTANT: Save any artifacts, documents, or shared data that other tickets might need to the shared workspace:
+- For code/design docs: {os.path.join(workspace.workspace_path, 'docs')}
+- For config files: {os.path.join(workspace.workspace_path, 'configs')}
+- For data files: {os.path.join(workspace.workspace_path, 'shared_data')}
+- For ticket-specific artifacts: {os.path.join(workspace.workspace_path, 'artifacts', f'ticket_{ticket_identifier.zfill(3) if ticket_identifier.isdigit() else ticket_identifier}')}
+"""
+
+    # Add dependency context if needed
+    dependency_context = ""
+    if ticket.get('dependencies'):
+        dep_artifacts = workspace.get_dependency_artifacts(ticket['dependencies'])
+        if dep_artifacts:
+            dependency_context = "\n\nDEPENDENCY ARTIFACTS AVAILABLE:\n"
+            for dep_id, artifacts in dep_artifacts.items():
+                dependency_context += f"\nFrom Ticket {dep_id}:\n"
+                for artifact in artifacts:
+                    dependency_context += f"  - {artifact}\n"
+            dependency_context += "\nIMPORTANT: Read these dependency artifacts FIRST to understand what has been implemented!"
+
     if provider_type == 'claude_tmux':
         # Claude Code can read tickets.md directly
         prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_identifier} from tickets.md - NOT any other ticket!
 
 Find and execute specifically "## Ticket {ticket_identifier}:" in tickets.md
 
+{workspace_info}
+{dependency_context}
+
+CRITICAL REQUIREMENTS:
+1. READ the ticket carefully, especially the "Output Files" section
+2. CREATE ALL FILES listed in the "Output Files" section with their exact names
+3. If the ticket says to create "migration_design.md", you MUST create that exact file
+4. Follow the acceptance criteria exactly - they often specify what files to create
+
 DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_identifier}.
+
+For tickets with dependencies:
+1. FIRST read any artifacts from dependency tickets in the shared workspace
+2. Use the implementations from previous tickets as specified in "Required Input Files" and "Context Requirements"
+3. Save any outputs that future tickets might need to the shared workspace
 
 Be minimalistic, surgical and future proof!
 Avoid using any code or comments that may be construed as AI generated.
@@ -579,12 +849,17 @@ Acceptance Criteria:
 Project Context: {project_context}
 Project Directory: {project_dir}
 
+{workspace_info}
+{dependency_context}
+
 IMPORTANT REQUIREMENTS:
 1. Implement ONLY this specific ticket, nothing else
 2. Write production-quality code - no shortcuts or mocks
 3. Be minimalistic and surgical in your approach
 4. Ensure all acceptance criteria are met
 5. The code must be future-proof and maintainable
+6. Save any artifacts that future tickets might need to the shared workspace
+7. If this ticket has dependencies, read their artifacts from the workspace first
 
 Please provide the complete implementation with all necessary files and code."""
 
@@ -644,10 +919,35 @@ Please provide the complete implementation with all necessary files and code."""
             cwd=project_dir
         )
 
+        created_files = []
         if git_result.stdout:
             print("📝 Files changed:")
             for line in git_result.stdout.strip().split('\n'):
                 print(f"   {line}")
+                # Parse git status to get file paths
+                parts = line.strip().split(None, 1)
+                if len(parts) == 2:
+                    status_code, file_path = parts
+                    if 'A' in status_code or 'M' in status_code or '?' in status_code:
+                        created_files.append(file_path)
+
+        # Save manifest of created files to workspace
+        if created_files:
+            workspace.create_manifest(ticket_identifier, created_files)
+            print(f"\n📋 Saved manifest with {len(created_files)} files to workspace")
+
+            # Copy important files to workspace for dependency access
+            important_extensions = ['.py', '.js', '.ts', '.json', '.md', '.yaml', '.yml', '.sql']
+            for file_path in created_files:
+                _, ext = os.path.splitext(file_path)
+                if ext in important_extensions:
+                    full_path = os.path.join(project_dir, file_path)
+                    if os.path.exists(full_path):
+                        with open(full_path, 'r') as f:
+                            content = f.read()
+                        artifact_name = os.path.basename(file_path)
+                        saved_path = workspace.save_artifact(ticket_identifier, artifact_name, content)
+                        print(f"   💾 Saved {artifact_name} to workspace")
 
         # Validate acceptance criteria before marking complete
         print("\n🔍 Validating acceptance criteria...")
@@ -987,8 +1287,17 @@ def get_executable_tickets(tickets: Dict[str, dict], completed: Set[str]) -> Lis
 
 
 def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
-                         completed_lock: threading.Lock) -> bool:
-    """Worker function for parallel ticket execution."""
+                         completed_lock: threading.Lock, workspace: SharedWorkspace) -> bool:
+    """Worker function for parallel ticket execution.
+    
+    Args:
+        ticket_id: Normalized ticket ID
+        ticket_data: Ticket data dictionary
+        tickets_path: Path to tickets.md
+        completed_lock: Thread lock for synchronization
+        workspace: Shared workspace for the session
+
+    """
     try:
         print(f"\n🚀 Starting ticket {ticket_id}")
 
@@ -996,7 +1305,7 @@ def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
         raw_id = ticket_data.get('raw_id', ticket_id.lstrip('0'))
 
         # Use longer timeout for ticket execution (5 minutes)
-        success = execute_single_ticket(tickets_path, raw_id, timeout_override=300)
+        success = execute_single_ticket(tickets_path, raw_id, timeout_override=300, workspace=workspace)
 
         if success:
             with completed_lock:
@@ -1069,6 +1378,10 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3):
 
     print(f"📋 Found {len(tickets)} tickets")
 
+    # Create shared workspace for this session
+    workspace = get_shared_workspace()
+    print(f"📁 Using shared workspace: {workspace.workspace_path}")
+
     deps, reverse_deps = build_dependency_graph(tickets)
     completed = set()
     failed = set()
@@ -1105,7 +1418,8 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3):
                     ticket_id,
                     tickets[ticket_id],  # Pass ticket data
                     tickets_path,
-                    completed_lock
+                    completed_lock,
+                    workspace  # Pass shared workspace
                 )
                 futures[future] = ticket_id
 
@@ -1148,8 +1462,16 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3):
         print("\n✅ All tickets completed successfully!")
         print("🔧 Running final validation...")
         run_validation_commands()
+
+        # Optionally preserve workspace for debugging
+        if os.environ.get('PRESERVE_WORKSPACE', 'false').lower() == 'true':
+            print(f"\n📁 Workspace preserved at: {workspace.workspace_path}")
+        else:
+            workspace.cleanup()
+
         return True
     else:
         print(f"\n❌ Execution stopped. Failed tickets: {failed}")
+        print(f"📁 Workspace preserved for debugging: {workspace.workspace_path}")
         return False
 

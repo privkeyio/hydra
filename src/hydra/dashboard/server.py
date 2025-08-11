@@ -166,7 +166,7 @@ class DashboardServer:
                         continue
                 else:
                     # If all ports are taken, raise the original error
-                    raise Exception(f"Could not find an available port. Try: lsof -ti:8080 | xargs kill -9")
+                    raise Exception("Could not find an available port. Try: lsof -ti:8080 | xargs kill -9")
             else:
                 raise
 

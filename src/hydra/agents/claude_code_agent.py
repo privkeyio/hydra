@@ -1,3 +1,5 @@
+"""Claude Code Agent module."""
+
 import json
 import subprocess
 import time

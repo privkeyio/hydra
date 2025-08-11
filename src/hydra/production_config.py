@@ -4,61 +4,60 @@ Optimized configuration for safe, efficient parallel code generation.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class ProductionConfig:
     """Production configuration for Hydra."""
-    
+
     # Parallel execution settings
     max_parallel_tickets: int = 3  # Optimal for most systems
     enable_smart_scheduling: bool = True  # Use conflict detection
     enable_file_locking: bool = True  # Always lock files in production
-    
+
     # Safety settings
     enable_git_safety: bool = True  # Block dangerous git operations
     require_approval_for_git: bool = True  # Require manual approval for git
     enable_rollback: bool = True  # Enable automatic rollback on failure
     max_retry_attempts: int = 2  # Retry failed operations
-    
-    # Performance settings  
+
+    # Performance settings
     use_session_pooling: bool = True  # Pre-warm Claude sessions
     session_pool_size: int = 5  # Number of pre-warmed sessions
     cache_analysis_results: bool = True  # Cache file analysis
     batch_small_tickets: bool = True  # Batch compatible small tickets
-    
+
     # Conflict resolution
     conflict_detection_threshold: float = 0.3  # Sensitivity for conflicts
     auto_resolve_conflicts: bool = False  # Manual resolution for safety
     stagger_start_delay: tuple = (2, 10)  # Random delay range in seconds
-    
+
     # Resource limits
     max_execution_time_per_ticket: int = 300  # 5 minutes per ticket
     max_total_execution_time: int = 3600  # 1 hour total
     max_memory_per_session: str = "2GB"  # Memory limit per session
-    
+
     # Monitoring and logging
     enable_detailed_logging: bool = True
     save_execution_reports: bool = True
     enable_dashboard: bool = True
     dashboard_port: int = 8080
-    
+
     # File operation settings
     file_lock_timeout: int = 30  # Seconds to wait for file lock
     file_lock_retry_count: int = 3  # Number of retries for locks
     track_file_modifications: bool = True  # Track all file changes
-    
+
     # Quality gates
     run_quality_checks: bool = True  # Always run quality gates
     enforce_quality_gates: bool = True  # Block on quality failures
     auto_fix_quality_issues: bool = True  # Try to auto-fix issues
-    
+
     # Recovery settings
     checkpoint_frequency: int = 60  # Save state every 60 seconds
     enable_crash_recovery: bool = True  # Resume after crashes
     preserve_partial_work: bool = True  # Keep partial completions
-    
+
     def to_env_vars(self) -> dict:
         """Convert config to environment variables."""
         return {

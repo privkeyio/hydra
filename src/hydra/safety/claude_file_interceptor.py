@@ -71,12 +71,12 @@ class FileModification:
                     import_words.add(f'import_{words[i+1]}')
                 elif word == 'from' and i + 1 < len(words):
                     import_words.add(f'from_{words[i+1]}')
-            
+
             if import_words:
                 changes.update(import_words)
             else:
                 changes.add('imports')
-                
+
         if 'class' in content or 'def' in content:
             changes.add('definitions')
         if 'config' in content or 'setting' in content:
@@ -94,7 +94,7 @@ class FileModification:
             return True
 
         # Read operations are compatible with everything
-        if (self.operation == OperationType.READ or 
+        if (self.operation == OperationType.READ or
             other.operation == OperationType.READ):
             return True
 
@@ -121,32 +121,32 @@ class FileModification:
         # Simple word-based similarity check
         self_words = set(self.ticket_content.lower().split())
         other_words = set(other.ticket_content.lower().split())
-        
+
         if not self_words and not other_words:
             return False
-        
+
         if not self_words or not other_words:
             return True
-            
+
         intersection = self_words & other_words
         union = self_words | other_words
-        
+
         similarity = len(intersection) / len(union) if union else 0
         return similarity < 0.3  # Less than 30% similarity suggests different modifications
 
     def _affects_different_sections(self, other: 'FileModification') -> bool:
         """Check if modifications affect different file sections."""
         # Simple heuristic based on line numbers mentioned
-        self_lines = set(re.findall(r'line\s+(\d+)', 
+        self_lines = set(re.findall(r'line\s+(\d+)',
                                    self.ticket_content, re.IGNORECASE))
-        other_lines = set(re.findall(r'line\s+(\d+)', 
+        other_lines = set(re.findall(r'line\s+(\d+)',
                                     other.ticket_content, re.IGNORECASE))
 
         if self_lines and other_lines:
             # Check if line ranges don't overlap (with buffer)
             self_nums = {int(x) for x in self_lines}
             other_nums = {int(x) for x in other_lines}
-            return (max(self_nums) + 5 < min(other_nums) or 
+            return (max(self_nums) + 5 < min(other_nums) or
                    max(other_nums) + 5 < min(self_nums))
 
         return False
@@ -509,7 +509,7 @@ class SmartFileLockManager:
                 return True
             visited = set()
             stack = [start]
-            
+
             while stack:
                 current = stack.pop()
                 if current == target:
@@ -609,13 +609,13 @@ class SmartFileLockManager:
             return False
 
         dfs(start_agent, [])
-        
+
         # If no cycle found starting from start_agent, check all connected agents
         if not cycle_agents:
             for agent in self.wait_graph:
                 if agent not in visited:
                     dfs(agent, [])
-        
+
         return cycle_agents
 
     def _cleanup_wait_graph(self, agent_id: str):

@@ -1,11 +1,15 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+"""Main module."""
+
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 {% if include_auth %}from fastapi.middleware.cors import CORSMiddleware{% endif %}
-from sqlalchemy.orm import Session
-from database import get_db, engine
+from crud import create_item, get_item, get_items
+from database import engine, get_db
 from models import Base
 from schemas import ItemCreate, ItemResponse
-from crud import create_item, get_items, get_item
+from sqlalchemy.orm import Session
+
 {% if include_auth %}from auth import verify_token{% endif %}
 
 Base.metadata.create_all(bind=engine)

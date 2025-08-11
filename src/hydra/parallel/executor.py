@@ -13,12 +13,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from hydra.agents.pool import AgentPool
-from hydra.orchestrator.claude_code_orchestrator import (
-    ClaudeCodeOrchestrator,
-)
+from hydra.context import ArtifactTracker, TicketUpdater
+from hydra.orchestrator.claude_code_orchestrator import ClaudeCodeOrchestrator
 from hydra.quality import QualityGateRunner
 from hydra.safety.file_lock import get_file_lock_manager
-from hydra.ticket_workflow import mark_ticket_completed, mark_ticket_in_progress, parse_ticket
+from hydra.ticket_workflow import (
+    mark_ticket_completed,
+    mark_ticket_in_progress,
+    parse_ticket,
+)
 
 
 class ExecutionStatus(Enum):
@@ -71,15 +74,19 @@ class ParallelExecutor:
         self.running_tickets: Set[str] = set()
         self.orchestrators: Dict[str, ClaudeCodeOrchestrator] = {}
         self.dashboard_state = dashboard_state
-        
+
         # Initialize agent pool for managing Claude Code terminals
         self.agent_pool = AgentPool(max_agents=max_workers)
         self.agent_pool.start()
-        
+
         # Initialize file lock manager and smart interceptor
         self.file_lock_manager = get_file_lock_manager()
         from hydra.safety.claude_file_interceptor import SmartFileLockManager
         self.smart_lock_manager = SmartFileLockManager()
+
+        # Initialize artifact tracker for context passing
+        self.artifact_tracker = ArtifactTracker(project_root)
+        self.ticket_updater = TicketUpdater(project_root)
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md."""
@@ -150,7 +157,7 @@ class ParallelExecutor:
     def _build_smart_execution_plan(self) -> ExecutionPlan:
         """Build execution plan using smart conflict detection AND dependency resolution."""
         print("🧠 Using smart scheduling to minimize file conflicts while respecting dependencies...")
-        
+
         # First, build dependency-aware waves using standard logic
         dependency_graph = {}
         reverse_deps = {}  # Track which tickets depend on each ticket
@@ -195,7 +202,7 @@ class ParallelExecutor:
 
             dependency_waves.append(wave)
             processed.update(wave)
-        
+
         # Now apply smart conflict detection within each dependency wave
         # Read ticket contents for analysis
         tickets_content = {}
@@ -208,7 +215,7 @@ class ParallelExecutor:
                 match = re.search(pattern, content, re.DOTALL)
                 if match:
                     tickets_content[ticket_id] = match.group(0)
-        
+
         # Optimize each dependency wave for file conflicts
         final_waves = []
         for dep_wave in dependency_waves:
@@ -219,7 +226,7 @@ class ParallelExecutor:
                 # Use smart scheduler to split wave if there are conflicts
                 wave_content = {tid: tickets_content.get(tid, '') for tid in dep_wave}
                 conflict_free_subwaves = self.smart_lock_manager.schedule_tickets_smartly(wave_content)
-                
+
                 # Merge subwaves back if they're small
                 if len(conflict_free_subwaves) == 1:
                     final_waves.append(conflict_free_subwaves[0])
@@ -227,29 +234,29 @@ class ParallelExecutor:
                     # Multiple subwaves means conflicts were detected
                     print(f"   ⚠️  Detected file conflicts in dependency wave {dep_wave}, splitting into {len(conflict_free_subwaves)} subwaves")
                     final_waves.extend(conflict_free_subwaves)
-        
+
         print(f"📊 Smart scheduling created {len(final_waves)} execution waves (respecting both dependencies and file conflicts)")
         for i, wave in enumerate(final_waves, 1):
             print(f"   Wave {i}: {', '.join(wave)}")
-        
+
         return ExecutionPlan(
             waves=final_waves,
             dependency_graph=dependency_graph,
             total_tickets=len(self.tickets),
             max_parallel=self.max_workers
         )
-    
+
     def build_execution_plan(self) -> ExecutionPlan:
         """Build an execution plan based on dependencies."""
         import os
-        
+
         # Check if smart scheduling is enabled
         use_smart_scheduling = os.environ.get('HYDRA_SMART_SCHEDULING', '0') == '1'
-        
+
         if use_smart_scheduling and hasattr(self, 'smart_lock_manager'):
             # Use smart scheduling to minimize conflicts
             return self._build_smart_execution_plan()
-        
+
         # Build dependency graph (standard approach)
         dependency_graph = {}
         reverse_deps = {}  # Track which tickets depend on each ticket
@@ -307,19 +314,19 @@ class ParallelExecutor:
         # Get thread info for debugging
         thread_id = threading.current_thread().name
         print(f"🧵 Thread {thread_id} assigned to Ticket {ticket_id}")
-        
+
         # Add staggered start to prevent Claude Code session collisions
         import random
         start_delay = random.uniform(0.5, 5.0)  # Random delay between 0.5-5 seconds
         print(f"⏱️  Ticket {ticket_id} starting in {start_delay:.1f}s to prevent session collision...")
         time.sleep(start_delay)
-        
+
         # Spawn an agent for this ticket
         agent_id = self.agent_pool.spawn_agent(ticket_id)
         if not agent_id:
             print(f"⚠️  No available agent slots for ticket {ticket_id}")
             return False
-            
+
         with self.lock:
             if ticket_id in self.completed_tickets:
                 self.agent_pool.release_agent(agent_id)
@@ -369,10 +376,24 @@ class ParallelExecutor:
             orchestrator = ClaudeCodeOrchestrator()
             self.orchestrators[ticket_id] = orchestrator
 
+            # Get file snapshot before execution (for artifact tracking)
+            before_snapshot = self.artifact_tracker.get_file_snapshot()
+
+            # Get context from dependent tickets
+            dependencies = ticket_data.get('dependencies', [])
+            dependency_context = ""
+            if dependencies:
+                print(f"📚 Loading context from dependencies: {', '.join(dependencies)}")
+                dependency_context = self.artifact_tracker.get_dependency_context(
+                    ticket_id, dependencies
+                )
+
             # Build prompt - Claude Code will read tickets.md directly from the working directory
             prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_id} from tickets.md - NOT any other ticket!
 
 Find and execute specifically "## Ticket {ticket_id}:" in tickets.md
+
+{dependency_context}
 
 BEFORE STARTING: Check if the work for this ticket has already been done:
 1. Look for existing files that the ticket would create
@@ -437,7 +458,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 from hydra.quality.auto_fixer import QualityAutoFixer
                 fixer = QualityAutoFixer(self.project_root)
                 fixes = fixer.fix_common_issues()
-                
+
                 if fixes:
                     print("📝 Applied automatic fixes:")
                     for issue, fixed, message in fixes:
@@ -445,14 +466,14 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                             print(f"   ✅ {issue}: {message}")
                         else:
                             print(f"   ⚠️  {issue}: {message}")
-                
+
                 # Run quality gates
                 print(f"\n🚦 Running quality gates for ticket {ticket_id}...")
                 gate_runner = QualityGateRunner(self.project_root)
                 quality_report = gate_runner.run_quality_gates(ticket_id)
-                
+
                 # Print quality gate details for debugging
-                print(f"📋 Quality Gate Results:")
+                print("📋 Quality Gate Results:")
                 for check in quality_report.results:
                     status_icon = "✅" if check.status.value == "passed" else "❌" if check.status.value == "failed" else "⚠️"
                     print(f"   {status_icon} {check.name}: {check.status.value}")
@@ -476,7 +497,54 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                         print("⚠️  Ticket completed but has quality issues (agent should have fixed these)")
                         # Log quality issues for information (without failing)
                         # Note: Quality issues don't block completion
-                    
+
+                    # Discover and record artifacts created by this ticket
+                    print(f"📦 Discovering artifacts created by ticket {ticket_id}...")
+                    artifacts = self.artifact_tracker.discover_artifacts(ticket_id, before_snapshot)
+
+                    if artifacts:
+                        print(f"   Found {len(artifacts)} artifact(s):")
+                        for artifact in artifacts[:5]:  # Show first 5
+                            op_symbol = {
+                                'created': '➕',
+                                'modified': '✏️',
+                                'deleted': '➖'
+                            }.get(artifact.operation, '📄')
+                            print(f"     {op_symbol} {artifact.file_path}")
+                        if len(artifacts) > 5:
+                            print(f"     ... and {len(artifacts) - 5} more")
+
+                    # Extract acceptance criteria met
+                    criteria_met = []
+                    if 'acceptance_criteria' in ticket_data:
+                        for criterion in ticket_data['acceptance_criteria']:
+                            # Handle both string and dict formats
+                            if isinstance(criterion, str):
+                                # String format - check if it starts with ✅
+                                if criterion.startswith('✅'):
+                                    criteria_met.append(criterion.replace('✅', '').strip())
+                            elif isinstance(criterion, dict):
+                                # Dict format - check completed flag
+                                if criterion.get('completed', False):
+                                    criteria_met.append(criterion.get('description', ''))
+
+                    # Record ticket completion and artifacts
+                    self.artifact_tracker.record_ticket_completion(
+                        ticket_id=ticket_id,
+                        title=node.title,
+                        artifacts=artifacts,
+                        acceptance_criteria_met=criteria_met
+                    )
+
+                    # Update future tickets with actual file references
+                    if artifacts:
+                        print("🔄 Updating future tickets with specific file references...")
+                        updates_made = self.ticket_updater.update_future_tickets(
+                            ticket_id, artifacts
+                        )
+                        if updates_made > 0:
+                            print(f"   ✏️ Updated {updates_made} future ticket(s) with actual filenames")
+
                 with self.lock:
                     # Ticket is completed regardless of quality status
                     node.status = ExecutionStatus.COMPLETED
@@ -573,10 +641,10 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
     def execute_plan(self, plan: ExecutionPlan, tickets_path: str) -> Dict[str, Any]:
         """Execute the full execution plan."""
         start_time = time.time()
-        
+
         # Store tickets_path for use in reports
         self.tickets_path = tickets_path
-        
+
         # Initialize dashboard session
         if self.dashboard_state:
             import uuid
@@ -671,7 +739,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
         # Get quality summary from tickets.md
         from hydra.ticket_workflow import get_quality_summary
         quality_summary = get_quality_summary(self.tickets_path) if hasattr(self, 'tickets_path') else None
-        
+
         lines = [
             f"\n{'='*60}",
             "📊 Parallel Execution Report",
@@ -684,7 +752,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
             f"⏱️  Total duration: {summary['duration']:.2f}s",
             "",
         ]
-        
+
         if quality_summary and quality_summary['quality_failed'] > 0:
             lines.extend([
                 "⚠️  QUALITY ISSUES DETECTED:",
@@ -692,7 +760,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 "   Check tickets.md for detailed Quality Gate Results",
                 "",
             ])
-        
+
         lines.append("📋 Ticket Details:")
 
         for ticket_id, node in sorted(self.tickets.items()):
@@ -725,20 +793,20 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
         lines.append(f"{'='*60}")
 
         return "\n".join(lines)
-    
+
     def save_completion_report(self, summary: Dict[str, Any]) -> str:
         """Save a completion report and dashboard snapshot."""
         # Create .hydra directory structure
         hydra_dir = self.project_root / ".hydra"
         hydra_dir.mkdir(exist_ok=True)
-        
+
         reports_dir = hydra_dir / "reports"
         reports_dir.mkdir(exist_ok=True)
-        
+
         # Save completion report
         report_file = reports_dir / f"completion_{int(time.time())}.md"
         report_content = self.generate_report(summary)
-        
+
         # Add extra information for the saved report
         full_report = f"""# 🎉 Project Completion Report
 
@@ -757,21 +825,21 @@ Check your project directory for all the generated calculator files.
 
 ## ✅ All Tickets Completed!
 """
-        
+
         with open(report_file, 'w') as f:
             f.write(full_report)
-        
+
         # Save dashboard HTML snapshot if available
         if self.dashboard_state:
-            dashboard_dir = hydra_dir / "dashboard" 
+            dashboard_dir = hydra_dir / "dashboard"
             dashboard_dir.mkdir(exist_ok=True)
-            
+
             snapshot_file = dashboard_dir / f"snapshot_{int(time.time())}.html"
             # Create a static HTML snapshot
             self._save_dashboard_snapshot(snapshot_file, summary)
-        
+
         return str(report_file)
-    
+
     def _save_dashboard_snapshot(self, snapshot_file: Path, summary: Dict[str, Any]):
         """Save a static HTML dashboard snapshot."""
         html_content = f"""<!DOCTYPE html>
@@ -879,12 +947,12 @@ Check your project directory for all the generated calculator files.
                     duration = f" - {node.end_time - node.start_time:.1f}s"
                 html_content += f"""            <div class="ticket-item">✅ {ticket_id}: {node.title}{duration}</div>
 """
-        
+
         html_content += """        </div>
     </div>
 </body>
 </html>"""
-        
+
         with open(snapshot_file, 'w') as f:
             f.write(html_content)
 
@@ -923,7 +991,7 @@ Check your project directory for all the generated calculator files.
             json.dump(log_data, f, indent=2)
 
         return str(log_file)
-    
+
     def shutdown(self):
         """Shutdown the executor and clean up resources."""
         # Stop the agent pool

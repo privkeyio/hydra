@@ -5,19 +5,19 @@ direct process management, and containerized execution.
 """
 
 from .manager import (
+    DirectProcessBackend,
+    DockerBackend,
     SessionBackend,
     SessionBackendType,
     SessionConfig,
     SessionInfo,
     SessionManager,
     TmuxBackend,
-    DirectProcessBackend,
-    DockerBackend
 )
 
 __all__ = [
     'SessionBackend',
-    'SessionBackendType', 
+    'SessionBackendType',
     'SessionConfig',
     'SessionInfo',
     'SessionManager',

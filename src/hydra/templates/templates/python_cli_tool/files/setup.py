@@ -1,4 +1,6 @@
-from setuptools import setup, find_packages
+"""Setup module."""
+
+from setuptools import find_packages, setup
 
 setup(
     name="{{tool_name}}",

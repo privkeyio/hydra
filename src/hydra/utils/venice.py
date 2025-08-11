@@ -1,3 +1,5 @@
+"""Venice module."""
+
 import os
 
 from openai import OpenAI

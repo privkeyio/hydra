@@ -357,6 +357,7 @@ class InteractiveAIProvider(ABC):
 
         Returns:
             str: The provider name.
+
         """
         return self.config.provider_name
 

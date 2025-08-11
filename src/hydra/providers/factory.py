@@ -23,7 +23,7 @@ class ProviderRegistry:
         provider_class = cls._providers.get(name.lower())
         if provider_class:
             return provider_class
-            
+
         # Check plugins if not found in core providers
         try:
             from hydra.plugins.loader import get_plugin_loader
@@ -32,14 +32,14 @@ class ProviderRegistry:
         except ImportError:
             # Plugin system not available
             pass
-            
+
         return None
 
     @classmethod
     def list_providers(cls) -> list[str]:
         """List all registered providers."""
         providers = list(cls._providers.keys())
-        
+
         # Add plugin providers
         try:
             from hydra.plugins.loader import get_plugin_loader
@@ -48,7 +48,7 @@ class ProviderRegistry:
         except ImportError:
             # Plugin system not available
             pass
-            
+
         return list(set(providers))  # Remove duplicates
 
 
@@ -59,7 +59,7 @@ def auto_register_providers():
     # Register core providers including Claude session provider
     provider_map = {
         'venice': 'VeniceProvider',
-        'anthropic': 'AnthropicProvider', 
+        'anthropic': 'AnthropicProvider',
         'openai': 'OpenAIProvider',
         'mock': 'MockProvider',
         'claude_session': 'ClaudeSessionProvider',
@@ -99,16 +99,79 @@ class LLMProviderFactory:
 
     def create(self, config: LLMConfig) -> LLMProvider:
         """Create an LLM provider instance from configuration."""
+        from .error_handler import get_error_handler
+        from .fallback_provider import FallbackProvider
+
+        # Check if fallback mode is requested
+        if config.provider_type == 'fallback' or config.extra_params.get('enable_fallback'):
+            return FallbackProvider(config)
+
         provider_class = ProviderRegistry.get(config.provider_type)
 
         if not provider_class:
             available = ProviderRegistry.list_providers()
-            raise ValueError(
+            error_msg = (
                 f"Unknown provider type: {config.provider_type}. "
                 f"Available providers: {', '.join(available)}"
             )
 
-        return provider_class(config)
+            # Log error for tracking
+            error_handler = get_error_handler()
+            from .error_handler import ErrorCategory, ErrorSeverity, ProviderError
+            error_handler.error_history.append(
+                ProviderError(
+                    provider=config.provider_type,
+                    category=ErrorCategory.INITIALIZATION,
+                    severity=ErrorSeverity.CRITICAL,
+                    message=error_msg,
+                    original_error=ValueError(error_msg)
+                )
+            )
+            raise ValueError(error_msg)
+
+        try:
+            provider = provider_class(config)
+
+            # Validate provider if possible
+            if hasattr(provider, 'validate_config'):
+                provider.validate_config()
+
+            return provider
+
+        except Exception as e:
+            # Handle initialization errors
+            error_handler = get_error_handler()
+            from .error_handler import ErrorCategory, ErrorSeverity
+
+            provider_error = error_handler.handle_error(
+                provider=config.provider_type,
+                error=e,
+                context={'initialization': True, 'config': config.__dict__}
+            )
+
+            # If fallback is available and error is critical, try fallback
+            if config.extra_params.get('auto_fallback') and provider_error.severity in [ErrorSeverity.CRITICAL, ErrorSeverity.HIGH]:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Provider {config.provider_type} failed to initialize, attempting fallback")
+
+                fallback_config = LLMConfig(
+                    provider_type='fallback',
+                    model=config.model,
+                    temperature=config.temperature,
+                    max_tokens=config.max_tokens,
+                    timeout=config.timeout,
+                    api_key=config.api_key,
+                    base_url=config.base_url,
+                    extra_params={
+                        **config.extra_params,
+                        'fallback_providers': config.extra_params.get('fallback_providers', [])
+                    }
+                )
+                return FallbackProvider(fallback_config)
+
+            # Re-raise with better error message
+            raise Exception(f"Failed to initialize provider {config.provider_type}: {provider_error}") from e
 
     def list_providers(self) -> list[str]:
         """List available provider types."""
@@ -120,37 +183,38 @@ def create_claude_provider_factory():
     
     Returns:
         Callable that creates InteractiveAIProvider instances
+
     """
     def factory():
         try:
             # Try to import and create a Claude CLI provider
-            from .interactive_base import InteractiveAIProvider, ProviderConfig
             from .claude_interactive_adapter import ClaudeInteractiveAdapter
-            
+            from .interactive_base import InteractiveAIProvider, ProviderConfig
+
             config = ProviderConfig(
                 provider_name="claude_cli",
                 auto_discover=True,
                 session_timeout=300,
                 max_concurrent_sessions=5
             )
-            
+
             return ClaudeInteractiveAdapter(config)
-            
+
         except ImportError:
             # Fallback to a basic Claude provider if interactive adapter not available
             try:
-                from .claude_cli import ClaudeCLIProvider
                 from .base import LLMConfig
-                
+                from .claude_cli import ClaudeCLIProvider
+
                 config = LLMConfig(
                     provider_type="claude_cli",
                     timeout=300
                 )
                 return ClaudeCLIProvider(config)
-                
+
             except ImportError:
                 raise RuntimeError("No Claude provider available for warm session pool")
-                
+
     return factory
 
 

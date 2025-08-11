@@ -1,5 +1,8 @@
-from flask import Flask, render_template, request, jsonify
+"""App module."""
+
+from flask import Flask, jsonify, render_template, request
 from flask_sqlalchemy import SQLAlchemy
+
 {% if auth_enabled %}from flask_login import LoginManager, login_required{% endif %}
 import os
 
@@ -23,6 +26,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 from models import User
+
 
 @login_manager.user_loader
 def load_user(user_id):

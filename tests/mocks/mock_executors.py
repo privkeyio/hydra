@@ -2,7 +2,8 @@
 
 import time
 import threading
-from typing import Any, Dict, List, Optional, Callable, Future
+from typing import Any, Dict, List, Optional, Callable
+from concurrent.futures import Future
 from unittest.mock import Mock
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass

@@ -1,53 +1,51 @@
 # Hydra Documentation
 
-Welcome to the Hydra project documentation. This directory contains comprehensive documentation for understanding, using, and maintaining the Hydra self-replicating agent system.
+Multi-agent orchestration system with pluggable LLM provider support.
 
 ## 📚 Documentation Index
 
-### Architecture & Design
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture, components, and design decisions
-- **[ARCHITECTURE_DIAGRAMS.md](ARCHITECTURE_DIAGRAMS.md)** - Visual representations of system architecture
-- **[API_REFERENCE.md](API_REFERENCE.md)** - Complete API documentation for all modules
+### Core Documentation
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design
+- **[API_REFERENCE.md](API_REFERENCE.md)** - Complete API documentation
+- **[CLI Commands](cli-commands.md)** - Command-line interface reference
 
-### Project Management
-- **[prd.md](prd.md)** - Original Product Requirements Document
-- **[tickets.md](tickets.md)** - Implementation tickets and progress tracking
-- **[PRD_COMPLETION_STATUS.md](PRD_COMPLETION_STATUS.md)** - MVP completion analysis
+### Provider System
+- **[Provider Configuration](providers/configuration.md)** - Setup LLM providers
+- **[Provider Implementation](providers/implementation.md)** - Create custom providers
 
-## 🗺️ Documentation Map
+## 🚀 Quick Start
 
-```
-For New Users:
-1. Start with ARCHITECTURE.md for system overview
-2. Review ARCHITECTURE_DIAGRAMS.md for visual understanding
-3. Check API_REFERENCE.md for usage examples
+```bash
+# Set your provider (claude_tmux, venice, mock)
+export LLM_PROVIDER=claude_tmux
 
-For Developers:
-1. Read prd.md for requirements context
-2. Review tickets.md for implementation details
-3. Consult ARCHITECTURE.md for technical design
-4. Use API_REFERENCE.md for development
+# Configure provider credentials
+export CLAUDE_CLI_PATH=/path/to/claude  # For Claude
+export VENICE_API_KEY=your_key         # For Venice
 
-For Maintenance:
-1. Check PRD_COMPLETION_STATUS.md for feature status
-2. Review ARCHITECTURE.md for extension points
-3. Update documentation as system evolves
+# Run a task
+hydra claude execute "Create a Python function"
+
+# Or use tickets for complex projects
+hydra ticket create "Build a REST API"
+hydra ticket parallel --workers 4
 ```
 
-## 📖 Quick Links
+## 📦 Supported Providers
 
-### System Overview
-- [System Architecture](ARCHITECTURE.md#system-overview)
-- [Component Interaction Diagram](ARCHITECTURE_DIAGRAMS.md#component-interaction-diagram)
-- [Core Components](ARCHITECTURE.md#core-components)
+| Provider | Type | Description |
+|----------|------|-------------|
+| `claude_tmux` | Interactive | Claude Code CLI via tmux sessions |
+| `venice` | API | Venice.ai API integration |
+| `mock` | Testing | Development and testing provider |
 
-### Implementation Guide
-- [CodeAgent API](API_REFERENCE.md#codeagent-class)
-- [Workflow Engine](API_REFERENCE.md#workflow-engine)
-- [CLI Interface](API_REFERENCE.md#cli-interface)
+## 🔧 Key Features
 
-### Technical Details
-- [Agent Hierarchy](ARCHITECTURE.md#agent-hierarchy)
+- **Provider Abstraction** - Switch between LLM providers without code changes
+- **Parallel Execution** - Multiple agents working simultaneously
+- **Smart Routing** - Automatic model selection based on task complexity
+- **Error Recovery** - Fallback providers and retry mechanisms
+- **Performance Monitoring** - Built-in profiling and optimization
 - [Security Architecture](ARCHITECTURE.md#security-architecture)
 - [Data Flow](ARCHITECTURE_DIAGRAMS.md#data-flow-sequence)
 

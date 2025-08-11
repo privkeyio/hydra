@@ -1,3 +1,5 @@
+"""Project Orchestrator module."""
+
 import asyncio
 import json
 import logging
@@ -42,8 +44,9 @@ class TaskComplexity(Enum):
 
 
 class ModelType(Enum):
-    SONNET = "sonnet"
-    OPUS = "opus"
+    FAST = "fast"
+    BALANCED = "balanced"
+    SMART = "smart"
     AUTO = "auto"
 
 
@@ -213,21 +216,35 @@ class ProjectOrchestrator:
         self.execution_log = []
 
     def _select_model_for_task(self, task: TaskNode) -> str:
-        if task.model != ModelType.AUTO:
-            model_map = {
-                ModelType.SONNET: "claude-sonnet-4-20250514",
-                ModelType.OPUS: "claude-3-opus-20240229"
-            }
-            return model_map.get(task.model, self.config.llm_provider.model)
+        from hydra.providers.model_mapper import get_model_mapper
+        mapper = get_model_mapper()
 
-        complexity_model_map = {
-            TaskComplexity.SIMPLE: "claude-sonnet-4-20250514",
-            TaskComplexity.MODERATE: "claude-sonnet-4-20250514",
-            TaskComplexity.COMPLEX: "claude-3-opus-20240229",
-            TaskComplexity.CRITICAL: "claude-3-opus-20240229"
+        if task.model != ModelType.AUTO:
+            # Map model type to provider model
+            model_category_map = {
+                ModelType.FAST: "fast",
+                ModelType.BALANCED: "balanced",
+                ModelType.SMART: "smart"
+            }
+            category = model_category_map.get(task.model)
+            if category:
+                model = mapper.map_model(category)
+                if model:
+                    return model
+            return self.config.llm_provider.model
+
+        # Map complexity to model
+        complexity_map = {
+            TaskComplexity.SIMPLE: "simple",
+            TaskComplexity.MODERATE: "moderate",
+            TaskComplexity.COMPLEX: "complex",
+            TaskComplexity.CRITICAL: "critical"
         }
 
-        return complexity_model_map.get(task.complexity, self.config.llm_provider.model)
+        complexity_str = complexity_map.get(task.complexity, "moderate")
+        model = mapper.suggest_model_for_task(complexity_str)
+
+        return model if model else self.config.llm_provider.model
 
     def _analyze_task_complexity(self, task: TaskNode) -> TaskComplexity:
         indicators = {
@@ -453,11 +470,18 @@ class ProjectOrchestrator:
         return max_concurrent
 
     def _get_model_distribution(self) -> Dict[str, int]:
+        from hydra.providers.model_mapper import get_model_mapper
+        mapper = get_model_mapper()
+
         distribution = defaultdict(int)
         for task in self.spec.tasks:
             model = self._select_model_for_task(task)
-            model_name = 'sonnet' if 'sonnet' in model.lower() else 'opus'
-            distribution[model_name] += 1
+            # Get the category for the model
+            category = mapper.get_model_category(model)
+            if category:
+                distribution[category.value] += 1
+            else:
+                distribution['unknown'] += 1
         return dict(distribution)
 
     def _log_event(self, message: str):

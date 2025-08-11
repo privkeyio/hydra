@@ -1,4 +1,7 @@
+"""Model Router module."""
+
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -6,10 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
-
-class ModelType(Enum):
-    SONNET = "claude-sonnet-4-20250514"
-    OPUS = "claude-3-opus-20240229"
+from hydra.providers.model_mapper import ModelCategory, get_model_mapper, map_model
 
 
 class ComplexityLevel(Enum):
@@ -30,7 +30,7 @@ class CostInfo:
 
 @dataclass
 class RoutingDecision:
-    selected_model: ModelType
+    selected_model: str  # Provider-specific model identifier
     confidence: float
     complexity: ComplexityLevel
     reasoning: str
@@ -41,8 +41,9 @@ class RoutingDecision:
 @dataclass
 class RoutingMetrics:
     total_requests: int = 0
-    sonnet_requests: int = 0
-    opus_requests: int = 0
+    fast_requests: int = 0
+    balanced_requests: int = 0
+    smart_requests: int = 0
     total_cost: float = 0.0
     cost_savings: float = 0.0
     accuracy_score: float = 0.0
@@ -148,28 +149,33 @@ class TaskComplexityAnalyzer:
 
 class CostEstimator:
     def __init__(self):
-        self.model_costs = {
-            ModelType.SONNET: {
-                'input_per_1k': 0.003,
-                'output_per_1k': 0.015
-            },
-            ModelType.OPUS: {
-                'input_per_1k': 0.015,
-                'output_per_1k': 0.075
-            }
-        }
+        # Use relative costs from model mapper
+        self.model_mapper = get_model_mapper()
+        # Base costs per 1k tokens (relative to baseline)
+        self.base_input_cost = 0.003
+        self.base_output_cost = 0.015
 
     def estimate_tokens(self, text: str) -> int:
         return max(1, len(text.split()) * 1.3)
 
     def estimate_cost(
-        self, model: ModelType, input_text: str, expected_output_tokens: int = 500
+        self, model: str, input_text: str, expected_output_tokens: int = 500
     ) -> float:
         input_tokens = self.estimate_tokens(input_text)
-        costs = self.model_costs[model]
 
-        input_cost = (input_tokens / 1000) * costs['input_per_1k']
-        output_cost = (expected_output_tokens / 1000) * costs['output_per_1k']
+        # Get relative cost for model
+        relative_cost = 1.0  # Default
+        category = self.model_mapper.get_model_category(model)
+        if category:
+            # Get provider from environment
+            provider = os.getenv("LLM_PROVIDER", "claude_tmux").lower()
+            provider_models = self.model_mapper.provider_mappings.get(provider, {})
+            mapping = provider_models.get(category)
+            if mapping:
+                relative_cost = mapping.relative_cost
+
+        input_cost = (input_tokens / 1000) * self.base_input_cost * relative_cost
+        output_cost = (expected_output_tokens / 1000) * self.base_output_cost * relative_cost
 
         return input_cost + output_cost
 
@@ -183,16 +189,22 @@ class ModelRouter:
         self.config = self._load_config(config_path)
 
     def _load_config(self, config_path: Optional[str]) -> Dict:
+        # Get provider from environment
+        provider = os.getenv("LLM_PROVIDER", "claude_tmux").lower()
+        mapper = get_model_mapper()
+
+        # Map complexity to model categories and then to provider models
         default_config = {
             'routing_rules': {
-                ComplexityLevel.SIMPLE.value: ModelType.SONNET.value,
-                ComplexityLevel.MODERATE.value: ModelType.SONNET.value,
-                ComplexityLevel.COMPLEX.value: ModelType.OPUS.value,
-                ComplexityLevel.CRITICAL.value: ModelType.OPUS.value
+                ComplexityLevel.SIMPLE.value: mapper.suggest_model_for_task("simple", provider),
+                ComplexityLevel.MODERATE.value: mapper.suggest_model_for_task("moderate", provider),
+                ComplexityLevel.COMPLEX.value: mapper.suggest_model_for_task("complex", provider),
+                ComplexityLevel.CRITICAL.value: mapper.suggest_model_for_task("critical", provider),
             },
             'confidence_threshold': 0.7,
             'cost_optimization_enabled': True,
-            'fallback_model': ModelType.SONNET.value
+            'fallback_model': mapper.suggest_model_for_task("moderate", provider),
+            'provider': provider
         }
 
         if config_path and Path(config_path).exists():
@@ -209,21 +221,28 @@ class ModelRouter:
         self,
         task_description: str,
         context: Optional[Dict] = None,
-        manual_model: Optional[ModelType] = None,
+        manual_model: Optional[str] = None,
         expected_output_tokens: int = 500
     ) -> RoutingDecision:
 
         self.metrics.total_requests += 1
+        mapper = get_model_mapper()
 
         if manual_model:
             self.metrics.manual_overrides += 1
             complexity = self.analyzer.analyze_task(task_description, context)
+
+            # Map the manual model if needed
+            selected_model = map_model(manual_model, self.config.get('provider'))
+            if not selected_model:
+                selected_model = manual_model  # Use as-is if mapping fails
+
             estimated_cost = self.cost_estimator.estimate_cost(
-                manual_model, task_description, expected_output_tokens
+                selected_model, task_description, expected_output_tokens
             )
 
             decision = RoutingDecision(
-                selected_model=manual_model,
+                selected_model=selected_model,
                 confidence=1.0,
                 complexity=complexity,
                 reasoning="Manual override",
@@ -232,14 +251,12 @@ class ModelRouter:
             )
         else:
             complexity = self.analyzer.analyze_task(task_description, context)
-            selected_model_str = self.config['routing_rules'][complexity.value]
-            selected_model = ModelType(selected_model_str)
+            selected_model = self.config['routing_rules'][complexity.value]
 
             confidence = self._calculate_confidence(task_description, complexity)
 
             if confidence < self.config['confidence_threshold']:
-                fallback_model_str = self.config['fallback_model']
-                selected_model = ModelType(fallback_model_str)
+                selected_model = self.config['fallback_model']
 
             estimated_cost = self.cost_estimator.estimate_cost(
                 selected_model, task_description, expected_output_tokens
@@ -257,10 +274,14 @@ class ModelRouter:
                 estimated_cost=estimated_cost
             )
 
-        if decision.selected_model == ModelType.SONNET:
-            self.metrics.sonnet_requests += 1
-        else:
-            self.metrics.opus_requests += 1
+        # Update metrics based on model category
+        category = mapper.get_model_category(decision.selected_model)
+        if category == ModelCategory.FAST:
+            self.metrics.fast_requests += 1
+        elif category == ModelCategory.BALANCED:
+            self.metrics.balanced_requests += 1
+        elif category == ModelCategory.SMART:
+            self.metrics.smart_requests += 1
 
         self.metrics.total_cost += decision.estimated_cost
         self.routing_history.append(decision)
@@ -299,13 +320,17 @@ class ModelRouter:
         if not self.routing_history:
             return
 
-        opus_cost_total = sum(
-            self.cost_estimator.estimate_cost(ModelType.OPUS, "dummy", 500)
+        # Calculate what it would cost to use the most expensive model for everything
+        mapper = get_model_mapper()
+        smart_model = mapper.suggest_model_for_task("critical", self.config.get('provider'))
+
+        max_cost_total = sum(
+            self.cost_estimator.estimate_cost(smart_model, "dummy", 500)
             for _ in self.routing_history
         )
 
         actual_cost = sum(decision.estimated_cost for decision in self.routing_history)
-        self.metrics.cost_savings = max(0, opus_cost_total - actual_cost)
+        self.metrics.cost_savings = max(0, max_cost_total - actual_cost)
 
     def record_actual_cost(self, task_id: str, cost_info: CostInfo):
         pass
@@ -317,8 +342,9 @@ class ModelRouter:
 
         return {
             'total_requests': total,
-            'sonnet_percentage': (self.metrics.sonnet_requests / total) * 100,
-            'opus_percentage': (self.metrics.opus_requests / total) * 100,
+            'fast_percentage': (self.metrics.fast_requests / total) * 100,
+            'balanced_percentage': (self.metrics.balanced_requests / total) * 100,
+            'smart_percentage': (self.metrics.smart_requests / total) * 100,
             'estimated_total_cost': self.metrics.total_cost,
             'estimated_cost_savings': self.metrics.cost_savings,
             'manual_override_percentage': (self.metrics.manual_overrides / total) * 100,

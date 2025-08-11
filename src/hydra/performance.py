@@ -1,3 +1,5 @@
+"""Performance module."""
+
 import asyncio
 import logging
 import os

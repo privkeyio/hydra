@@ -46,7 +46,8 @@ class ProviderRegistry:
         "claude_interactive": (
             "hydra.providers.claude_interactive.ClaudeInteractiveProvider"
         ),
-        "venice_api": "hydra.providers.venice.VeniceProvider",
+        "venice": "hydra.providers.venice.VeniceProvider",
+        "venice_api": "hydra.providers.venice.VeniceProvider",  # Alias for compatibility
         "anthropic_api": "hydra.providers.anthropic.AnthropicProvider",
         "mock_provider": "hydra.providers.mock_provider.MockProvider",
         "mock": "hydra.providers.mock_provider.MockProvider",

@@ -206,7 +206,7 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     print(f"🧠 Using {smart_model or 'smart model'} for ticket planning...")
 
     # Adapt prompt to use generic model categories instead of specific Claude models
-    prompt = f"""make a tickets.md doc with tickets that are made in task language for LLM agents to execute that include acceptance criteria, dependencies (like 001,002 or None), status, and which model category (fast, balanced, smart, or coder) should be used for that ticket. be minimalistic, surgical and future proof!
+    prompt = f"""Create a file named 'tickets.md' in the current directory with tickets that are made in task language for LLM agents to execute that include acceptance criteria, dependencies (like 001,002 or None), status, and which model category (fast, balanced, smart, or coder) should be used for that ticket. be minimalistic, surgical and future proof!
 
 Each ticket MUST have this format:
 ## Ticket 001: [Title]

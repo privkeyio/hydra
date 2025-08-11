@@ -14,7 +14,8 @@ from typing import Any, Dict, List, Optional, Pattern, Set
 
 import yaml
 
-from ..config_system.config_manager import ConfigManager
+# from ..config_system.config_manager import ConfigManager
+# ConfigManager was removed - using direct config loading instead
 
 
 class ResponseStrategy(Enum):
@@ -77,18 +78,18 @@ class PromptDetector:
     """Universal prompt detection engine with configurable patterns."""
 
     def __init__(self,
-                 config_manager: Optional[ConfigManager] = None,
+                 config_manager: Optional[Any] = None,  # ConfigManager removed from system
                  patterns_dir: Optional[Path] = None,
                  enable_learning: bool = True):
         """Initialize the prompt detector.
 
         Args:
-            config_manager: Configuration manager instance
+            config_manager: Configuration manager instance (deprecated)
             patterns_dir: Directory containing pattern configuration files
             enable_learning: Whether to enable learning mode for new patterns
 
         """
-        self.config_manager = config_manager
+        self.config_manager = None  # ConfigManager no longer used
         self.patterns_dir = patterns_dir or Path.cwd() / '.hydra' / 'patterns'
         self.enable_learning = enable_learning
 

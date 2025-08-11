@@ -20,14 +20,13 @@ The simplest way to configure a provider is through environment variables:
 
 ```bash
 # Select the provider
-export LLM_PROVIDER=claude  # Options: claude, venice, mock
+export LLM_PROVIDER=claude_tmux  # Options: claude_tmux, venice, mock
 
 # Provider-specific configuration
 export CLAUDE_CLI_PATH=/path/to/claude  # For Claude provider
 export VENICE_API_KEY=your_api_key      # For Venice provider
 
-# Model selection
-export LLM_MODEL=opus     # Provider-specific model identifier
+# Optional settings
 export LLM_TIMEOUT=300    # Request timeout in seconds
 export LLM_MAX_RETRIES=3  # Number of retries on failure
 ```

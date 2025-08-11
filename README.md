@@ -32,16 +32,21 @@ cd hydra
 pip install -e .
 ```
 
-**Requirements:** Python 3.11+, tmux, Claude CLI
+**Requirements:** Python 3.11+, tmux, Redis (for distributed features)
 
 ### Basic Setup
 
 ```bash
-# Set Claude CLI path
-export CLAUDE_CLI_PATH=/path/to/claude
+# Choose your LLM provider (claude_tmux, venice, mock)
+export LLM_PROVIDER=claude_tmux
 
-# Or use API key
+# For Claude provider
+export CLAUDE_CLI_PATH=/path/to/claude
+# OR
 export ANTHROPIC_API_KEY=your_key
+
+# For Venice provider
+export VENICE_API_KEY=your_key
 ```
 
 ### Your First Project
@@ -95,7 +100,7 @@ hydra claude attach dev
 
 ```markdown
 ## Ticket 001: Setup API
-**Model:** sonnet
+**Model:** Balanced 4
 **Dependencies:** None
 **Description:** Create FastAPI application
 
@@ -104,6 +109,12 @@ hydra claude attach dev
 - [ ] Add health check endpoint
 - [ ] Setup error handling
 ```
+
+## Provider Support
+
+- **Claude** (claude_tmux) - Interactive Claude Code CLI via tmux
+- **Venice AI** (venice) - API-based Venice.ai integration
+- **Mock** (mock) - Testing and development provider
 
 ## Documentation
 

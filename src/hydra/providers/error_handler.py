@@ -36,7 +36,7 @@ class ErrorCategory(Enum):
 
 class ErrorType(Enum):
     """Types of provider errors (backward compatibility)."""
-    
+
     PROVIDER_ERROR = "provider_error"
     INITIALIZATION_ERROR = "initialization_error"
     AUTHENTICATION_ERROR = "authentication_error"

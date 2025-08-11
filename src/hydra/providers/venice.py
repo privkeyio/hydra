@@ -5,11 +5,20 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime
-from typing import Any, Dict, Iterator, List, Optional
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from openai import AsyncOpenAI, OpenAI
 
+from hydra.action_executor import (
+    Action,
+    ActionType,
+    ExecutionContext,
+    FileOperationsExecutor,
+    ResponseParser,
+)
 from hydra.providers.base import LLMConfig
 from hydra.providers.base_provider import (
     BaseProvider,
@@ -754,3 +763,371 @@ class VeniceProvider(BaseProvider):
                 final_results.append(result)
 
         return final_results
+
+    def execute_ticket(
+        self,
+        ticket_content: str,
+        working_directory: Optional[str] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Execute a ticket by generating Venice response and executing actions.
+
+        This method integrates the action executor with Venice to enable
+        non-interactive execution of file operations and commands.
+
+        Args:
+            ticket_content: The ticket description/requirements
+            working_directory: Directory to execute actions in
+            **kwargs: Additional parameters for generation
+
+        Returns:
+            Dictionary containing execution results with keys:
+                - success: Whether all actions succeeded
+                - actions_executed: Number of actions executed
+                - results: List of action results
+                - response: The Venice response text
+                - errors: List of any errors encountered
+
+        """
+        start_time = time.time()
+        working_dir = Path(working_directory) if working_directory else Path.cwd()
+
+        # Initialize execution tracking
+        execution_result = {
+            "success": True,
+            "actions_executed": 0,
+            "results": [],
+            "response": "",
+            "errors": [],
+            "execution_time": 0.0,
+        }
+
+        try:
+            # Build enhanced prompt for Venice
+            prompt = self._build_ticket_prompt(ticket_content)
+
+            # Generate response from Venice
+            logger.info("Generating Venice response for ticket execution")
+            response = self.generate(prompt, **kwargs)
+            execution_result["response"] = response
+
+            # Parse response to extract actions
+            logger.info("Parsing Venice response for actions")
+            actions = self._parse_venice_response(response)
+
+            if not actions:
+                logger.warning("No actions extracted from Venice response")
+                execution_result["errors"].append(
+                    "No executable actions found in response"
+                )
+                return execution_result
+
+            logger.info(f"Extracted {len(actions)} actions from Venice response")
+
+            # Create execution context
+            context = ExecutionContext(
+                working_directory=working_dir,
+                dry_run=kwargs.get("dry_run", False),
+                max_retries=kwargs.get("max_retries", 3),
+                timeout=kwargs.get("timeout", 300),
+                rollback_on_failure=kwargs.get("rollback_on_failure", True),
+                session_id=kwargs.get("session_id"),
+            )
+
+            # Initialize file executor
+            executor = FileOperationsExecutor(context)
+
+            # Execute actions
+            for action in actions:
+                try:
+                    # Validate action first
+                    if not executor.validate(action):
+                        error_msg = (
+                            f"Action validation failed: {action.type.name} "
+                            f"on {action.target}"
+                        )
+                        logger.warning(error_msg)
+                        execution_result["errors"].append(error_msg)
+                        continue
+
+                    # Execute the action
+                    logger.info(
+                        f"Executing action: {action.type.name} on {action.target}"
+                    )
+                    result = executor.execute(action)
+
+                    # Track result
+                    execution_result["results"].append({
+                        "action_type": action.type.name,
+                        "target": action.target,
+                        "success": result.success,
+                        "output": result.output,
+                        "error": result.error,
+                        "execution_time": result.execution_time,
+                    })
+
+                    if result.success:
+                        execution_result["actions_executed"] += 1
+                    else:
+                        execution_result["success"] = False
+                        if result.error:
+                            execution_result["errors"].append(result.error)
+
+                        # Handle rollback if enabled
+                        if context.rollback_on_failure:
+                            logger.info("Rolling back due to action failure")
+                            executor.rollback()
+                            break
+
+                except Exception as e:
+                    error_msg = f"Failed to execute action {action.type.name}: {str(e)}"
+                    logger.error(error_msg)
+                    execution_result["errors"].append(error_msg)
+                    execution_result["success"] = False
+
+                    if context.rollback_on_failure:
+                        executor.rollback()
+                        break
+
+        except Exception as e:
+            error_msg = f"Ticket execution failed: {str(e)}"
+            logger.error(error_msg)
+            execution_result["errors"].append(error_msg)
+            execution_result["success"] = False
+
+        # Calculate execution time
+        execution_result["execution_time"] = time.time() - start_time
+
+        # Log summary
+        logger.info(
+            f"Ticket execution completed: success={execution_result['success']}, "
+            f"actions={execution_result['actions_executed']}, "
+            f"time={execution_result['execution_time']:.2f}s"
+        )
+
+        return execution_result
+
+    def _build_ticket_prompt(self, ticket_content: str) -> str:
+        """Build an enhanced prompt for ticket execution.
+
+        Args:
+            ticket_content: The ticket requirements
+
+        Returns:
+            Enhanced prompt for Venice
+
+        """
+        prompt_parts = [
+            "You are a software engineer tasked with implementing the "
+            "following ticket:",
+            "",
+            ticket_content,
+            "",
+            "Please provide a complete implementation with:",
+            "1. All necessary code files (use markdown code blocks with file paths)",
+            "2. Any required shell commands (use bash code blocks)",
+            "3. Clear file paths for each code block (e.g., ```python:src/main.py)",
+            "4. Complete, working code with proper error handling",
+            "",
+            "Format your response with clear code blocks and file paths.",
+            "Each file should be in its own code block with the path specified.",
+        ]
+
+        return "\n".join(prompt_parts)
+
+    def _parse_venice_response(self, response: str) -> List[Action]:
+        """Parse Venice response to extract actions.
+
+        This method handles Venice-specific response formats and converts
+        them into executable actions.
+
+        Args:
+            response: The Venice response text
+
+        Returns:
+            List of parsed actions
+
+        """
+        parser = ResponseParser(
+            validate_actions=True,
+            allow_dangerous=False,
+            max_actions=100,
+        )
+
+        try:
+            # First try standard parsing
+            actions = parser.parse(response)
+
+            # If no actions found, try Venice-specific patterns
+            if not actions:
+                actions = self._extract_venice_specific_actions(response)
+
+            # Enhance actions with Venice metadata
+            for action in actions:
+                action.metadata["provider"] = "venice"
+                action.metadata["model"] = self.config.model
+
+            return actions
+
+        except Exception as e:
+            logger.error(f"Failed to parse Venice response: {e}")
+            # Try fallback parsing
+            return self._fallback_parse_venice_response(response)
+
+    def _extract_venice_specific_actions(self, response: str) -> List[Action]:
+        """Extract actions using Venice-specific patterns.
+
+        Args:
+            response: The Venice response
+
+        Returns:
+            List of extracted actions
+
+        """
+        actions = []
+
+        # Pattern for code blocks with file paths (e.g., ```python:src/main.py)
+        file_pattern = r'```(?:(\w+):)?([^\n]+)\n(.*?)```'
+        matches = re.finditer(file_pattern, response, re.DOTALL)
+
+        for match in matches:
+            language = match.group(1) or "text"
+            potential_path = match.group(2).strip()
+            content = match.group(3).strip()
+
+            # Check if this looks like a file path
+            if self._is_valid_file_path(potential_path):
+                action = Action(
+                    type=ActionType.CREATE_FILE,
+                    target=potential_path,
+                    content=content,
+                    metadata={
+                        "language": language,
+                        "source": "venice_parser",
+                    }
+                )
+                actions.append(action)
+            # Check if it's a shell command
+            elif language in ["bash", "sh", "shell"]:
+                # Parse individual commands from the block
+                commands = content.split('\n')
+                for cmd in commands:
+                    cmd = cmd.strip()
+                    if cmd and not cmd.startswith('#'):
+                        action = Action(
+                            type=ActionType.RUN_COMMAND,
+                            target=cmd,
+                            metadata={"source": "venice_parser"}
+                        )
+                        actions.append(action)
+
+        return actions
+
+    def _fallback_parse_venice_response(self, response: str) -> List[Action]:
+        """Fallback parser for Venice responses.
+
+        This method tries to extract any recognizable patterns when
+        standard parsing fails.
+
+        Args:
+            response: The Venice response
+
+        Returns:
+            List of actions (may be empty)
+
+        """
+        actions = []
+
+        # Try to find any code blocks
+        code_blocks = self.extract_code_blocks(response)
+
+        for block in code_blocks:
+            # Try to determine if this is a file or command
+            if block.filename:
+                action = Action(
+                    type=ActionType.CREATE_FILE,
+                    target=block.filename,
+                    content=block.content,
+                    metadata={
+                        "language": block.language,
+                        "source": "venice_fallback",
+                    }
+                )
+                actions.append(action)
+            elif block.language in ["bash", "sh", "shell"]:
+                # Treat as commands
+                for line in block.content.split('\n'):
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        action = Action(
+                            type=ActionType.RUN_COMMAND,
+                            target=line,
+                            metadata={"source": "venice_fallback"}
+                        )
+                        actions.append(action)
+
+        return actions
+
+    def _is_valid_file_path(self, path: str) -> bool:
+        """Check if a string looks like a valid file path.
+
+        Args:
+            path: String to check
+
+        Returns:
+            True if it looks like a file path
+
+        """
+        # Basic checks for file path patterns
+        if not path or len(path) > 255:
+            return False
+
+        # Check for file extensions
+        if '.' in path:
+            ext = path.split('.')[-1]
+            # Common code file extensions
+            valid_extensions = {
+                'py', 'js', 'ts', 'jsx', 'tsx', 'java', 'cpp', 'c', 'h',
+                'go', 'rs', 'rb', 'php', 'cs', 'swift', 'kt', 'scala',
+                'html', 'css', 'scss', 'json', 'xml', 'yaml', 'yml',
+                'md', 'txt', 'sh', 'bash', 'sql', 'dockerfile', 'makefile'
+            }
+            if ext.lower() in valid_extensions:
+                return True
+
+        # Check for path separators
+        if '/' in path or '\\' in path:
+            return True
+
+        return False
+
+    def parse_response_for_actions(self, response: str) -> Tuple[List[Dict], List[str]]:
+        """Parse Venice response for file operations and commands.
+
+        This is a compatibility method that returns results in a simpler format.
+
+        Args:
+            response: The Venice response
+
+        Returns:
+            Tuple of (file_operations, commands) where:
+                - file_operations: List of dicts with 'path' and 'content'
+                - commands: List of command strings
+
+        """
+        actions = self._parse_venice_response(response)
+
+        file_operations = []
+        commands = []
+
+        for action in actions:
+            if action.type in [ActionType.CREATE_FILE, ActionType.MODIFY_FILE]:
+                file_operations.append({
+                    "path": action.target,
+                    "content": action.content or "",
+                    "operation": action.type.name.lower(),
+                })
+            elif action.type == ActionType.RUN_COMMAND:
+                commands.append(action.target)
+
+        return file_operations, commands

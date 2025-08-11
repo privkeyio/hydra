@@ -38,16 +38,33 @@ pip install -e .
 
 ```bash
 # Choose your LLM provider (claude_tmux, venice, mock)
-export LLM_PROVIDER=claude_tmux
+export LLM_PROVIDER=venice  # or claude_tmux
 
 # For Claude provider
 export CLAUDE_CLI_PATH=/path/to/claude
 # OR
 export ANTHROPIC_API_KEY=your_key
 
-# For Venice provider
-export VENICE_API_KEY=your_key
+# For Venice provider (recommended for open-source models)
+export VENICE_API_KEY=your_key  # Get from https://venice.ai
 ```
+
+#### Venice AI Setup (Recommended)
+
+Venice provides access to powerful open-source models like Qwen, Llama, and DeepSeek:
+
+1. **Get API Key**: Sign up at [venice.ai](https://venice.ai) for free API access
+2. **Configure Environment**:
+   ```bash
+   # .env file
+   LLM_PROVIDER=venice
+   VENICE_API_KEY=your_venice_api_key
+   ```
+3. **Available Models**:
+   - `qwen-2.5-coder-32b` - Best for coding tasks
+   - `llama-3.3-70b` - Balanced performance
+   - `deepseek-coder-v2-lite` - Fast code generation
+   - Run `hydra venice list-models` to see all options
 
 ### Your First Project
 

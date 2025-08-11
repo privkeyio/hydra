@@ -768,15 +768,28 @@ def _handle_sync_parallel_execution(args):
             dashboard_server.stop()
             return 0
         else:
-            completed = summary['completed']
+            functionally_completed = summary.get('functionally_completed', summary['completed'])
+            quality_passed = summary.get('quality_passed', summary['completed'])
             total = summary['total_tickets']
-            incomplete_msg = f"Execution incomplete: {completed}/{total} completed"
-            print(f"\n⚠️ {incomplete_msg}")
+            
+            if functionally_completed == total:
+                # All tickets ran but some had quality issues
+                print(f"\n✅ All {total} tickets executed successfully!")
+                if quality_passed < functionally_completed:
+                    print(f"⚠️  {functionally_completed - quality_passed} tickets have quality issues (lint/test warnings)")
+                    print("   Review the output and fix quality issues as needed.")
+            else:
+                # Some tickets failed to execute
+                print(f"\n⚠️ Execution incomplete: {functionally_completed}/{total} tickets executed")
+                if summary.get('failed', 0) > 0:
+                    print(f"   ❌ {summary['failed']} tickets failed to execute")
+                if summary.get('blocked', 0) > 0:
+                    print(f"   ⛔ {summary['blocked']} tickets blocked by dependencies")
 
             # Still save a report even if incomplete
-            if completed > 0:
+            if functionally_completed > 0:
                 report_path = executor.save_completion_report(summary)
-                print(f"\n📄 Partial completion report saved: {report_path}")
+                print(f"\n📄 Completion report saved: {report_path}")
 
             executor.shutdown()
             dashboard_server.stop()
@@ -884,14 +897,21 @@ def _handle_async_parallel_execution(args):
                     dashboard_server.stop()
                 return 0
             else:
-                completed = summary['completed']
+                functionally_completed = summary.get('functionally_completed', summary['completed'])
+                quality_passed = summary.get('quality_passed', summary['completed'])
                 total = summary['total_tickets']
-                print(f"\n⚠️ Execution incomplete: {completed}/{total} completed")
+                
+                if functionally_completed == total:
+                    print(f"\n✅ All {total} tickets executed successfully!")
+                    if quality_passed < functionally_completed:
+                        print(f"⚠️  {functionally_completed - quality_passed} tickets have quality issues")
+                else:
+                    print(f"\n⚠️ Execution incomplete: {functionally_completed}/{total} tickets executed")
 
                 # Still save a report even if incomplete
-                if completed > 0:
+                if functionally_completed > 0:
                     report_path = await executor.save_completion_report(summary)
-                    print(f"\n📄 Partial completion report saved: {report_path}")
+                    print(f"\n📄 Completion report saved: {report_path}")
 
                 executor.shutdown()
                 if dashboard_server:
@@ -1017,9 +1037,16 @@ def _handle_batch_execution(args):
                     dashboard_server.stop()
                 return 0
             else:
-                completed = summary['completed']
+                functionally_completed = summary.get('functionally_completed', summary['completed'])
+                quality_passed = summary.get('quality_passed', summary['completed'])
                 total = summary['total_tickets']
-                print(f"\n⚠️ Execution incomplete: {completed}/{total} completed")
+                
+                if functionally_completed == total:
+                    print(f"\n✅ All {total} tickets executed successfully!")
+                    if quality_passed < functionally_completed:
+                        print(f"⚠️  {functionally_completed - quality_passed} tickets have quality issues")
+                else:
+                    print(f"\n⚠️ Execution incomplete: {functionally_completed}/{total} tickets executed")
 
                 executor.shutdown()
                 if dashboard_server:

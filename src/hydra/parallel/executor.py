@@ -565,7 +565,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 if quality_passed:
                     status_msg = "✅ Completed"
                 else:
-                    status_msg = "⚠️  Completed (quality issues detected - review agent's work)"
+                    status_msg = "✅ Functionally complete ⚠️  (has quality issues - review output)"
                 print(f"\n{status_msg} Ticket {ticket_id} in {duration:.2f}s")
 
                 # Release the agent back to the pool and file locks
@@ -718,8 +718,11 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
 
         summary = {
             "total_tickets": plan.total_tickets,
-            "completed": len(self.completed_tickets) - len(self.quality_failed_tickets),  # Subtract quality failures
-            "failed": len(self.failed_tickets) + len(self.quality_failed_tickets),  # Include quality failures in failed count
+            "functionally_completed": len(self.completed_tickets),  # All tickets that ran to completion
+            "quality_passed": len(self.completed_tickets) - len(self.quality_failed_tickets),  # Tickets that passed quality gates
+            "completed": len(self.completed_tickets) - len(self.quality_failed_tickets),  # For backwards compatibility
+            "failed": len(self.failed_tickets),  # Tickets that failed to execute
+            "quality_failed": len(self.quality_failed_tickets),  # Tickets that completed but failed quality
             "blocked": sum(
                 1 for n in self.tickets.values()
                 if n.status == ExecutionStatus.BLOCKED
@@ -745,10 +748,12 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
             "📊 Parallel Execution Report",
             f"{'='*60}",
             f"Total tickets: {summary['total_tickets']}",
-            f"✅ Completed (Quality Passed): {summary['completed']}",
-            f"❌ Failed/Quality Issues: {summary['failed']}",
-            f"⛔ Blocked: {summary['blocked']}",
-            f"📈 Success rate: {summary['success_rate']:.1f}%",
+            f"✅ Functionally Complete: {summary.get('functionally_completed', summary['completed'])} (executed successfully)",
+            f"   ✅ Quality Passed: {summary.get('quality_passed', summary['completed'])}",
+            f"   ⚠️  Quality Failed: {summary.get('quality_failed', 0)}",
+            f"❌ Execution Failed: {summary['failed']} (couldn't complete)",
+            f"⛔ Blocked: {summary['blocked']} (dependencies failed)",
+            f"📈 Completion rate: {summary['success_rate']:.1f}%",
             f"⏱️  Total duration: {summary['duration']:.2f}s",
             "",
         ]

@@ -364,8 +364,12 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     # Adapt prompt to use generic model categories instead of specific Claude models
     # Extract just the filename from the full path for the prompt
     output_filename = os.path.basename(output_path)
-    prompt = f"""Create a file named '{output_filename}' in the current directory with tickets that are made in task language for AI agents to execute that include acceptance criteria, ticket dependencies, and which model category (smart, balanced, fast, or coder) should be used for that ticket. Be minimalistic, surgical and future proof!
-    
+    prompt = f"""Create a file named '{output_filename}' in the current directory with MINIMAL tickets to solve the problem. 
+
+CRITICAL: Generate the FEWEST tickets possible. Most issues should be 1-2 tickets max. Only create multiple tickets if there are truly independent parts or if a database migration MUST happen before code changes.
+
+Prefer direct code changes over analysis/design documents. Skip intermediate documents unless absolutely necessary.
+
 Note: For Claude Code specifically, use smart=opus 4, balanced=sonnet 4, fast=sonnet 4, coder=opus 4
 
 Each ticket MUST have this format:
@@ -373,79 +377,62 @@ Each ticket MUST have this format:
 **Status:** TODO
 **Model:** [smart, balanced, fast, or coder]
 **Dependencies:** [None or comma-separated ticket numbers like 001,002]
-**Description:** [Task description - if this depends on other tickets, mention that it builds on their outputs]
-
-**Required Input Files:** (include for ALL tickets)
-- [For tickets with dependencies: List files from previous tickets]
-- [For tickets without dependencies: Write "None" or list any existing project files needed]
-
-**Output Files:** (include for ALL tickets that create files)
-- [List all files this ticket will create/generate]
-- [E.g., "analysis_report.md", "migration_design.md", "api_endpoints.py"]
-
-**Context Requirements:** (only include if Dependencies is not None)
-- [Specific instructions about reading/using outputs from dependency tickets]
-- [E.g., "FIRST: Read design_doc.md from Ticket 001 to understand the architecture"]
+**Description:** [Direct task description - be specific about what code to change]
 
 **Acceptance Criteria:**
-- [ ] [Criteria that reference outputs from dependencies when applicable]
-- [ ] [Must include creation of any output files listed above]
+- [ ] [Specific code changes to make]
+- [ ] [Tests to update/add if needed]
+- [ ] [Verification steps]
 
-IMPORTANT RULES:
-1. ALL tickets MUST have a "Required Input Files" section (use "None" if no inputs needed)
-2. ALL tickets that create files MUST have an "Output Files" section listing what they produce
-3. For tickets with dependencies:
-   - List the specific output files from previous tickets in "Required Input Files"
-   - Add "Context Requirements" explaining how to use the outputs from dependencies
-   - In the Description, mention that the ticket "builds on" or "uses outputs from" its dependencies
-4. Match input/output files across tickets - outputs from one ticket should match inputs for dependent tickets
+RULES FOR MINIMAL TICKETS:
+1. DEFAULT to 1 ticket that does everything unless there's a compelling reason to split
+2. Only split into multiple tickets if:
+   - Database migration MUST run before code changes to avoid breaking existing systems
+   - There are completely independent features that different people could work on
+3. NEVER create tickets for:
+   - Analysis reports (do analysis within the implementation ticket)
+   - Design documents (design while implementing)
+   - Documentation updates (include in the main change)
+   - Validation reports (validation happens during implementation)
+4. Focus on DIRECT CODE CHANGES, not meta-work
 
-Example for an independent ticket:
-## Ticket 001: Analyze current implementation
+Example for a bug fix (IDEAL - single ticket):
+## Ticket 001: Fix wallet counter skipping index 0
 **Status:** TODO
 **Model:** smart
 **Dependencies:** None
-**Description:** Deep analysis of current system implementation to understand all patterns and edge cases
-
-**Required Input Files:**
-- None (or list existing project files if needed)
-
-**Output Files:**
-- analysis_report.md
-- component_diagram.png
-- database_schema.sql
+**Description:** Change counter semantics from "last used" to "next available" and add migration for existing wallets
 
 **Acceptance Criteria:**
-- [ ] Document all system components in analysis_report.md
-- [ ] Create visual component diagram
-- [ ] Export current database schema to database_schema.sql
+- [ ] Update database trait get_keyset_counter to return u32 instead of Option<u32>, defaulting to 0
+- [ ] Add database migration to increment all existing counters by 1 where counter > 0
+- [ ] Remove +1 logic from wallet operations (issue_bolt11, issue_bolt12, melt_bolt11, swap)
+- [ ] Update tests to verify index 0 is now used
+- [ ] Run all tests and ensure they pass
 
-Example for a dependent ticket:
-## Ticket 002: Implement API based on design
+Example when migration is truly needed separately:
+## Ticket 001: Add database migration for counter fix
+**Status:** TODO
+**Model:** fast
+**Dependencies:** None
+**Description:** Add migration to increment existing keyset counters by 1 to prepare for semantic change
+
+**Acceptance Criteria:**
+- [ ] Add SQL migration: UPDATE keyset SET counter = counter + 1 WHERE counter > 0
+- [ ] Add REDB migration with same logic
+- [ ] Test migration on sample data
+
+## Ticket 002: Update counter logic to use next available index
 **Status:** TODO
 **Model:** smart
 **Dependencies:** 001
-**Description:** Implement the REST API based on the design document from Ticket 001
-
-**Required Input Files:**
-- analysis_report.md (from Ticket 001)
-- database_schema.sql (from Ticket 001)
-
-**Output Files:**
-- api_endpoints.py
-- api_tests.py
-- api_documentation.md
-
-**Context Requirements:**
-- FIRST: Read analysis_report.md to understand the system architecture
-- Review database_schema.sql for data model implementation
-- Follow the patterns and conventions established in Ticket 001
+**Description:** Change counter implementation to represent next available index instead of last used
 
 **Acceptance Criteria:**
-- [ ] Implement all endpoints based on analysis_report.md
-- [ ] Use the database schema from database_schema.sql
-- [ ] Create comprehensive tests in api_tests.py
-- [ ] Document API in api_documentation.md
+- [ ] Change get_keyset_counter return type from Option<u32> to u32 (default 0)
+- [ ] Remove all +1 increments in wallet operations
+- [ ] Update tests to verify behavior
+- [ ] Ensure all tests pass
 
 Project: {project_description}"""
 
@@ -806,35 +793,30 @@ IMPORTANT: Save any artifacts, documents, or shared data that other tickets migh
 
     if provider_type == 'claude_tmux':
         # Claude Code can read tickets.md directly
-        prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_identifier} from tickets.md - NOT any other ticket!
+        prompt = f"""Execute ONLY Ticket {ticket_identifier} from tickets.md.
 
-Find and execute specifically "## Ticket {ticket_identifier}:" in tickets.md
+Find "## Ticket {ticket_identifier}:" in tickets.md and implement it.
 
 {workspace_info}
 {dependency_context}
 
-CRITICAL REQUIREMENTS:
-1. READ the ticket carefully, especially the "Output Files" section
-2. CREATE ALL FILES listed in the "Output Files" section with their exact names
-3. If the ticket says to create "migration_design.md", you MUST create that exact file
-4. Follow the acceptance criteria exactly - they often specify what files to create
+APPROACH:
+1. Make DIRECT code changes - don't create unnecessary documentation
+2. Be surgical and minimal - change only what's needed
+3. If the ticket mentions specific files/functions, change those directly
+4. Focus on making the tests pass
 
-DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_identifier}.
+QUALITY:
+- Write clean, idiomatic code that matches the existing codebase style
+- No placeholders, mocks, or shortcuts
+- Make sure all tests pass after your changes
 
-For tickets with dependencies:
-1. FIRST read any artifacts from dependency tickets in the shared workspace
-2. Use the implementations from previous tickets as specified in "Required Input Files" and "Context Requirements"
-3. Save any outputs that future tickets might need to the shared workspace
+When done:
+1. Verify all acceptance criteria are met
+2. Update tickets.md status to DONE
+3. Run tests to ensure nothing broke
 
-Be minimalistic, surgical and future proof!
-Avoid using any code or comments that may be construed as AI generated.
-Make sure you do a good job because other LLMs said your code sucked!
-
-When you finish, ensure acceptance criteria is met then update tickets.md and then run lint, build, test etc before we move on.
-
-DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
-
-REMINDER: You are working on Ticket {ticket_identifier} ONLY. Ignore all other tickets."""
+REMINDER: You are working on Ticket {ticket_identifier} ONLY."""
     else:
         # For other providers (Venice, OpenAI, etc), include ticket details in prompt
         prompt = f"""You are implementing Ticket {ticket_identifier} with the following requirements:

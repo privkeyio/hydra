@@ -183,21 +183,40 @@ class TicketVerifier:
         # Extract potential file paths from criterion
         patterns = [
             r'[\'"`]([^\'"`]+\.\w+)[\'"`]',  # Quoted filenames
-            r'(\w+/\w+\.\w+)',  # Path-like patterns
-            r'(\w+\.\w+)',  # Simple filenames
+            r'([\w\-]+/[\w\-]+\.[\w]+)',  # Path-like patterns with hyphens
+            r'([\w\-]+\.[\w]+)',  # Simple filenames with hyphens
+            r'(\S+\.ts)',  # Any .ts file
+            r'(\S+\.js)',  # Any .js file
+            r'(\S+\.md)',  # Any .md file
+            r'(\S+\.json)',  # Any .json file
         ]
 
         for pattern in patterns:
             matches = re.findall(pattern, criterion)
             for match in matches:
-                file_path = self.project_root / match
-                if file_path.exists():
-                    return VerificationResult(
-                        criterion=criterion,
-                        status=CriterionStatus.PASSED,
-                        evidence=f"File {match} exists",
-                        confidence=0.9
-                    )
+                # Skip common words that aren't filenames
+                if match in ['create', 'add', 'implement', 'with', 'for', 'to', 'in']:
+                    continue
+                    
+                # Check multiple possible locations
+                possible_paths = [
+                    self.project_root / match,
+                    self.project_root / 'src' / match,
+                    self.project_root / 'src/utils' / match,
+                    self.project_root / 'src/core' / match,
+                    self.project_root / 'src/events' / match,
+                    self.project_root / 'docs' / match,
+                    self.project_root / 'test-results' / match,
+                ]
+                
+                for file_path in possible_paths:
+                    if file_path.exists():
+                        return VerificationResult(
+                            criterion=criterion,
+                            status=CriterionStatus.PASSED,
+                            evidence=f"File {match} exists at {file_path.relative_to(self.project_root)}",
+                            confidence=0.9
+                        )
 
         return VerificationResult(
             criterion=criterion,

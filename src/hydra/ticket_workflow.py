@@ -637,22 +637,21 @@ def validate_acceptance_criteria(ticket, project_dir):
                 failed_criteria.append(f"{i}. {criterion}")
                 print(f"   ❌ {i}. npm install check failed: {e}")
 
-        # Generic file checks
+        # Generic file checks - use proper validation
         elif any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
-            # Extract potential file name from criterion
-            words = criterion.split()
-            file_found = False
-            for word in words:
-                if any(ext in word for ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
-                    file_path = os.path.join(project_dir, word.strip('.,()'))
-                    if os.path.exists(file_path):
-                        file_found = True
-                        print(f"   ✅ {i}. File {word} found")
-                        break
-
-            if not file_found:
+            from hydra.verification.ticket_verifier import TicketVerifier
+            verifier = TicketVerifier(project_dir)
+            result = verifier._verify_file_exists(criterion)
+            
+            if result.status.value == 'passed':
+                print(f"   ✅ {i}. {result.evidence}")
+            else:
+                # For critical files, be more explicit about what's missing
+                if '30min-video-report.md' in criterion or 'performance-metrics.json' in criterion:
+                    print(f"   ❌ {i}. Required documentation/metrics file not created")
+                else:
+                    print(f"   ❌ {i}. {result.evidence}")
                 failed_criteria.append(f"{i}. {criterion}")
-                print(f"   ❌ {i}. Required file not found")
 
         # Development environment checks
         elif "development environment" in criterion_lower or "docker" in criterion_lower:

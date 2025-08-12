@@ -132,7 +132,7 @@ class ClaudeTmuxProvider(BaseProvider):
 
         # Check if debug mode is enabled via environment variable
         debug_mode = os.environ.get('HYDRA_DEBUG', '').lower() in ['true', '1', 'yes']
-        
+
         # Set up debug logging only if enabled
         if debug_mode:
             debug_log_path = hydra_dir / "debug" / f"claude_{session_name}_{int(time.time())}.log"
@@ -163,17 +163,29 @@ class ClaudeTmuxProvider(BaseProvider):
 
             # Create a new tmux session with Claude
             # Check if we need to specify a model
+            # First check kwargs for model, then environment variable
+            model_from_kwargs = kwargs.get('model', '')
             model_from_env = os.environ.get('CLAUDE_MODEL', '').lower()
+
+            # Use model from kwargs if provided, otherwise from env
+            model_to_use = model_from_kwargs if model_from_kwargs else model_from_env
 
             # Map ticket models to Claude model names
             model_mapping = {
                 'smart': 'opus',      # Complex tasks need Opus
                 'coder': 'opus',      # Complex coding needs Opus
                 'balanced': 'sonnet', # Balanced tasks use Sonnet
-                'fast': 'sonnet'      # Fast tasks also use Sonnet (no Haiku)
+                'fast': 'sonnet',     # Fast tasks also use Sonnet (no Haiku)
+                # Also handle direct Claude model names
+                'claude-opus-4-1-20250805': 'opus',
+                'opus': 'opus',
+                'claude-sonnet-4-20250514': 'sonnet',
+                'sonnet': 'sonnet'
             }
 
-            claude_model = model_mapping.get(model_from_env, 'sonnet')  # Default to sonnet
+            # Default to opus for ticket creation, sonnet for everything else
+            default_model = 'opus' if kwargs.get('mode') == 'ticket_generation' else 'sonnet'
+            claude_model = model_mapping.get(model_to_use.lower(), default_model)
 
             # Build the command with model flag
             cmd = [
@@ -216,8 +228,11 @@ class ClaudeTmuxProvider(BaseProvider):
                 print("🎯 Generic task")
 
             # Import file creation enforcer
-            from hydra.providers.file_creation_enforcer import enforce_file_creation, extract_required_files
-            
+            from hydra.providers.file_creation_enforcer import (
+                enforce_file_creation,
+                extract_required_files,
+            )
+
             # Parse ticket if available to extract required files
             ticket = kwargs.get('ticket', None)
             file_creation_prompt = ""
@@ -228,7 +243,7 @@ class ClaudeTmuxProvider(BaseProvider):
                     print(f"📋 This ticket requires creating {len(required_files)} new files:")
                     for f in required_files:
                         print(f"   📄 {f}")
-            
+
             # Send a clear, direct prompt to Claude
             # Check if this is called from ticket_workflow with full prompt
             if prompt and len(prompt) > 100:  # Full prompt from ticket_workflow
@@ -487,7 +502,7 @@ class ClaudeTmuxProvider(BaseProvider):
             print("🛑 Ending Claude session...")
             self._send_to_session(session_name, "/exit")
             time.sleep(2)
-            
+
             # Validate required files were created if we have ticket info
             if 'required_files' in locals() and required_files:
                 print("\n🔍 Validating required files were created...")
@@ -503,17 +518,17 @@ class ClaudeTmuxProvider(BaseProvider):
                         Path(project_dir) / f"src/events/{req_file}",
                         Path(project_dir) / f"docs/{req_file}",
                     ]
-                    
+
                     for path in possible_paths:
                         if path.exists():
                             print(f"   ✅ Found: {path.relative_to(project_dir)}")
                             found = True
                             break
-                    
+
                     if not found:
                         missing_files.append(req_file)
                         print(f"   ❌ MISSING: {req_file}")
-                
+
                 if missing_files:
                     print(f"\n⚠️  WARNING: Claude did not create {len(missing_files)} required files!")
                     print("   This will cause the ticket to fail validation.")

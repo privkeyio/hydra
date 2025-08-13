@@ -38,7 +38,7 @@ class TestClaudeProviderIntegration:
     def claude_config(self):
         """Create Claude provider configuration."""
         return LLMConfig(
-            provider="claude_tmux",
+            provider_type="claude_tmux",
             model="claude-3-sonnet-20240229",
             api_key=None,  # Claude uses CLI
             extra_params={
@@ -153,7 +153,7 @@ class TestVeniceProviderIntegration:
     def venice_config(self):
         """Create Venice provider configuration."""
         return LLMConfig(
-            provider="venice",
+            provider_type="venice",
             model="llama-3.3-70b",
             api_key=os.environ.get("VENICE_API_KEY", "test-key"),
             base_url="https://api.venice.ai/api/v1",
@@ -506,7 +506,7 @@ class TestProviderCapabilities:
         """Test interactive capability detection."""
         # Claude should support interactive
         claude_config = LLMConfig(
-            provider="claude_tmux",
+            provider_type="claude_tmux",
             model="claude-3-sonnet-20240229"
         )
 
@@ -515,7 +515,7 @@ class TestProviderCapabilities:
             assert provider.supports_interactive()
 
         # Mock provider may not support interactive
-        mock_config = LLMConfig(provider="mock", model="mock-fast")
+        mock_config = LLMConfig(provider_type="mock", model="mock-fast")
         mock_provider = MockProvider(mock_config)
         # Mock provider defines its own interactive support
         interactive = mock_provider.supports_interactive()
@@ -549,7 +549,7 @@ class TestProviderErrorHandling:
     def test_api_error_handling(self):
         """Test API error handling."""
         venice_config = LLMConfig(
-            provider="venice",
+            provider_type="venice",
             model="llama-3.3-70b",
             api_key="invalid-key",
             base_url="https://invalid.url"
@@ -569,7 +569,7 @@ class TestProviderErrorHandling:
             pytest.skip("Claude CLI not installed")
 
         claude_config = LLMConfig(
-            provider="claude_tmux",
+            provider_type="claude_tmux",
             model="claude-3-sonnet-20240229"
         )
         provider = ClaudeTmuxProvider(claude_config)
@@ -591,7 +591,7 @@ class TestProviderErrorHandling:
             # First call fails, second succeeds with mock
             mock_primary = MagicMock()
             mock_primary.generate.side_effect = Exception("Failed")
-            mock_fallback = MockProvider(LLMConfig(provider="mock", model="mock-fast"))
+            mock_fallback = MockProvider(LLMConfig(provider_type="mock", model="mock-fast"))
             
             mock_create.side_effect = [mock_primary, mock_fallback]
 

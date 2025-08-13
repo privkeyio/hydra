@@ -432,7 +432,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 description=f"Ticket {ticket_id}: {node.title}",
                 prompt=prompt,
                 working_directory=str(self.project_root),
-                timeout=300,
+                timeout=900,
                 task_id=ticket_id  # Pass ticket ID for unique tmux session
             )
 

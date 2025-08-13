@@ -33,8 +33,8 @@ class ProductionConfig:
     stagger_start_delay: tuple = (2, 10)  # Random delay range in seconds
 
     # Resource limits
-    max_execution_time_per_ticket: int = 300  # 5 minutes per ticket
-    max_total_execution_time: int = 3600  # 1 hour total
+    max_execution_time_per_ticket: int = 900  # 15 minutes per ticket
+    max_total_execution_time: int = 7200  # 2 hours total
     max_memory_per_session: str = "2GB"  # Memory limit per session
 
     # Monitoring and logging
@@ -92,6 +92,6 @@ def get_ci_config() -> ProductionConfig:
     config = ProductionConfig()
     config.max_parallel_tickets = 5  # More parallel in CI
     config.enable_dashboard = False  # No UI in CI
-    config.max_execution_time_per_ticket = 600  # 10 min for CI
+    config.max_execution_time_per_ticket = 1200  # 20 min for CI
     config.auto_resolve_conflicts = True  # Auto-resolve in CI
     return config

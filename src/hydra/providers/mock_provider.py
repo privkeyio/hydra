@@ -25,12 +25,15 @@ class MockProvider(BaseProvider):
             fail_mode: If True, operations will fail for error testing
 
         """
-        super().__init__(config)
+        # Set attributes BEFORE calling super().__init__() which calls validate_config()
         self.fail_mode = fail_mode
         self.call_history: List[Dict[str, Any]] = []
         self.response_overrides: Dict[str, str] = {}
         self._mock_sessions: Dict[str, Session] = {}
         self._current_model = "mock-model-1"
+        
+        # Now call super().__init__() which will call validate_config()
+        super().__init__(config)
 
     def validate_config(self):
         """Mock provider always validates successfully."""

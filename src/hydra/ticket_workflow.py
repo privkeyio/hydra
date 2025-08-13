@@ -1474,8 +1474,8 @@ def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
         # Use the raw_id stored during parsing
         raw_id = ticket_data.get('raw_id', ticket_id.lstrip('0'))
 
-        # Use longer timeout for ticket execution (5 minutes)
-        success = execute_single_ticket(tickets_path, raw_id, timeout_override=300, workspace=workspace)
+        # Use longer timeout for ticket execution (15 minutes)
+        success = execute_single_ticket(tickets_path, raw_id, timeout_override=900, workspace=workspace)
 
         if success:
             with completed_lock:

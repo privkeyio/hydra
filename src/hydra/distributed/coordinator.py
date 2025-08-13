@@ -156,7 +156,8 @@ class DistributedCoordinator:
 
         # Resource monitoring
         self.resource_tracker = ResourceTracker(update_interval=2.0)
-        self.resource_tracker.start_monitoring()
+        # Don't start monitoring in __init__ to avoid thread creation issues in tests
+        self._monitoring_started = False
 
         # State persistence
         self.state_manager = HydraStateManager(self.state_dir.parent)
@@ -176,6 +177,11 @@ class DistributedCoordinator:
             return
 
         self.running = True
+        
+        # Start resource monitoring if not already started
+        if not self._monitoring_started:
+            self.resource_tracker.start_monitoring()
+            self._monitoring_started = True
 
         # Create HTTP session
         self.session = aiohttp.ClientSession(

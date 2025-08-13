@@ -83,6 +83,9 @@ class ParallelExecutor:
         self.file_lock_manager = get_file_lock_manager()
         from hydra.safety.claude_file_interceptor import SmartFileLockManager
         self.smart_lock_manager = SmartFileLockManager()
+        # Start deadlock monitoring for production use
+        if not os.environ.get('TESTING'):
+            self.smart_lock_manager.start_deadlock_monitoring()
 
         # Initialize artifact tracker for context passing
         self.artifact_tracker = ArtifactTracker(project_root)

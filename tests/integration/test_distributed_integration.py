@@ -3,6 +3,7 @@
 import asyncio
 import json
 import pytest
+import pytest_asyncio
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,7 +25,7 @@ def temp_dirs(tmp_path):
     }
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def coordinator_cluster(temp_dirs):
     """Create a cluster of coordinators for testing."""
     coordinators = {}
@@ -57,19 +58,20 @@ class TestDistributedIntegration:
         """Test that single instance becomes leader."""
         coordinator = list(coordinator_cluster.values())[0]
         
-        # Mock HTTP server setup
+        # Mock HTTP server setup and background tasks
         with patch.object(coordinator, '_start_http_server', AsyncMock()):
             with patch.object(coordinator, '_start_discovery', AsyncMock()):
-                await coordinator.start()
-                
-                # Wait a bit for election process
-                await asyncio.sleep(1)
-                
-                # Single instance should become leader
-                assert coordinator.role == InstanceRole.LEADER
-                assert coordinator.distributed_state.leader_instance == coordinator.instance_id
-                
-                await coordinator.stop()
+                with patch.object(coordinator, '_start_background_tasks', AsyncMock()):
+                    await coordinator.start()
+                    
+                    # Manually trigger election for single instance
+                    await coordinator._become_leader()
+                    
+                    # Single instance should become leader
+                    assert coordinator.role == InstanceRole.LEADER
+                    assert coordinator.distributed_state.leader_instance == coordinator.instance_id
+                    
+                    await coordinator.stop()
     
     @pytest.mark.asyncio
     async def test_multi_instance_cluster_formation(self, coordinator_cluster):

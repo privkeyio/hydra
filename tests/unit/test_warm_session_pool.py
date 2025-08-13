@@ -165,13 +165,16 @@ class TestWarmSessionPool:
             initial_stats = pool.get_stats()
             initial_created = initial_stats['sessions_created']
             
-            # Acquire and immediately release a session
+            # Acquire and release a session
             provider = pool.acquire_session()
             assert provider is not None
             pool.release_session(provider)
             
-            # Wait for recycling to kick in
-            time.sleep(2)
+            # Wait for session to become idle (longer than idle_timeout)
+            time.sleep(1.5)
+            
+            # Manually trigger recycling since background thread runs every 30s
+            pool._recycle_old_sessions()
             
             # Check that sessions were recycled
             final_stats = pool.get_stats()

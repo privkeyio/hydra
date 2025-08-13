@@ -871,7 +871,12 @@ class OutputHandlerFactory:
 
             return DefaultHandler()
 
-        return handler_class()
+        # Try to create with provider_name, fall back to no args
+        try:
+            return handler_class(provider_name)
+        except TypeError:
+            # Handler doesn't accept provider_name argument
+            return handler_class()
 
     @classmethod
     def register(cls, provider_name: str, handler_class: type) -> None:

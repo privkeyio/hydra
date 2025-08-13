@@ -261,7 +261,7 @@ class ResponseParser:
                 raise ValidationError(f"Potentially dangerous path: {path}")
 
         # Check for valid characters
-        if not re.match(r"^[\w\-./~]+$", path):
+        if not re.match(r"^[\w\-\./~]+$", path):
             raise ValidationError(f"Invalid characters in path: {path}")
 
     def _filter_dangerous_actions(self, actions: List[Action]) -> List[Action]:

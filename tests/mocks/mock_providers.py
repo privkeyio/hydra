@@ -13,13 +13,14 @@ class MockLLMProvider(LLMProvider):
     """Enhanced mock LLM provider with configurable responses and error simulation."""
     
     def __init__(self, config: LLMConfig, responses: Optional[Dict[str, str]] = None):
-        super().__init__(config)
+        # Initialize attributes before calling super() since validate_config() is called
         self.responses = responses or {}
         self.call_count = 0
         self.call_history = []
         self.error_rate = 0.0
         self.response_delay = 0.0
         self.should_fail = False
+        super().__init__(config)
         
     def validate_config(self):
         """Always validates successfully unless configured to fail."""

@@ -48,6 +48,9 @@ class ModelType(Enum):
     BALANCED = "balanced"
     SMART = "smart"
     AUTO = "auto"
+    SONNET = "sonnet"
+    OPUS = "opus"
+    HAIKU = "haiku"
 
 
 @dataclass

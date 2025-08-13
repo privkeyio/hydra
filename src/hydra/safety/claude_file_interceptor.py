@@ -315,9 +315,13 @@ class SmartFileLockManager:
     def start_deadlock_monitoring(self):
         """Start the deadlock monitoring thread if not already started."""
         if not self._deadlock_monitoring:
-            self._deadlock_thread = threading.Thread(target=self._deadlock_monitor, daemon=True)
-            self._deadlock_thread.start()
-            self._deadlock_monitoring = True
+            try:
+                self._deadlock_thread = threading.Thread(target=self._deadlock_monitor, daemon=True)
+                self._deadlock_thread.start()
+                self._deadlock_monitoring = True
+            except RuntimeError as e:
+                logger.warning(f"Could not start deadlock monitoring thread: {e}")
+                self._deadlock_monitoring = False
     
     def predict_file_modifications(self, agent_id: str, ticket_content: str) -> List[FileModification]:
         """Predict file modifications from ticket description with high accuracy."""

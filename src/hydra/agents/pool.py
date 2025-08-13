@@ -56,10 +56,14 @@ class AgentPool:
     def start(self):
         """Start the agent pool manager."""
         self._running = True
-        self._cleanup_thread = threading.Thread(target=self._cleanup_idle_agents)
-        self._cleanup_thread.daemon = True
-        self._cleanup_thread.start()
-        logger.info(f"Agent pool started with max {self.max_agents} agents")
+        try:
+            self._cleanup_thread = threading.Thread(target=self._cleanup_idle_agents)
+            self._cleanup_thread.daemon = True
+            self._cleanup_thread.start()
+            logger.info(f"Agent pool started with max {self.max_agents} agents")
+        except RuntimeError as e:
+            logger.warning(f"Could not start cleanup thread: {e}")
+            self._cleanup_thread = None
 
     def stop(self):
         """Stop the agent pool and terminate all agents."""

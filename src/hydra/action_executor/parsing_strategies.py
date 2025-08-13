@@ -52,19 +52,19 @@ class CodeBlockStrategy(ParsingStrategy):
     # Regex patterns for different code block formats
     PATTERNS = {
         "markdown_with_header": re.compile(
-            r"```(?P<lang>\w+)?\n#\s*file:\s*(?P<path>[\w\-./]+)\n(?P<content>.*?)```",
+            r"```(?P<lang>\w+)?\n#\s*file:\s*(?P<path>[\w\-\./]+)\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE,
         ),
         "create_file_instruction": re.compile(
-            r"(?:Create|Write|Add)\s+(?:file\s+)?(?P<path>[\w\-./]+):\s*\n```(?:\w+)?\n(?P<content>.*?)```",
+            r"(?:Create|Write|Add)\s+(?:file\s+)?(?P<path>[\w\-\./]+):\s*\n```(?:\w+)?\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE | re.IGNORECASE,
         ),
         "modify_file_instruction": re.compile(
-            r"(?:Modify|Update|Edit|Change)\s+(?:file\s+)?(?P<path>[\w\-./]+):\s*\n```(?:\w+)?\n(?P<content>.*?)```",
+            r"(?:Modify|Update|Edit|Change)\s+(?:file\s+)?(?P<path>[\w\-\./]+):\s*\n```(?:\w+)?\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE | re.IGNORECASE,
         ),
         "file_path_comment": re.compile(
-            r"```(?P<lang>\w+)?\n(?://|#|--)\s*(?P<path>[\w\-./]+)\n(?P<content>.*?)```",
+            r"```(?P<lang>\w+)?\n(?://|#|--)\s*(?P<path>[\w\-\./]+)\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE,
         ),
     }

@@ -257,10 +257,18 @@ class ModelRouter:
 
             if confidence < self.config['confidence_threshold']:
                 selected_model = self.config['fallback_model']
+            
+            # Fallback to default model if still None
+            if not selected_model:
+                selected_model = "claude-3-5-sonnet-20241022"
 
-            estimated_cost = self.cost_estimator.estimate_cost(
-                selected_model, task_description, expected_output_tokens
-            )
+            # Only estimate cost if we have a valid model
+            if selected_model:
+                estimated_cost = self.cost_estimator.estimate_cost(
+                    selected_model, task_description, expected_output_tokens
+                )
+            else:
+                estimated_cost = 0.0
 
             reasoning = f"Complexity: {complexity.value}, Confidence: {confidence:.2f}"
             if self.config['cost_optimization_enabled']:

@@ -26,7 +26,7 @@ class TestFileModification:
         
         assert mod.agent_id == "agent1"
         assert mod.operation == OperationType.EDIT
-        assert "imports" in mod.predicted_changes
+        assert "import_statements" in mod.predicted_changes
         assert mod.priority == 1
         
     def test_change_analysis(self):
@@ -34,7 +34,7 @@ class TestFileModification:
         # Test import detection
         mod = FileModification("agent1", "test.py", OperationType.EDIT, 
                              "Add import statements for new modules")
-        assert "imports" in mod.predicted_changes
+        assert "import_statements" in mod.predicted_changes
         
         # Test class/function detection
         mod = FileModification("agent1", "test.py", OperationType.EDIT,

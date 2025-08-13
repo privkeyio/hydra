@@ -57,27 +57,27 @@ class ModelMapper:
                 ),
                 ModelCategory.BALANCED: ModelMapping(
                     category=ModelCategory.BALANCED,
-                    provider_model="claude-sonnet-4-20250514",
-                    display_name="Claude Sonnet 4",
+                    provider_model="claude-3-5-sonnet-20241022",
+                    display_name="Claude 3.5 Sonnet",
                     context_window=200000,
                     max_output_tokens=8192,
-                    relative_cost=0.5
+                    relative_cost=0.3
                 ),
                 ModelCategory.SMART: ModelMapping(
                     category=ModelCategory.SMART,
-                    provider_model="claude-opus-4-1-20250805",
-                    display_name="Claude Opus 4.1",
+                    provider_model="claude-3-opus-20240229",
+                    display_name="Claude 3 Opus",
                     context_window=200000,
-                    max_output_tokens=8192,
+                    max_output_tokens=4096,
                     relative_cost=1.0
                 ),
                 ModelCategory.CODER: ModelMapping(
                     category=ModelCategory.CODER,
-                    provider_model="claude-sonnet-4-20250514",
-                    display_name="Claude Sonnet 4",
+                    provider_model="claude-3-5-sonnet-20241022",
+                    display_name="Claude 3.5 Sonnet",
                     context_window=200000,
                     max_output_tokens=8192,
-                    relative_cost=0.5
+                    relative_cost=0.3
                 ),
             },
             "venice": {
@@ -112,6 +112,40 @@ class ModelMapper:
                     context_window=32768,
                     max_output_tokens=4096,
                     relative_cost=0.15
+                ),
+            },
+            "mock": {
+                ModelCategory.FAST: ModelMapping(
+                    category=ModelCategory.FAST,
+                    provider_model="mock-fast-model",
+                    display_name="Mock Fast Model",
+                    context_window=4096,
+                    max_output_tokens=2048,
+                    relative_cost=0.1
+                ),
+                ModelCategory.BALANCED: ModelMapping(
+                    category=ModelCategory.BALANCED,
+                    provider_model="mock-balanced-model",
+                    display_name="Mock Balanced Model",
+                    context_window=8192,
+                    max_output_tokens=4096,
+                    relative_cost=0.3
+                ),
+                ModelCategory.SMART: ModelMapping(
+                    category=ModelCategory.SMART,
+                    provider_model="mock-smart-model",
+                    display_name="Mock Smart Model",
+                    context_window=16384,
+                    max_output_tokens=8192,
+                    relative_cost=0.8
+                ),
+                ModelCategory.CODER: ModelMapping(
+                    category=ModelCategory.CODER,
+                    provider_model="mock-coder-model",
+                    display_name="Mock Coder Model",
+                    context_window=16384,
+                    max_output_tokens=8192,
+                    relative_cost=0.6
                 ),
             },
         }
@@ -237,6 +271,8 @@ class ModelMapper:
             Model category or None
 
         """
+        if not model_name:
+            return None
         model_name = model_name.strip().lower()
 
         # Check legacy mappings

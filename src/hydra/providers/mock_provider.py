@@ -168,6 +168,11 @@ class MockProvider(BaseProvider):
             return True
         return False
 
+    def count_tokens(self, text: str) -> int:
+        """Count tokens in text (mock implementation)."""
+        # Simple mock implementation: assume ~4 characters per token
+        return max(1, len(text) // 4)
+
     def list_models(self) -> List[ModelInfo]:
         """Return mock models with full metadata."""
         return [

@@ -101,8 +101,13 @@ class HydraStateManager:
                     except Exception as e:
                         self._log_error(f"Auto-save failed: {e}")
 
-        self._auto_save_thread = threading.Thread(target=auto_save_worker, daemon=True)
-        self._auto_save_thread.start()
+        try:
+            self._auto_save_thread = threading.Thread(target=auto_save_worker, daemon=True)
+            self._auto_save_thread.start()
+        except RuntimeError as e:
+            # Handle thread creation failure gracefully in test environments
+            self._log_error(f"Could not start auto-save thread: {e}")
+            self._auto_save_thread = None
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""

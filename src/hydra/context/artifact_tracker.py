@@ -226,7 +226,7 @@ class ArtifactTracker:
 
         # Add context from filename
         if 'test' in name.lower():
-            return f"Test {base_desc.lower()}"
+            return f"Test {base_desc}"
         elif 'config' in name.lower():
             return "Configuration file"
         elif 'spec' in name.lower():

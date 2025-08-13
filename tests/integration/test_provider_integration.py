@@ -268,8 +268,7 @@ class TestProviderSwitching:
 
         # Create fallback provider (wraps multiple providers)
         fallback_config = {
-            "primary": "mock_provider",
-            "fallbacks": ["mock_provider"],
+            "fallback_providers": ["mock_provider"],
             "model": "mock-fast"
         }
         fallback_provider = factory.create("fallback", fallback_config)
@@ -582,8 +581,7 @@ class TestProviderErrorHandling:
         """Test fallback provider on errors."""
         fallback = FallbackProvider({
             "provider": "fallback",
-            "primary": "failing_provider",
-            "fallbacks": ["mock"]
+            "fallback_providers": ["failing_provider", "mock"]
         })
 
         # Should fall back to mock
@@ -629,8 +627,8 @@ class TestEndToEndWorkflow:
         from hydra.agents.base import CodeAgent
 
         agent = CodeAgent("test_task")
-        assert agent.provider is not None
-        assert agent.provider.name == "mock"
+        assert agent.llm_provider is not None
+        assert agent.llm_provider.name == "mock"
 
         # Test agent operations
         response = agent.reason("Analyze this problem")

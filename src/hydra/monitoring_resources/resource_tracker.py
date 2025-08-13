@@ -152,7 +152,7 @@ class APICallTracker:
                 self.call_history[key].popleft()
 
             # Check rate limit
-            limit = self.rate_limits.get(provider, self.rate_limits['default'])
+            limit = self.rate_limits.get(provider, self.rate_limits.get('default', 60))
             if len(self.call_history[key]) >= limit:
                 count = len(self.call_history[key])
                 msg = f"Rate limit exceeded for {key}: {count} >= {limit}"

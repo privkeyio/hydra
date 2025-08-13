@@ -34,7 +34,12 @@ class FallbackProvider(BaseProvider):
         """
         # Initialize attributes before calling super().__init__
         # Get fallback providers from config
-        self.provider_names = config.extra_params.get('fallback_providers', [])
+        if hasattr(config, 'extra_params'):
+            self.provider_names = config.extra_params.get('fallback_providers', [])
+        elif isinstance(config, dict):
+            self.provider_names = config.get('fallback_providers', [])
+        else:
+            self.provider_names = []
         if not self.provider_names:
             # Default fallback order
             self.provider_names = ['claude_tmux', 'venice', 'mock']

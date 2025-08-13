@@ -88,6 +88,8 @@ class FileModification:
             changes.add('tests')
         if 'style' in content or 'format' in content:
             changes.add('formatting')
+        if 'rewrite' in content or 'refactor' in content:
+            changes.add('major_restructure')
 
         return changes
 

@@ -119,13 +119,19 @@ class WorkStealingScheduler:
             return
 
         self.running = True
-        self.rebalance_thread = threading.Thread(
-            target=self._rebalance_loop,
-            daemon=True,
-            name="WorkStealingRebalancer"
-        )
-        self.rebalance_thread.start()
-        logger.info("Work stealing scheduler started")
+        try:
+            self.rebalance_thread = threading.Thread(
+                target=self._rebalance_loop,
+                daemon=True,
+                name="WorkStealingRebalancer"
+            )
+            self.rebalance_thread.start()
+            logger.info("Work stealing scheduler started")
+        except RuntimeError as e:
+            # Handle thread creation failures gracefully (e.g., in test environments)
+            logger.warning(f"Failed to start rebalance thread: {e}")
+            self.rebalance_thread = None
+            # Scheduler can still work without background rebalancing
 
     def stop(self):
         """Stop the scheduler and cleanup resources."""

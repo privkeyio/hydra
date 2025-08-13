@@ -117,22 +117,30 @@ class WarmSessionPool:
 
     def _start_background_threads(self):
         """Start background maintenance threads."""
-        self._health_checker_running = True
-        self._recycler_running = True
+        try:
+            self._health_checker_running = True
+            self._recycler_running = True
 
-        self._health_thread = threading.Thread(
-            target=self._health_check_loop,
-            daemon=True,
-            name="WarmPool-HealthChecker"
-        )
-        self._health_thread.start()
+            self._health_thread = threading.Thread(
+                target=self._health_check_loop,
+                daemon=True,
+                name="WarmPool-HealthChecker"
+            )
+            self._health_thread.start()
 
-        self._recycler_thread = threading.Thread(
-            target=self._recycler_loop,
-            daemon=True,
-            name="WarmPool-Recycler"
-        )
-        self._recycler_thread.start()
+            self._recycler_thread = threading.Thread(
+                target=self._recycler_loop,
+                daemon=True,
+                name="WarmPool-Recycler"
+            )
+            self._recycler_thread.start()
+        except RuntimeError as e:
+            # Handle thread creation failures gracefully (e.g., in test environments)
+            logger.warning(f"Failed to start background threads: {e}")
+            self._health_checker_running = False
+            self._recycler_running = False
+            self._health_thread = None
+            self._recycler_thread = None
 
     def _warm_initial_pool(self):
         """Pre-warm the initial pool of sessions."""

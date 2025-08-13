@@ -8,6 +8,8 @@ import subprocess
 from pathlib import Path
 from typing import List, Tuple
 
+from hydra.quality.ai_detection import AIGeneratedCodeDetector
+
 
 class QualityAutoFixer:
     """Automatically fixes common quality issues."""
@@ -23,6 +25,12 @@ class QualityAutoFixer:
 
         """
         fixes = []
+        
+        # Check for AI-generated code first - this can't be auto-fixed
+        ai_issues = self._check_ai_generated_code()
+        if ai_issues:
+            fixes.append(("AI-generated code detected", False, 
+                         f"Found {len(ai_issues)} AI-generated patterns that need manual review"))
 
         # Fix 1: Add missing __init__.py files
         fixes.extend(self._add_missing_init_files())
@@ -198,3 +206,23 @@ class QualityAutoFixer:
             return result.returncode == 0
         except:
             return True  # Assume OK if can't validate
+    
+    def _check_ai_generated_code(self) -> List:
+        """Check for AI-generated code patterns in recent changes."""
+        try:
+            # Get git diff
+            git_diff = subprocess.run(
+                ["git", "diff", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root
+            )
+            
+            if git_diff.returncode != 0:
+                return []
+            
+            detector = AIGeneratedCodeDetector()
+            issues = detector.detect_in_diff(git_diff.stdout)
+            return issues
+        except Exception:
+            return []

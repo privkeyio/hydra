@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from hydra.intelligence.model_selector import create_enhanced_model_prompt
 from hydra.monitoring import monitoring
+from hydra.quality.ai_detection import AIGeneratedCodeDetector
 
 
 class SharedWorkspace:
@@ -567,12 +568,50 @@ Project: {project_description}"""
         return False
 
 
+def check_for_ai_generated_code(project_dir):
+    """Check for AI-generated code patterns in recent git changes."""
+    try:
+        # Get the git diff for recent changes
+        git_diff = subprocess.run(
+            ["git", "diff", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=project_dir
+        )
+        
+        if git_diff.returncode != 0:
+            return []
+        
+        detector = AIGeneratedCodeDetector()
+        issues = detector.detect_in_diff(git_diff.stdout)
+        
+        # Format issues for display
+        formatted_issues = []
+        for issue in issues:
+            formatted_issues.append(
+                f"{issue['file']}:{issue['line']} - {issue['pattern']}"
+            )
+        
+        return formatted_issues
+    except Exception:
+        return []
+
+
 def validate_acceptance_criteria(ticket, project_dir):
     """Validate that acceptance criteria were actually implemented."""
     criteria = ticket['acceptance_criteria']
     failed_criteria = []
 
     print(f"🔍 Checking {len(criteria)} acceptance criteria:")
+    
+    # First, check for AI-generated code patterns in recent changes
+    ai_issues = check_for_ai_generated_code(project_dir)
+    if ai_issues:
+        print("\n⚠️  WARNING: AI-generated code patterns detected!")
+        for issue in ai_issues[:5]:  # Show first 5 issues
+            print(f"   • {issue}")
+        # Add to failed criteria
+        failed_criteria.append("AI-generated or placeholder code detected")
 
     for i, criterion in enumerate(criteria, 1):
         criterion_lower = criterion.lower()
@@ -687,7 +726,9 @@ def validate_acceptance_criteria(ticket, project_dir):
                 print(f"   ❌ {i}. npm install check failed: {e}")
 
         # Generic file checks - use proper validation
-        elif any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
+        # But skip if it's about saving/writing to existing files or using functions
+        elif (any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']) and 
+              not any(keyword in criterion_lower for keyword in ['save', 'write', 'using', 'update', 'modify', 'persist', 'call', 'invoke', 'existing'])):
             from hydra.verification.ticket_verifier import TicketVerifier
             verifier = TicketVerifier(project_dir)
             result = verifier._verify_file_exists(criterion)

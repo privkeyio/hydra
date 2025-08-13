@@ -24,7 +24,7 @@ class TestVeniceProviderIntegration:
     def venice_config(self):
         """Create a test Venice configuration."""
         return LLMConfig(
-            provider="venice",
+            provider_type="venice",
             model="llama-3.1-8b",
             api_key="test-api-key",
             base_url="https://api.venice.ai/api/v1",
@@ -348,7 +348,7 @@ class TestVeniceProviderEdgeCases:
     def venice_provider(self):
         """Create a Venice provider with minimal config."""
         config = LLMConfig(
-            provider="venice",
+            provider_type="venice",
             api_key="test-key",
         )
         with patch("hydra.providers.venice.OpenAI"), \

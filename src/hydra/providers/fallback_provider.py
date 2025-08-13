@@ -12,7 +12,7 @@ from .base_provider import (
     ParsedResponse,
     Session,
 )
-from .error_handler import ErrorSeverity, get_error_handler
+from .error_handler import ErrorCategory, ErrorSeverity, get_error_handler
 from .factory import LLMProviderFactory
 
 logger = logging.getLogger(__name__)
@@ -223,9 +223,15 @@ class FallbackProvider(BaseProvider):
                     logger.info(f"Retrying {method_name} on {provider_name}")
                     continue
 
-                else:
-                    # Non-retryable, non-critical error - propagate
+                elif error.category == ErrorCategory.INVALID_REQUEST:
+                    # Invalid request errors should be propagated immediately
                     raise
+
+                else:
+                    # Other errors: try fallback to next provider
+                    logger.info(f"Provider {provider_name} failed, trying next provider")
+                    if not self._fallback_to_next():
+                        break
 
         # All providers failed
         if last_error:

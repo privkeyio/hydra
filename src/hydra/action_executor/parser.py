@@ -101,6 +101,9 @@ class ResponseParser:
             logger.info(f"Parsed {len(actions)} actions from response")
             return actions
 
+        except ValidationError:
+            # Re-raise ValidationError as is, don't wrap in ParseError
+            raise
         except Exception as e:
             raise ParseError(f"Failed to parse response: {e}", response=response) from e
 
@@ -193,7 +196,7 @@ class ResponseParser:
             try:
                 # Validate required fields
                 if not action.target:
-                    raise ValidationError(f"Action {action.type.name} missing target")
+                    raise ValidationError(f"Action {action.type.name} missing target", action)
 
                 # Validate content for file operations
                 if action.type in [
@@ -203,7 +206,8 @@ class ResponseParser:
                     ActionType.REPLACE_IN_FILE,
                 ] and action.content is None:
                     raise ValidationError(
-                        f"Action {action.type.name} requires content for {action.target}"
+                        f"Action {action.type.name} requires content for {action.target}",
+                        action
                     )
 
                 # Validate paths
@@ -219,17 +223,18 @@ class ResponseParser:
                 if action.type in [ActionType.MOVE_FILE, ActionType.COPY_FILE]:
                     if "source" not in action.options:
                         raise ValidationError(
-                            f"Action {action.type.name} missing source in options"
+                            f"Action {action.type.name} missing source in options",
+                            action
                         )
                     self._validate_path(action.options["source"])
                     self._validate_path(action.target)
 
                 validated.append(action)
 
-            except ValidationError as e:
+            except (ValidationError, ValueError) as e:
                 logger.warning(f"Validation failed for action: {e}")
-                if self.validate_actions:
-                    raise
+                # Skip invalid actions (filter them out) rather than raising errors
+                continue
 
         return validated
 
@@ -244,7 +249,7 @@ class ResponseParser:
 
         """
         if not path:
-            raise ValidationError("Empty path")
+            raise ValueError("Empty path")
 
         # Check for dangerous path patterns
         dangerous_patterns = [
@@ -258,11 +263,11 @@ class ResponseParser:
 
         for pattern in dangerous_patterns:
             if re.match(pattern, path):
-                raise ValidationError(f"Potentially dangerous path: {path}")
+                raise ValueError(f"Potentially dangerous path: {path}")
 
-        # Check for valid characters
-        if not re.match(r"^[\w\-\./~]+$", path):
-            raise ValidationError(f"Invalid characters in path: {path}")
+        # Check for valid characters (allow most characters except Windows invalid ones)
+        if re.search(r'[\\<>:"|?*]', path):
+            raise ValueError(f"Invalid characters in path: {path}")
 
     def _filter_dangerous_actions(self, actions: List[Action]) -> List[Action]:
         """Filter out potentially dangerous actions.

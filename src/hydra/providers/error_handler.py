@@ -234,6 +234,10 @@ class ProviderErrorHandler:
         if any(x in error_str for x in ['init', 'setup', 'config', 'not found at']):
             return ErrorCategory.INITIALIZATION, ErrorSeverity.CRITICAL
 
+        # Critical errors
+        if any(x in error_str for x in ['critical', 'fatal', 'severe']):
+            return ErrorCategory.UNKNOWN, ErrorSeverity.CRITICAL
+
         # Default
         return ErrorCategory.UNKNOWN, ErrorSeverity.MEDIUM
 

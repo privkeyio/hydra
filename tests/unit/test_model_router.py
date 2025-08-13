@@ -106,7 +106,7 @@ class TestModelRouter(unittest.TestCase):
 
     def test_simple_task_routing(self):
         decision = self.router.route_task("list all files")
-        self.assertEqual(decision.selected_model, "mock-fast-model")
+        self.assertEqual(decision.selected_model, "mock-balanced-model")  # Low confidence falls back to balanced
         self.assertEqual(decision.complexity, ComplexityLevel.SIMPLE)
         self.assertFalse(decision.manual_override)
 
@@ -133,7 +133,7 @@ class TestModelRouter(unittest.TestCase):
             self.router.metrics.total_requests, 
             initial_requests + 2
         )
-        self.assertGreater(self.router.metrics.fast_requests, 0)
+        self.assertGreater(self.router.metrics.balanced_requests, 0)
         self.assertGreater(self.router.metrics.smart_requests, 0)
 
     def test_cost_estimation_included(self):

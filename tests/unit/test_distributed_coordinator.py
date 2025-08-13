@@ -142,9 +142,21 @@ class TestDistributedCoordinator:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={'task_id': 'forwarded-task-123'})
         
-        coordinator.session = AsyncMock()
-        coordinator.session.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-        coordinator.session.post.return_value.__aexit__ = AsyncMock(return_value=None)
+        # Create a real async context manager instead of mocking the protocol methods
+        from unittest.mock import MagicMock
+        
+        class MockAsyncResponse:
+            def __init__(self, response):
+                self._response = response
+                
+            async def __aenter__(self):
+                return self._response
+                
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                return None
+        
+        coordinator.session = MagicMock()
+        coordinator.session.post.return_value = MockAsyncResponse(mock_response)
         
         task_id = await coordinator.submit_task("002", "Forwarded task")
         
@@ -297,11 +309,22 @@ class TestDistributedCoordinator:
         coordinator.distributed_state.instances["leader-1"] = leader
         
         # Mock unreachable leader
-        coordinator.session = AsyncMock()
+        coordinator.session = MagicMock()
         mock_response = AsyncMock()
         mock_response.status = 500  # Connection failed
-        coordinator.session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-        coordinator.session.get.return_value.__aexit__ = AsyncMock(return_value=None)
+        
+        # Use the same MockAsyncResponse class from above
+        class MockAsyncResponse:
+            def __init__(self, response):
+                self._response = response
+                
+            async def __aenter__(self):
+                return self._response
+                
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                return None
+        
+        coordinator.session.get.return_value = MockAsyncResponse(mock_response)
         
         with patch.object(coordinator, '_trigger_election', AsyncMock()) as mock_election:
             await coordinator.handle_network_partition()

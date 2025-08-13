@@ -137,7 +137,7 @@ class TestBatchProcessingComponents(unittest.TestCase):
         from hydra.parallel.batch_executor import BatchExecutor, BatchConfig
         
         # Mock the dependencies that cause circular imports
-        with patch('hydra.parallel.batch_executor.get_file_lock_manager'), \
+        with patch('hydra.safety.get_file_lock_manager'), \
              patch('hydra.agents.pool.AgentPool') as mock_pool:
             
             mock_pool_instance = MagicMock()

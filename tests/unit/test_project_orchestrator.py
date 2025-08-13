@@ -226,17 +226,25 @@ class TestProjectOrchestrator:
         assert len(orchestrator.completed_tasks) == 0
     
     def test_select_model_for_task_auto(self, simple_spec, mock_config):
+        # Set environment to use mock provider for testing
+        import os
+        os.environ['LLM_PROVIDER'] = 'mock'
+        
         orchestrator = ProjectOrchestrator(simple_spec, mock_config)
         
         simple_task = simple_spec.tasks[0]
         model = orchestrator._select_model_for_task(simple_task)
-        assert "sonnet" in model.lower()
+        assert "mock-fast-model" in model.lower()
         
         complex_task = simple_spec.tasks[1]
         model = orchestrator._select_model_for_task(complex_task)
-        assert "opus" in model.lower()
+        assert "mock-smart-model" in model.lower()
     
     def test_select_model_for_task_manual(self, mock_config):
+        # Set environment to use mock provider for testing
+        import os
+        os.environ['LLM_PROVIDER'] = 'mock'
+        
         task = TaskNode(
             id="task1",
             name="Task",
@@ -247,7 +255,7 @@ class TestProjectOrchestrator:
         orchestrator = ProjectOrchestrator(spec, mock_config)
         
         model = orchestrator._select_model_for_task(task)
-        assert "opus" in model.lower()
+        assert "mock-smart-model" in model.lower()
     
     def test_analyze_task_complexity(self, mock_config):
         spec = ProjectSpecification(name="Test", description="Test", tasks=[])

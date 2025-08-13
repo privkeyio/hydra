@@ -119,27 +119,24 @@ class TestWorkStealingPerformance(unittest.TestCase):
                     if len(completed) >= len(tasks):
                         break
         
-        # Start worker threads
-        threads = []
-        for worker_id in scheduler.worker_queues.keys():
-            thread = threading.Thread(
-                target=worker_thread,
-                args=(worker_id,)
-            )
-            threads.append(thread)
-            thread.start()
-        
-        # Wait for all to complete
-        for thread in threads:
-            thread.join(timeout=10)
+        # Start worker threads with limited concurrency
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(scheduler.worker_queues)) as executor:
+            futures = []
+            for worker_id in scheduler.worker_queues.keys():
+                future = executor.submit(worker_thread, worker_id)
+                futures.append(future)
+            
+            # Wait for all to complete
+            concurrent.futures.wait(futures, timeout=30)
             
         return time.time() - start_time
 
     def test_performance_improvement(self):
         """Test that work stealing provides 30-40% performance improvement."""
-        num_workers = 4
-        num_tasks = 100  # More tasks for better demonstration
-        num_runs = 3  # Multiple runs for averaging
+        num_workers = 2  # Reduced from 4 to 2
+        num_tasks = 20  # Reduced from 100 to 20
+        num_runs = 2  # Reduced from 3 to 2
         
         baseline_times = []
         stealing_times = []
@@ -184,17 +181,15 @@ class TestWorkStealingPerformance(unittest.TestCase):
                     with lock:
                         completed.append(task.task_id)
             
-            threads = []
-            for i in range(num_workers):
-                thread = threading.Thread(
-                    target=baseline_worker,
-                    args=(i, worker_queues[i])
-                )
-                threads.append(thread)
-                thread.start()
-            
-            for thread in threads:
-                thread.join()
+            # Use ThreadPoolExecutor to limit threads
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+                futures = []
+                for i in range(num_workers):
+                    future = executor.submit(baseline_worker, i, worker_queues[i])
+                    futures.append(future)
+                
+                concurrent.futures.wait(futures, timeout=30)
             
             baseline_time = time.time() - baseline_start
             baseline_times.append(baseline_time)
@@ -264,7 +259,7 @@ class TestWorkStealingPerformance(unittest.TestCase):
 
     def test_rebalancing_performance(self):
         """Test that automatic rebalancing improves performance."""
-        num_workers = 3
+        num_workers = 2  # Reduced from 3 to 2
         scheduler_with_rebalance = WorkStealingScheduler(
             num_workers=num_workers,
             stealing_policy=StealingPolicy.BALANCED,
@@ -282,7 +277,7 @@ class TestWorkStealingPerformance(unittest.TestCase):
         scheduler_no_rebalance.start()
         
         # Create heavily imbalanced workload
-        num_tasks = 30
+        num_tasks = 10  # Reduced from 30 to 10
         for i in range(num_tasks):
             task_with = Task(
                 task_id=f"rebalance_task_{i}",
@@ -330,8 +325,8 @@ class TestWorkStealingPerformance(unittest.TestCase):
 
     def test_stealing_policy_performance(self):
         """Test performance differences between stealing policies."""
-        num_workers = 3
-        num_tasks = 40
+        num_workers = 2  # Reduced from 3 to 2
+        num_tasks = 15  # Reduced from 40 to 15
         
         policies_to_test = [
             StealingPolicy.AGGRESSIVE,

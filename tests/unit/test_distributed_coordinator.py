@@ -144,6 +144,7 @@ class TestDistributedCoordinator:
         
         coordinator.session = AsyncMock()
         coordinator.session.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+        coordinator.session.post.return_value.__aexit__ = AsyncMock(return_value=None)
         
         task_id = await coordinator.submit_task("002", "Forwarded task")
         
@@ -300,6 +301,7 @@ class TestDistributedCoordinator:
         mock_response = AsyncMock()
         mock_response.status = 500  # Connection failed
         coordinator.session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+        coordinator.session.get.return_value.__aexit__ = AsyncMock(return_value=None)
         
         with patch.object(coordinator, '_trigger_election', AsyncMock()) as mock_election:
             await coordinator.handle_network_partition()
@@ -518,7 +520,8 @@ async def test_http_handlers(coordinator, temp_state_dir):
         'term': 1,
         'timestamp': time.time()
     }
-    request = make_mocked_request('POST', '/heartbeat', json=heartbeat_data)
+    request = make_mocked_request('POST', '/heartbeat')
+    request.json = AsyncMock(return_value=heartbeat_data)
     response = await coordinator._handle_heartbeat(request)
     
     assert response.status == 200
@@ -531,7 +534,8 @@ async def test_http_handlers(coordinator, temp_state_dir):
         'term': 2,
         'timestamp': time.time()
     }
-    request = make_mocked_request('POST', '/vote_request', json=vote_data)
+    request = make_mocked_request('POST', '/vote_request')
+    request.json = AsyncMock(return_value=vote_data)
     response = await coordinator._handle_vote_request(request)
     
     assert response.status == 200

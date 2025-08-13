@@ -99,11 +99,14 @@ class TestCostEstimator(unittest.TestCase):
 
 class TestModelRouter(unittest.TestCase):
     def setUp(self):
+        # Set environment to use mock provider for testing
+        import os
+        os.environ['LLM_PROVIDER'] = 'mock'
         self.router = ModelRouter()
 
     def test_simple_task_routing(self):
         decision = self.router.route_task("list all files")
-        self.assertEqual(decision.selected_model, "claude-3-5-sonnet-20241022")
+        self.assertEqual(decision.selected_model, "mock-fast-model")
         self.assertEqual(decision.complexity, ComplexityLevel.SIMPLE)
         self.assertFalse(decision.manual_override)
 
@@ -115,23 +118,23 @@ class TestModelRouter(unittest.TestCase):
     def test_manual_override(self):
         decision = self.router.route_task(
             "simple task", 
-            manual_model="claude-3-opus-20240229"
+            manual_model="mock-smart-model"
         )
-        self.assertEqual(decision.selected_model, "claude-3-opus-20240229")
+        self.assertEqual(decision.selected_model, "mock-smart-model")
         self.assertTrue(decision.manual_override)
 
     def test_metrics_tracking(self):
         initial_requests = self.router.metrics.total_requests
         
         self.router.route_task("simple task")
-        self.router.route_task("prepare for production deployment", manual_model="claude-3-opus-20240229")
+        self.router.route_task("prepare for production deployment", manual_model="mock-smart-model")
         
         self.assertEqual(
             self.router.metrics.total_requests, 
             initial_requests + 2
         )
-        self.assertGreater(self.router.metrics.sonnet_requests, 0)
-        self.assertGreater(self.router.metrics.opus_requests, 0)
+        self.assertGreater(self.router.metrics.fast_requests, 0)
+        self.assertGreater(self.router.metrics.smart_requests, 0)
 
     def test_cost_estimation_included(self):
         decision = self.router.route_task("create a function")
@@ -139,24 +142,24 @@ class TestModelRouter(unittest.TestCase):
         self.assertIn("cost", decision.reasoning.lower())
 
     def test_routing_stats(self):
-        self.router.route_task("simple task")  # Sonnet
-        self.router.route_task("complex architecture")  # Opus
+        self.router.route_task("simple task")  # Fast model
+        self.router.route_task("complex architecture")  # Smart model
         
         stats = self.router.get_routing_stats()
         
         self.assertIn('total_requests', stats)
-        self.assertIn('sonnet_percentage', stats)
-        self.assertIn('opus_percentage', stats)
+        self.assertIn('fast_percentage', stats)
+        self.assertIn('smart_percentage', stats)
         self.assertIn('estimated_total_cost', stats)
 
     def test_config_loading(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             config = {
                 "routing_rules": {
-                    "simple": "claude-3-opus-20240229",
-                    "moderate": "claude-3-opus-20240229",
-                    "complex": "claude-3-opus-20240229",
-                    "critical": "claude-3-opus-20240229"
+                    "simple": "mock-smart-model",
+                    "moderate": "mock-smart-model",
+                    "complex": "mock-smart-model",
+                    "critical": "mock-smart-model"
                 }
             }
             json.dump(config, f)
@@ -217,7 +220,7 @@ class TestModelRouter(unittest.TestCase):
         
         decision = router.route_task("ambiguous task description")
         
-        self.assertEqual(decision.selected_model, "claude-3-5-sonnet-20241022")
+        self.assertEqual(decision.selected_model, "mock-balanced-model")
 
     def test_context_aware_routing(self):
         context = {

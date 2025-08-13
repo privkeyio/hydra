@@ -67,6 +67,10 @@ class CodeBlockStrategy(ParsingStrategy):
             r"```(?P<lang>\w+)?\n(?://|#|--)\s*(?P<path>[\w\-\./]+)\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE,
         ),
+        "simple_comment_pattern": re.compile(
+            r"```(?P<lang>\w+)?\n#\s*(?P<path>[\w\-\./]+)\n(?P<content>.*?)```",
+            re.DOTALL | re.MULTILINE,
+        ),
     }
 
     def extract_actions(self, response: str) -> List[Action]:

@@ -197,12 +197,16 @@ class VeniceProvider(BaseProvider):
                 {"role": "user", "content": prompt}
             ]
 
+            # Filter out conflicting parameters from extra_params
+            filtered_extra_params = {k: v for k, v in self.config.extra_params.items() 
+                                   if k not in ['temperature', 'max_tokens', 'model', 'messages']}
+            
             response = self.client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **self.config.extra_params
+                **filtered_extra_params
             )
 
             return response.choices[0].message.content
@@ -732,12 +736,16 @@ class VeniceProvider(BaseProvider):
                 {"role": "user", "content": prompt}
             ]
 
+            # Filter out conflicting parameters from extra_params
+            filtered_extra_params = {k: v for k, v in self.config.extra_params.items() 
+                                   if k not in ['temperature', 'max_tokens', 'model', 'messages']}
+            
             response = await self.async_client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **self.config.extra_params
+                **filtered_extra_params
             )
 
             return response.choices[0].message.content

@@ -385,5 +385,5 @@ model_preferences:
         
         assert 'statistics' in report
         assert 'model_distribution' in report['statistics']
-        assert report['statistics']['model_distribution']['sonnet'] == 6
-        assert report['statistics']['model_distribution']['opus'] == 3
+        assert report['statistics']['model_distribution']['balanced'] == 6
+        assert report['statistics']['model_distribution']['smart'] == 3

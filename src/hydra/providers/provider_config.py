@@ -49,6 +49,7 @@ class ProviderConfig:
     base_url: Optional[str] = None
     cli_path: Optional[str] = None
     extra_params: Dict[str, Any] = field(default_factory=dict)
+    fallback_providers: List[str] = field(default_factory=list)
 
     def to_llm_config(self) -> LLMConfig:
         """Convert to LLMConfig for provider initialization."""
@@ -329,7 +330,8 @@ class ProviderConfigManager:
             api_key=api_key,
             base_url=base_url,
             cli_path=cli_path,
-            extra_params=config_dict.get('extra_params', {})
+            extra_params=config_dict.get('extra_params', {}),
+            fallback_providers=config_dict.get('fallback_providers', [])
         )
 
         # Validate configuration

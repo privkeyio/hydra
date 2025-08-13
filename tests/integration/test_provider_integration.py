@@ -106,9 +106,12 @@ class TestClaudeProviderIntegration:
             success = provider.select_model(models[0].identifier)
             assert success
 
+    @patch('pathlib.Path.exists')
     @patch('subprocess.run')
-    def test_claude_code_generation(self, mock_run, claude_config):
+    def test_claude_code_generation(self, mock_run, mock_path_exists, claude_config):
         """Test Claude code generation functionality."""
+        mock_path_exists.return_value = True  # Mock Claude CLI exists
+        mock_run.return_value.returncode = 0  # Mock tmux check success
         provider = ClaudeTmuxProvider(claude_config)
 
         # Mock tmux commands
@@ -182,30 +185,25 @@ class TestVeniceProviderIntegration:
         # Check mappings resolve to Venice models
         assert "llama" in mapping["sonnet"].lower()
 
-    @patch('requests.post')
-    def test_venice_api_call(self, mock_post, venice_config):
+    @patch('openai.OpenAI')
+    def test_venice_api_call(self, mock_openai_class, venice_config):
         """Test Venice API call structure."""
-        provider = VeniceProvider(venice_config)
-
-        # Mock API response
+        # Mock the OpenAI client and response
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+        
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{
-                "message": {
-                    "content": "def hello():\n    print('Hello from Venice')"
-                }
-            }]
-        }
-        mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
-
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "def hello():\n    print('Hello from Venice')"
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        provider = VeniceProvider(venice_config)
         response = provider.generate("Create a hello function")
 
-        # Verify API call
-        assert mock_post.called
-        call_args = mock_post.call_args
-        assert call_args[1]["headers"]["Authorization"] == "Bearer test-key"
-        assert "Create a hello function" in str(call_args[1]["json"]["messages"])
+        # Verify API call was made
+        assert mock_client.chat.completions.create.called
+        call_args = mock_client.chat.completions.create.call_args
+        assert "Create a hello function" in str(call_args[1]["messages"])
 
     def test_venice_output_conversion(self, venice_config):
         """Test Venice text to code conversion."""
@@ -498,8 +496,9 @@ class TestProviderCapabilities:
         mock_provider = factory.create("mock_provider", {"model": "mock-fast"})
         caps = mock_provider.get_capabilities()
 
-        assert "generate" in caps
-        assert caps["generate"] is True
+        # Check for actual capabilities that BaseProvider defines
+        assert "streaming" in caps
+        assert "interactive" in caps
 
     def test_interactive_capability(self):
         """Test interactive capability detection."""

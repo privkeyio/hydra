@@ -470,8 +470,21 @@ class VeniceProvider(BaseProvider):
                 "provider": "venice",
                 "model": self.config.model,
                 "timestamp": datetime.now().isoformat(),
+                "requires_code_extraction": len(code_blocks) > 0,
             }
         )
+
+    def _format_code_prompt(self, prompt: str) -> str:
+        """Format a prompt for code generation.
+
+        Args:
+            prompt: The original prompt
+
+        Returns:
+            Formatted prompt for code generation
+
+        """
+        return f"Please write clean, well-documented code for: {prompt}. Include the code in a code block."
 
     def extract_code_blocks(self, response: str) -> List[CodeBlock]:
         """Extract code blocks from response.

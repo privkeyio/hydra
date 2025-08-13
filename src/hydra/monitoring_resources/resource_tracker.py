@@ -177,7 +177,7 @@ class APICallTracker:
                 counts[key] = {
                     'calls_last_minute': len(history),
                     'limit': self.rate_limits.get(
-                        key.split(':')[0], self.rate_limits['default']
+                        key.split(':')[0], self.rate_limits.get('default', 60)
                     )
                 }
 
@@ -302,7 +302,7 @@ class ResourceTracker:
             logger.info("Resource monitoring started")
         except RuntimeError as e:
             logger.warning(f"Could not start monitoring thread: {e}")
-            self.running = False
+            self.running = False  # Make sure running is set to False on failure
 
     def stop_monitoring(self):
         """Stop the resource monitoring loop."""

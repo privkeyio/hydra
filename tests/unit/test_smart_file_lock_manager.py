@@ -173,8 +173,11 @@ class TestSmartFileLockManager:
         mod1 = FileModification("agent1", "test.py", OperationType.EDIT, "", priority=5)
         mod2 = FileModification("agent2", "test.py", OperationType.EDIT, "", priority=1)
         
-        self.manager.pending_requests["agent1:test.py"] = mod1
-        self.manager.pending_requests["agent2:test.py"] = mod2
+        # Use resolved file paths for consistency
+        key1 = f"agent1:{mod1.file_path}"
+        key2 = f"agent2:{mod2.file_path}"
+        self.manager.pending_requests[key1] = mod1
+        self.manager.pending_requests[key2] = mod2
         
         # Create circular dependency
         self.manager.wait_graph["agent1"].add("agent2")
@@ -183,9 +186,13 @@ class TestSmartFileLockManager:
         # Resolve deadlock
         self.manager._resolve_deadlock("agent1")
         
-        # Lower priority request should be aborted
-        assert "agent2:test.py" not in self.manager.pending_requests
-        assert "agent1:test.py" in self.manager.pending_requests
+        # Debug: Print current state
+        print(f"After deadlock resolution: {list(self.manager.pending_requests.keys())}")
+        print(f"mod1 priority: {mod1.priority}, mod2 priority: {mod2.priority}")
+        
+        # Lower priority request should be aborted (mod2 has priority 1 < mod1 priority 5)
+        assert key2 not in self.manager.pending_requests
+        assert key1 in self.manager.pending_requests
         
     def test_smart_ticket_scheduling(self):
         """Test intelligent ticket scheduling to minimize conflicts."""
@@ -288,14 +295,17 @@ class TestSmartFileLockManager:
         high_priority = FileModification("agent1", "test.py", OperationType.EDIT, "", priority=10)
         low_priority = FileModification("agent2", "test.py", OperationType.EDIT, "", priority=1)
         
-        self.manager.pending_requests["agent1:test.py"] = high_priority
-        self.manager.pending_requests["agent2:test.py"] = low_priority
+        # Use the resolved file path for consistency
+        file_key1 = f"agent1:{high_priority.file_path}"
+        file_key2 = f"agent2:{low_priority.file_path}"
+        self.manager.pending_requests[file_key1] = high_priority
+        self.manager.pending_requests[file_key2] = low_priority
         
         # Mock the acquire_lock to succeed for the first call
         with patch.object(self.manager, '_acquire_lock') as mock_acquire:
             mock_acquire.side_effect = [True, False]  # First succeeds, second doesn't
             
-            self.manager._process_pending_requests("test.py")
+            self.manager._process_pending_requests(high_priority.file_path)
             
             # Should try low priority first (sorted by priority ascending)
             assert mock_acquire.call_count == 2

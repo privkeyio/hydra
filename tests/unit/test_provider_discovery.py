@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from typing import Set
 
-from src.hydra.providers.discovery import ProviderDiscovery
-from src.hydra.providers.interactive_base import ProviderConfig, ProviderCapability
+from hydra.providers.discovery import ProviderDiscovery
+from hydra.providers.interactive_base import ProviderConfig, ProviderCapability
 
 
 class TestProviderDiscovery:
@@ -24,7 +24,7 @@ class TestProviderDiscovery:
         assert isinstance(claude_info['commands'], list)
         assert isinstance(claude_info['capabilities'], set)
     
-    @patch('src.hydra.providers.discovery.ProviderDiscovery._is_command_available')
+    @patch('hydra.providers.discovery.ProviderDiscovery._is_command_available')
     def test_discover_all(self, mock_is_available):
         """Test discovering all available tools."""
         # Mock claude as available, aider as not available
@@ -42,7 +42,7 @@ class TestProviderDiscovery:
         assert claude_config.tool_executable in ['claude', 'claude-cli']
         assert ProviderCapability.FILE_OPERATIONS in claude_config.capabilities
     
-    @patch('src.hydra.providers.discovery.ProviderDiscovery._is_command_available')
+    @patch('hydra.providers.discovery.ProviderDiscovery._is_command_available')
     def test_discover_by_name(self, mock_is_available):
         """Test discovering a specific tool by name."""
         mock_is_available.return_value = True

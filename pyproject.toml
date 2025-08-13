@@ -103,6 +103,11 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
 addopts = "-v --cov=hydra --cov-report=html --cov-report=term --timeout=300"
+markers = [
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "slow: marks tests as slow running tests"
+]
 
 [tool.coverage.run]
 source = ["src/hydra"]

@@ -10,8 +10,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from hydra.ticket_workflow import parse_ticket
-
 
 class CriterionStatus(Enum):
     """Status of a single acceptance criterion."""
@@ -94,6 +92,9 @@ class TicketVerifier:
         self, tickets_path: str, ticket_id: str
     ) -> TicketVerificationReport:
         """Verify all acceptance criteria for a ticket."""
+        # Late import to avoid circular dependency
+        from hydra.ticket_workflow import parse_ticket
+        
         ticket = parse_ticket(tickets_path, ticket_id)
         if not ticket:
             raise ValueError(f"Ticket {ticket_id} not found")

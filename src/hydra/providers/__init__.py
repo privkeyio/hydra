@@ -1,13 +1,37 @@
 """LLM Providers module for Hydra."""
-from .anthropic import AnthropicProvider
 from .base import LLMConfig, LLMProvider
 from .base_provider import BaseProvider
-from .claude_tmux import ClaudeTmuxProvider
 from .factory import LLMProviderFactory, ProviderRegistry
-from .openai_provider import OpenAIProvider
 
-# Import providers to register them
-from .venice import VeniceProvider
+# Try to import optional providers that require external dependencies
+try:
+    from .anthropic import AnthropicProvider
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    AnthropicProvider = None
+    _ANTHROPIC_AVAILABLE = False
+
+try:
+    from .claude_tmux import ClaudeTmuxProvider
+    _CLAUDE_TMUX_AVAILABLE = True
+except ImportError:
+    ClaudeTmuxProvider = None
+    _CLAUDE_TMUX_AVAILABLE = False
+
+try:
+    from .openai_provider import OpenAIProvider
+    _OPENAI_AVAILABLE = True
+except ImportError:
+    OpenAIProvider = None
+    _OPENAI_AVAILABLE = False
+
+try:
+    # Import providers to register them
+    from .venice import VeniceProvider
+    _VENICE_AVAILABLE = True
+except ImportError:
+    VeniceProvider = None
+    _VENICE_AVAILABLE = False
 
 # Create global factory instance
 provider_factory = LLMProviderFactory()
@@ -19,8 +43,14 @@ __all__ = [
     'LLMProviderFactory',
     'provider_factory',
     'ProviderRegistry',
-    'VeniceProvider',
-    'AnthropicProvider',
-    'OpenAIProvider',
-    'ClaudeTmuxProvider'
 ]
+
+# Add optional providers to __all__ if available
+if _VENICE_AVAILABLE:
+    __all__.append('VeniceProvider')
+if _ANTHROPIC_AVAILABLE:
+    __all__.append('AnthropicProvider')
+if _OPENAI_AVAILABLE:
+    __all__.append('OpenAIProvider')
+if _CLAUDE_TMUX_AVAILABLE:
+    __all__.append('ClaudeTmuxProvider')

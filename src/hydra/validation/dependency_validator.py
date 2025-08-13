@@ -4,13 +4,12 @@ import os
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
-
-from hydra.ticket_workflow import parse_ticket
+from typing import Dict, List, Optional
 
 
 class ValidationStatus(Enum):
     """Status of dependency validation."""
+
     VALID = "valid"
     INVALID = "invalid"
     WARNING = "warning"
@@ -19,6 +18,7 @@ class ValidationStatus(Enum):
 @dataclass
 class ValidationIssue:
     """Represents a validation issue found during dependency checking."""
+
     ticket_id: str
     issue_type: str
     severity: ValidationStatus
@@ -29,6 +29,7 @@ class ValidationIssue:
 @dataclass
 class FileFlow:
     """Represents a file flow from one ticket to another."""
+
     source_ticket: str
     target_ticket: str
     file_path: str
@@ -38,6 +39,7 @@ class FileFlow:
 @dataclass
 class DependencyValidationResult:
     """Result of dependency validation."""
+
     valid: bool
     issues: List[ValidationIssue]
     file_flows: List[FileFlow]
@@ -53,7 +55,9 @@ class DependencyValidator:
         self.dependency_graph = {}
         self.file_flows = []
 
-    def validate_ticket_dependencies(self, tickets_path: str) -> DependencyValidationResult:
+    def validate_ticket_dependencies(
+        self, tickets_path: str
+    ) -> DependencyValidationResult:
         """Validate all ticket dependencies in the given file."""
         if not os.path.exists(tickets_path):
             return DependencyValidationResult(
@@ -71,7 +75,7 @@ class DependencyValidator:
 
         # Parse all tickets
         self._parse_tickets(tickets_path)
-        
+
         # Validate dependencies
         issues = []
         issues.extend(self._check_circular_dependencies())
@@ -92,7 +96,9 @@ class DependencyValidator:
             topo_order = []
 
         return DependencyValidationResult(
-            valid=not any(issue.severity == ValidationStatus.INVALID for issue in issues),
+            valid=not any(
+                issue.severity == ValidationStatus.INVALID for issue in issues
+            ),
             issues=issues,
             file_flows=self.file_flows,
             dependency_graph=self.dependency_graph,
@@ -116,14 +122,14 @@ class DependencyValidator:
             for match in matches:
                 ticket_id = match.group(1).strip()
                 ticket_content = match.group(2).strip()
-                
+
                 # Parse the ticket details
                 ticket_data = self._parse_single_ticket(ticket_id, ticket_content)
                 self.tickets[ticket_id] = ticket_data
-                
+
                 # Build dependency graph
                 self.dependency_graph[ticket_id] = ticket_data.get('dependencies', [])
-                
+
                 # Extract file flows
                 self._extract_file_flows(ticket_id, ticket_data)
 
@@ -139,9 +145,11 @@ class DependencyValidator:
             'acceptance_criteria': []
         }
 
+        current_section = None
+
         for line in lines:
             line = line.strip()
-            
+
             # Parse dependencies
             if line.startswith('**Dependencies:**'):
                 deps_text = line.replace('**Dependencies:**', '').strip()
@@ -149,27 +157,44 @@ class DependencyValidator:
                     # Split by comma and clean
                     deps = [d.strip() for d in deps_text.split(',')]
                     ticket_data['dependencies'] = [d for d in deps if d]
+                current_section = None
 
             # Parse required input files
             elif line.startswith('**Required Input Files:**'):
-                continue  # Skip header
-            elif line.startswith('- ') and 'Required Input Files:' in content[:content.find(line)]:
-                # Extract file path from list item
-                file_ref = line[2:].strip()
-                if file_ref and file_ref.lower() != 'none':
-                    ticket_data['required_input_files'].append(file_ref)
-
-            # Parse output files
+                current_section = 'required_input_files'
             elif line.startswith('**Output Files:**'):
-                continue  # Skip header
-            elif line.startswith('- ') and 'Output Files:' in content[:content.find(line)]:
-                file_path = line[2:].strip()
-                if file_path:
-                    ticket_data['output_files'].append(file_path)
+                current_section = 'output_files'
+            elif line.startswith('**Acceptance Criteria:**'):
+                current_section = 'acceptance_criteria'
+            elif line.startswith('**'):
+                current_section = None  # New section, reset
 
-            # Parse acceptance criteria
-            elif line.startswith('- [ ]') or line.startswith('- [x]') or line.startswith('- [X]'):
-                criteria = line[5:].strip()  # Remove checkbox part
+            # Parse list items based on current section
+            elif line.startswith('- '):
+                item = line[2:].strip()
+                if not item or item.lower() == 'none':
+                    continue
+
+                if current_section == 'required_input_files':
+                    ticket_data['required_input_files'].append(item)
+                elif current_section == 'output_files':
+                    ticket_data['output_files'].append(item)
+                elif current_section == 'acceptance_criteria':
+                    # Handle checkboxes
+                    if (item.startswith('[ ]') or
+                        item.startswith('[x]') or
+                        item.startswith('[X]')):
+                        criteria = item[3:].strip()  # Remove checkbox part
+                        if criteria:
+                            ticket_data['acceptance_criteria'].append(criteria)
+                    else:
+                        ticket_data['acceptance_criteria'].append(item)
+
+            # Handle standalone checkboxes
+            elif (line.startswith('- [ ]') or
+                  line.startswith('- [x]') or
+                  line.startswith('- [X]')):
+                criteria = line[5:].strip()  # Remove "- [x] " part
                 if criteria:
                     ticket_data['acceptance_criteria'].append(criteria)
 
@@ -184,8 +209,10 @@ class DependencyValidator:
             if source_match:
                 source_ticket = source_match.group(1)
                 # Extract file path (everything before the parentheses)
-                file_path = re.sub(r'\s*\(from Ticket \d+\)', '', input_file_ref).strip()
-                
+                file_path = re.sub(
+                    r'\s*\(from Ticket \d+\)', '', input_file_ref
+                ).strip()
+
                 self.file_flows.append(FileFlow(
                     source_ticket=source_ticket,
                     target_ticket=ticket_id,
@@ -204,7 +231,7 @@ class DependencyValidator:
                 # Found cycle, return the cycle path
                 cycle_start = path.index(ticket_id)
                 return path[cycle_start:] + [ticket_id]
-            
+
             if ticket_id in visited:
                 return None
 
@@ -256,7 +283,7 @@ class DependencyValidator:
             # Check if the source ticket outputs the required file
             output_files = source_ticket.get('output_files', [])
             file_found = any(
-                flow.file_path in output_file or 
+                flow.file_path in output_file or
                 output_file in flow.file_path
                 for output_file in output_files
             )
@@ -281,7 +308,7 @@ class DependencyValidator:
     def _check_missing_dependencies(self) -> List[ValidationIssue]:
         """Check for missing dependency tickets."""
         issues = []
-        
+
         for ticket_id, dependencies in self.dependency_graph.items():
             for dep in dependencies:
                 if dep not in self.tickets:
@@ -298,7 +325,7 @@ class DependencyValidator:
     def _validate_dependency_order(self) -> List[ValidationIssue]:
         """Validate that dependencies follow logical order."""
         issues = []
-        
+
         for ticket_id, dependencies in self.dependency_graph.items():
             # Check if ticket depends on later tickets (by ID)
             try:
@@ -328,14 +355,12 @@ class DependencyValidator:
         """Perform topological sort to find execution order."""
         # Kahn's algorithm for topological sorting
         in_degree = {ticket: 0 for ticket in self.dependency_graph}
-        
-        # Calculate in-degrees
-        for ticket in self.dependency_graph:
-            for dep in self.dependency_graph[ticket]:
-                if dep in in_degree:
-                    in_degree[dep] += 1
 
-        # Find tickets with no dependencies
+        # Calculate in-degrees (count how many dependencies each ticket has)
+        for ticket in self.dependency_graph:
+            in_degree[ticket] = len(self.dependency_graph[ticket])
+
+        # Find tickets with no dependencies (in-degree 0)
         queue = [ticket for ticket, degree in in_degree.items() if degree == 0]
         topo_order = []
 
@@ -343,12 +368,12 @@ class DependencyValidator:
             current = queue.pop(0)
             topo_order.append(current)
 
-            # Remove current ticket from graph and update in-degrees
-            for dep in self.dependency_graph.get(current, []):
-                if dep in in_degree:
-                    in_degree[dep] -= 1
-                    if in_degree[dep] == 0:
-                        queue.append(dep)
+            # For each ticket that depends on current, decrement its in-degree
+            for ticket in self.dependency_graph:
+                if current in self.dependency_graph[ticket]:
+                    in_degree[ticket] -= 1
+                    if in_degree[ticket] == 0:
+                        queue.append(ticket)
 
         # Check if all tickets are included (no cycles)
         if len(topo_order) != len(self.dependency_graph):
@@ -363,34 +388,47 @@ class DependencyValidator:
             return []
 
         groups = []
-        processed = set()
-        
+
+        # Build level-based grouping: tickets at the same dependency level
+        # can run in parallel
+        levels = {}
         for ticket in result.topological_order:
-            if ticket in processed:
-                continue
-                
-            # Find all tickets that can run in parallel with this one
-            parallel_group = [ticket]
-            processed.add(ticket)
-            
-            # Check remaining tickets
-            for other_ticket in result.topological_order:
-                if other_ticket in processed:
-                    continue
-                    
-                # Can run in parallel if no dependency relationship
-                can_parallel = (
-                    other_ticket not in result.dependency_graph.get(ticket, []) and
-                    ticket not in result.dependency_graph.get(other_ticket, []) and
-                    not self._has_file_flow_conflict(ticket, other_ticket, result.file_flows)
-                )
-                
-                if can_parallel:
-                    parallel_group.append(other_ticket)
-                    processed.add(other_ticket)
-            
-            groups.append(parallel_group)
-        
+            # Calculate the maximum dependency depth
+            max_depth = 0
+            for dep in result.dependency_graph.get(ticket, []):
+                if dep in levels:
+                    max_depth = max(max_depth, levels[dep] + 1)
+            levels[ticket] = max_depth
+
+        # Group tickets by level
+        level_groups = {}
+        for ticket, level in levels.items():
+            if level not in level_groups:
+                level_groups[level] = []
+            level_groups[level].append(ticket)
+
+        # Convert to list of groups in execution order
+        for level in sorted(level_groups.keys()):
+            level_tickets = level_groups[level]
+
+            # Further split within level if there are file flow conflicts
+            while level_tickets:
+                current_group = [level_tickets.pop(0)]
+                i = 0
+                while i < len(level_tickets):
+                    ticket = level_tickets[i]
+                    # Check if this ticket can run with any in current group
+                    can_parallel = all(
+                        not self._has_file_flow_conflict(ticket, group_ticket, result.file_flows)
+                        for group_ticket in current_group
+                    )
+                    if can_parallel:
+                        current_group.append(level_tickets.pop(i))
+                    else:
+                        i += 1
+
+                groups.append(current_group)
+
         return groups
 
     def _has_file_flow_conflict(self, ticket1: str, ticket2: str, file_flows: List[FileFlow]) -> bool:
@@ -420,7 +458,7 @@ class DependencyValidator:
                     ValidationStatus.WARNING: "⚠️",
                     ValidationStatus.INVALID: "❌"
                 }.get(issue.severity, "❓")
-                
+
                 lines.append(f"  {status_icon} Ticket {issue.ticket_id}: {issue.description}")
                 if issue.suggested_fix:
                     lines.append(f"     💡 Fix: {issue.suggested_fix}")
@@ -454,3 +492,4 @@ class DependencyValidator:
                     lines.append(f"  Group {i}: {group[0]} (sequential)")
 
         return "\n".join(lines)
+

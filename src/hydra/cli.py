@@ -159,6 +159,14 @@ def create_parser():
     create_tickets_parser.add_argument(
         "--output", default="tickets.md", help="Output file (default: tickets.md)"
     )
+    create_tickets_parser.add_argument(
+        "--project-type", choices=["migration", "feature", "bugfix", "refactor"],
+        help="Project type for template-based ticket structure"
+    )
+    create_tickets_parser.add_argument(
+        "--interactive", action="store_true",
+        help="Launch interactive refinement after ticket creation"
+    )
 
     # Execute ticket
     execute_ticket_parser = ticket_subparsers.add_parser(
@@ -170,6 +178,10 @@ def create_parser():
     execute_ticket_parser.add_argument(
         "--tickets", default="tickets.md", help="Tickets file (default: tickets.md)"
     )
+    execute_ticket_parser.add_argument(
+        "--skip-preflight", action="store_true",
+        help="Skip pre-flight validation checks"
+    )
 
     # Run all tickets
     run_tickets_parser = ticket_subparsers.add_parser(
@@ -177,6 +189,10 @@ def create_parser():
     )
     run_tickets_parser.add_argument(
         "--tickets", default="tickets.md", help="Tickets file (default: tickets.md)"
+    )
+    run_tickets_parser.add_argument(
+        "--skip-preflight", action="store_true",
+        help="Skip pre-flight validation checks"
     )
 
     # Verify ticket completion
@@ -208,6 +224,10 @@ def create_parser():
         "--parallel", type=int, default=3, help="Max parallel agents (default: 3)"
     )
     auto_parser.add_argument("--dir", help="Project directory (default: current dir)")
+    auto_parser.add_argument(
+        "--skip-preflight", action="store_true",
+        help="Skip pre-flight validation checks"
+    )
 
     # Parallel execution
     parallel_parser = ticket_subparsers.add_parser(
@@ -224,6 +244,10 @@ def create_parser():
     )
     parallel_parser.add_argument(
         "--async", action="store_true", help="Use async execution engine (experimental)"
+    )
+    parallel_parser.add_argument(
+        "--skip-preflight", action="store_true",
+        help="Skip pre-flight validation checks"
     )
 
     # Batch execution
@@ -255,6 +279,10 @@ def create_parser():
     batch_parser.add_argument(
         "--save-log", action="store_true", help="Save execution log"
     )
+    batch_parser.add_argument(
+        "--skip-preflight", action="store_true",
+        help="Skip pre-flight validation checks"
+    )
 
     # Verify and fix tickets in parallel
     verify_parallel_parser = ticket_subparsers.add_parser(
@@ -272,6 +300,10 @@ def create_parser():
     verify_parallel_parser.add_argument(
         "--static-only", action="store_true",
         help="Only use static analysis, skip model-based verification"
+    )
+    verify_parallel_parser.add_argument(
+        "--skip-preflight", action="store_true",
+        help="Skip pre-flight validation checks"
     )
 
     # Claude Code orchestration subcommand
@@ -587,7 +619,16 @@ def handle_template_command(args):
 def _handle_create_tickets(args):
     """Handle ticket create command."""
     try:
-        success = generate_tickets_md(args.description, args.output)
+        project_type = getattr(args, 'project_type', None)
+        success = generate_tickets_md(args.description, args.output, project_type)
+
+        if success and getattr(args, 'interactive', False):
+            # Launch interactive refinement
+            from hydra.interactive.refinement_cli import run_interactive_refinement
+            print(f"\n🔧 Launching interactive refinement for {args.output}...")
+            refinement_result = run_interactive_refinement(args.output)
+            return refinement_result
+
         return 0 if success else 1
     except Exception as e:
         print(f"Error creating tickets: {e}")
@@ -601,7 +642,8 @@ def _handle_execute_ticket(args):
         correlation_id = monitoring.set_correlation_id(f"ticket_{args.identifier}")
         print(f"🔗 Session: {correlation_id}")
 
-        success = execute_single_ticket(args.tickets, args.identifier)
+        skip_preflight = getattr(args, 'skip_preflight', False)
+        success = execute_single_ticket(args.tickets, args.identifier, skip_preflight=skip_preflight)
         return 0 if success else 1
     except Exception as e:
         print(f"Error executing ticket: {e}")
@@ -611,7 +653,8 @@ def _handle_execute_ticket(args):
 def _handle_run_all_tickets(args):
     """Handle run all tickets command."""
     try:
-        success = run_all_tickets(args.tickets)
+        skip_preflight = getattr(args, 'skip_preflight', False)
+        success = run_all_tickets(args.tickets, skip_preflight=skip_preflight)
         return 0 if success else 1
     except Exception as e:
         print(f"Error running tickets: {e}")
@@ -726,6 +769,33 @@ def _handle_sync_parallel_execution(args):
             print("❌ No pending tickets found")
             return 1
 
+        # Run preflight validation unless skipped
+        skip_preflight = getattr(args, 'skip_preflight', False)
+        if not skip_preflight:
+            print("🚀 Running preflight validation...")
+            from hydra.preflight import PreflightChecker
+            checker = PreflightChecker()
+            report = checker.run_preflight_checks(str(tickets_path))
+            
+            if report.has_critical_issues():
+                print("🚨 PREFLIGHT FAILED - Critical issues found!")
+                print("\nCritical Issues:")
+                for check in report.get_critical_issues():
+                    print(f"❌ {check.description}: {check.message}")
+                print(f"\nUse --skip-preflight to override, but execution may fail.")
+                return 1
+            elif report.has_errors() or report.has_warnings():
+                print("⚠️  Preflight validation completed with warnings/errors:")
+                for check in report.get_failed_checks()[:3]:  # Show first 3
+                    print(f"{check.status_emoji} {check.description}: {check.message}")
+                if len(report.get_failed_checks()) > 3:
+                    print(f"   ... and {len(report.get_failed_checks()) - 3} more issues")
+                print("Proceeding with execution despite warnings...")
+            else:
+                print("✅ Preflight validation passed")
+        else:
+            print("⚡ Skipping preflight validation (--skip-preflight)")
+
         # Count only pending tickets (not already completed)
         pending_count = len([t for t in tickets.values()
                            if t.status == ExecutionStatus.PENDING])
@@ -779,7 +849,7 @@ def _handle_sync_parallel_execution(args):
             functionally_completed = summary.get('functionally_completed', summary['completed'])
             quality_passed = summary.get('quality_passed', summary['completed'])
             total = summary['total_tickets']
-            
+
             if functionally_completed == total:
                 # All tickets ran but some had quality issues
                 print(f"\n✅ All {total} tickets executed successfully!")
@@ -867,6 +937,33 @@ def _handle_async_parallel_execution(args):
                 print("❌ No pending tickets found")
                 return 1
 
+            # Run preflight validation unless skipped
+            skip_preflight = getattr(args, 'skip_preflight', False)
+            if not skip_preflight:
+                print("🚀 Running preflight validation...")
+                from hydra.preflight import PreflightChecker
+                checker = PreflightChecker()
+                report = checker.run_preflight_checks(str(tickets_path))
+                
+                if report.has_critical_issues():
+                    print("🚨 PREFLIGHT FAILED - Critical issues found!")
+                    print("\nCritical Issues:")
+                    for check in report.get_critical_issues():
+                        print(f"❌ {check.description}: {check.message}")
+                    print(f"\nUse --skip-preflight to override, but execution may fail.")
+                    return 1
+                elif report.has_errors() or report.has_warnings():
+                    print("⚠️  Preflight validation completed with warnings/errors:")
+                    for check in report.get_failed_checks()[:3]:  # Show first 3
+                        print(f"{check.status_emoji} {check.description}: {check.message}")
+                    if len(report.get_failed_checks()) > 3:
+                        print(f"   ... and {len(report.get_failed_checks()) - 3} more issues")
+                    print("Proceeding with execution despite warnings...")
+                else:
+                    print("✅ Preflight validation passed")
+            else:
+                print("⚡ Skipping preflight validation (--skip-preflight)")
+
             # Count pending tickets
             pending_count = len([t for t in tickets.values()
                                if t.status == ExecutionStatus.PENDING])
@@ -908,7 +1005,7 @@ def _handle_async_parallel_execution(args):
                 functionally_completed = summary.get('functionally_completed', summary['completed'])
                 quality_passed = summary.get('quality_passed', summary['completed'])
                 total = summary['total_tickets']
-                
+
                 if functionally_completed == total:
                     print(f"\n✅ All {total} tickets executed successfully!")
                     if quality_passed < functionally_completed:
@@ -1004,6 +1101,33 @@ def _handle_batch_execution(args):
                 print("❌ No pending tickets found")
                 return 1
 
+            # Run preflight validation unless skipped
+            skip_preflight = getattr(args, 'skip_preflight', False)
+            if not skip_preflight:
+                print("🚀 Running preflight validation...")
+                from hydra.preflight import PreflightChecker
+                checker = PreflightChecker()
+                report = checker.run_preflight_checks(str(tickets_path))
+                
+                if report.has_critical_issues():
+                    print("🚨 PREFLIGHT FAILED - Critical issues found!")
+                    print("\nCritical Issues:")
+                    for check in report.get_critical_issues():
+                        print(f"❌ {check.description}: {check.message}")
+                    print(f"\nUse --skip-preflight to override, but execution may fail.")
+                    return 1
+                elif report.has_errors() or report.has_warnings():
+                    print("⚠️  Preflight validation completed with warnings/errors:")
+                    for check in report.get_failed_checks()[:3]:  # Show first 3
+                        print(f"{check.status_emoji} {check.description}: {check.message}")
+                    if len(report.get_failed_checks()) > 3:
+                        print(f"   ... and {len(report.get_failed_checks()) - 3} more issues")
+                    print("Proceeding with execution despite warnings...")
+                else:
+                    print("✅ Preflight validation passed")
+            else:
+                print("⚡ Skipping preflight validation (--skip-preflight)")
+
             pending_count = len([t for t in tickets.values()
                                if t.status.name == "PENDING"])
             completed_count = len(executor.completed_tickets)
@@ -1048,7 +1172,7 @@ def _handle_batch_execution(args):
                 functionally_completed = summary.get('functionally_completed', summary['completed'])
                 quality_passed = summary.get('quality_passed', summary['completed'])
                 total = summary['total_tickets']
-                
+
                 if functionally_completed == total:
                     print(f"\n✅ All {total} tickets executed successfully!")
                     if quality_passed < functionally_completed:
@@ -1098,7 +1222,8 @@ def _handle_auto_workflow(args):
         print(f"🎯 Processing: {tickets_path}")
         print(f"⚡ Max parallel agents: {args.parallel}")
 
-        success = run_all_tickets(str(tickets_path), max_parallel=args.parallel)
+        skip_preflight = getattr(args, 'skip_preflight', False)
+        success = run_all_tickets(str(tickets_path), max_parallel=args.parallel, skip_preflight=skip_preflight)
 
         os.chdir(original_dir)
         return 0 if success else 1
@@ -1210,7 +1335,7 @@ Find "## Ticket {ticket_id}:" in tickets.md and check its acceptance criteria.
 
 Your job is to:
 1. First CHECK if all acceptance criteria are already met
-2. If ANY criteria are NOT met, IMPLEMENT them immediately 
+2. If ANY criteria are NOT met, IMPLEMENT them immediately
 3. After implementing, VERIFY again that criteria are now met
 4. Update tickets.md to mark completed criteria with [x]
 

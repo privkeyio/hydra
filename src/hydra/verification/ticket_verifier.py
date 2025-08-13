@@ -197,7 +197,7 @@ class TicketVerifier:
                 # Skip common words that aren't filenames
                 if match in ['create', 'add', 'implement', 'with', 'for', 'to', 'in']:
                     continue
-                    
+
                 # Check multiple possible locations
                 possible_paths = [
                     self.project_root / match,
@@ -208,7 +208,7 @@ class TicketVerifier:
                     self.project_root / 'docs' / match,
                     self.project_root / 'test-results' / match,
                 ]
-                
+
                 for file_path in possible_paths:
                     if file_path.exists():
                         return VerificationResult(

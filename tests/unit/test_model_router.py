@@ -4,9 +4,10 @@ import tempfile
 from pathlib import Path
 
 from hydra.routing.model_router import (
-    ModelRouter, ModelType, ComplexityLevel, TaskComplexityAnalyzer,
-    CostEstimator, RoutingDecision
+    ModelRouter, ComplexityLevel, RoutingDecision, TaskComplexityAnalyzer,
+    CostEstimator
 )
+from hydra.providers.model_mapper import ModelCategory
 
 
 class TestTaskComplexityAnalyzer(unittest.TestCase):
@@ -78,20 +79,20 @@ class TestCostEstimator(unittest.TestCase):
 
     def test_sonnet_cost_calculation(self):
         input_text = "create a simple function"
-        cost = self.estimator.estimate_cost(ModelType.SONNET, input_text, 100)
+        cost = self.estimator.estimate_cost("claude-3-5-sonnet-20241022", input_text, 100)
         self.assertGreater(cost, 0)
         self.assertLess(cost, 1.0)
 
     def test_opus_cost_calculation(self):
         input_text = "create a simple function"
-        cost = self.estimator.estimate_cost(ModelType.OPUS, input_text, 100)
+        cost = self.estimator.estimate_cost("claude-3-opus-20240229", input_text, 100)
         self.assertGreater(cost, 0)
         self.assertLess(cost, 1.0)
 
     def test_opus_more_expensive_than_sonnet(self):
         input_text = "create a complex system architecture"
-        sonnet_cost = self.estimator.estimate_cost(ModelType.SONNET, input_text, 500)
-        opus_cost = self.estimator.estimate_cost(ModelType.OPUS, input_text, 500)
+        sonnet_cost = self.estimator.estimate_cost("claude-3-5-sonnet-20241022", input_text, 500)
+        opus_cost = self.estimator.estimate_cost("claude-3-opus-20240229", input_text, 500)
         
         self.assertGreater(opus_cost, sonnet_cost)
 
@@ -102,7 +103,7 @@ class TestModelRouter(unittest.TestCase):
 
     def test_simple_task_routing(self):
         decision = self.router.route_task("list all files")
-        self.assertEqual(decision.selected_model, ModelType.SONNET)
+        self.assertEqual(decision.selected_model, "claude-3-5-sonnet-20241022")
         self.assertEqual(decision.complexity, ComplexityLevel.SIMPLE)
         self.assertFalse(decision.manual_override)
 
@@ -114,16 +115,16 @@ class TestModelRouter(unittest.TestCase):
     def test_manual_override(self):
         decision = self.router.route_task(
             "simple task", 
-            manual_model=ModelType.OPUS
+            manual_model="claude-3-opus-20240229"
         )
-        self.assertEqual(decision.selected_model, ModelType.OPUS)
+        self.assertEqual(decision.selected_model, "claude-3-opus-20240229")
         self.assertTrue(decision.manual_override)
 
     def test_metrics_tracking(self):
         initial_requests = self.router.metrics.total_requests
         
         self.router.route_task("simple task")
-        self.router.route_task("prepare for production deployment", manual_model=ModelType.OPUS)
+        self.router.route_task("prepare for production deployment", manual_model="claude-3-opus-20240229")
         
         self.assertEqual(
             self.router.metrics.total_requests, 
@@ -216,7 +217,7 @@ class TestModelRouter(unittest.TestCase):
         
         decision = router.route_task("ambiguous task description")
         
-        self.assertEqual(decision.selected_model, ModelType.SONNET)
+        self.assertEqual(decision.selected_model, "claude-3-5-sonnet-20241022")
 
     def test_context_aware_routing(self):
         context = {

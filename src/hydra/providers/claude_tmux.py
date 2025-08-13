@@ -140,7 +140,7 @@ class ClaudeTmuxProvider(BaseProvider):
             self._current_debug_log_path = debug_log_path
 
             def debug_log(message):
-                """Log debug messages to file and console"""
+                """Log debug messages to file and console."""
                 timestamp = time.strftime("%H:%M:%S")
                 log_msg = f"[{timestamp}] {message}"
                 print(f"🔍 DEBUG: {log_msg}")

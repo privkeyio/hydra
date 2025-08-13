@@ -40,7 +40,7 @@ class ModelMapper:
 
     def _load_provider_mappings(self) -> Dict[str, Dict[str, ModelMapping]]:
         """Load provider-specific model mappings.
-        
+
         Returns:
             Dictionary of provider -> model category -> model mapping
 
@@ -118,7 +118,7 @@ class ModelMapper:
 
     def _load_legacy_mappings(self) -> Dict[str, ModelCategory]:
         """Load legacy model name mappings for backward compatibility.
-        
+
         Returns:
             Dictionary of legacy name -> model category
 
@@ -170,11 +170,11 @@ class ModelMapper:
         provider: Optional[str] = None
     ) -> Optional[str]:
         """Map a model name to provider-specific model identifier.
-        
+
         Args:
             model_name: Generic or legacy model name
             provider: Target provider (auto-detected if not specified)
-            
+
         Returns:
             Provider-specific model identifier or None if not found
 
@@ -229,10 +229,10 @@ class ModelMapper:
 
     def get_model_category(self, model_name: str) -> Optional[ModelCategory]:
         """Get the category for a model name.
-        
+
         Args:
             model_name: Model name to categorize
-            
+
         Returns:
             Model category or None
 
@@ -260,10 +260,10 @@ class ModelMapper:
 
     def get_provider_models(self, provider: str) -> Dict[str, str]:
         """Get all available models for a provider.
-        
+
         Args:
             provider: Provider name
-            
+
         Returns:
             Dictionary of category -> model identifier
 
@@ -280,11 +280,11 @@ class ModelMapper:
         provider: Optional[str] = None
     ) -> Optional[str]:
         """Suggest a model based on task complexity.
-        
+
         Args:
             task_complexity: simple, moderate, complex, or critical
             provider: Target provider
-            
+
         Returns:
             Suggested model identifier
 
@@ -315,7 +315,7 @@ _mapper = None
 
 def get_model_mapper() -> ModelMapper:
     """Get the global model mapper instance.
-    
+
     Returns:
         ModelMapper instance
 
@@ -328,11 +328,11 @@ def get_model_mapper() -> ModelMapper:
 
 def map_model(model_name: str, provider: Optional[str] = None) -> Optional[str]:
     """Convenience function to map a model name.
-    
+
     Args:
         model_name: Model name to map
         provider: Target provider
-        
+
     Returns:
         Provider-specific model identifier
 
@@ -346,11 +346,11 @@ def get_model_for_complexity(
     provider: Optional[str] = None
 ) -> Optional[str]:
     """Get appropriate model for task complexity.
-    
+
     Args:
         complexity: Task complexity level
         provider: Target provider
-        
+
     Returns:
         Model identifier
 

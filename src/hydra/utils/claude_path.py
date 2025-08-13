@@ -6,14 +6,14 @@ from pathlib import Path
 
 def find_claude_cli_path():
     """Find the Claude CLI executable path dynamically.
-    
+
     Search order:
     1. CLAUDE_CLI_PATH environment variable
     2. 'claude' in PATH
     3. ~/.claude/local/claude (user home directory)
     4. ~/.local/bin/claude
     5. /usr/local/bin/claude
-    
+
     Returns:
         str: Path to claude CLI executable, or None if not found
 
@@ -60,7 +60,7 @@ def find_claude_cli_path():
 
 def get_claude_cli_path():
     """Get the Claude CLI path with caching.
-    
+
     Returns:
         str: Path to claude CLI executable
 

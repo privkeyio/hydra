@@ -1,5 +1,5 @@
 """Init   module."""
 
-from .model_router import ComplexityLevel, ModelRouter, ModelType, RoutingDecision
+from .model_router import ComplexityLevel, ModelRouter, RoutingDecision
 
-__all__ = ['ModelRouter', 'ModelType', 'ComplexityLevel', 'RoutingDecision']
+__all__ = ['ModelRouter', 'ComplexityLevel', 'RoutingDecision']

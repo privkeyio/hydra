@@ -13,6 +13,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Set, Tuple
 
+from hydra.intelligence.model_selector import create_enhanced_model_prompt
 from hydra.monitoring import monitoring
 
 
@@ -21,7 +22,7 @@ class SharedWorkspace:
 
     def __init__(self, session_id: Optional[str] = None):
         """Initialize shared workspace.
-        
+
         Args:
             session_id: Optional session ID, will generate one if not provided
 
@@ -53,11 +54,11 @@ class SharedWorkspace:
 
     def get_artifact_path(self, ticket_id: str, filename: str) -> str:
         """Get path for a ticket artifact.
-        
+
         Args:
             ticket_id: Ticket identifier
             filename: Name of the artifact file
-            
+
         Returns:
             Full path to the artifact
 
@@ -72,12 +73,12 @@ class SharedWorkspace:
 
     def save_artifact(self, ticket_id: str, filename: str, content: str) -> str:
         """Save an artifact for a ticket.
-        
+
         Args:
             ticket_id: Ticket identifier
             filename: Name of the artifact file
             content: Content to save
-            
+
         Returns:
             Path where artifact was saved
 
@@ -89,10 +90,10 @@ class SharedWorkspace:
 
     def list_ticket_artifacts(self, ticket_id: str) -> List[str]:
         """List all artifacts for a ticket.
-        
+
         Args:
             ticket_id: Ticket identifier
-            
+
         Returns:
             List of artifact filenames
 
@@ -108,10 +109,10 @@ class SharedWorkspace:
 
     def get_dependency_artifacts(self, dependencies: List[str]) -> Dict[str, List[str]]:
         """Get artifacts from dependency tickets.
-        
+
         Args:
             dependencies: List of ticket IDs that are dependencies
-            
+
         Returns:
             Dictionary mapping ticket_id to list of artifact paths
 
@@ -128,7 +129,7 @@ class SharedWorkspace:
 
     def create_manifest(self, ticket_id: str, created_files: List[str]) -> None:
         """Create a manifest of files created by a ticket.
-        
+
         Args:
             ticket_id: Ticket identifier
             created_files: List of files created by the ticket
@@ -155,10 +156,10 @@ _shared_workspace: Optional[SharedWorkspace] = None
 
 def get_shared_workspace(session_id: Optional[str] = None) -> SharedWorkspace:
     """Get or create the shared workspace for the session.
-    
+
     Args:
         session_id: Optional session ID for the workspace
-        
+
     Returns:
         SharedWorkspace instance
 
@@ -344,7 +345,7 @@ def parse_ticket(tickets_path, ticket_identifier):
 # The function at line 577 handles more ticket formats and is more comprehensive
 
 
-def generate_tickets_md(project_description, output_path="tickets.md"):
+def generate_tickets_md(project_description, output_path="tickets.md", project_type=None):
     """Generate tickets.md from project description using provider abstraction."""
     print("🎫 Generating tickets.md...")
     print("=" * 30)
@@ -361,23 +362,56 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     smart_model = mapper.map_model("smart", provider.config.provider_type if hasattr(provider, 'config') and hasattr(provider.config, 'provider_type') else None)
     print(f"🧠 Using {smart_model or 'smart model'} for ticket planning...")
 
+    # Load project template if specified
+    template_guidance = ""
+    if project_type:
+        try:
+            from hydra.templates.project_templates import (
+                ProjectTemplateManager,
+                ProjectType,
+            )
+            template_manager = ProjectTemplateManager()
+
+            if template_manager.validate_project_type(project_type):
+                project_type_enum = ProjectType(project_type)
+                template_structure = template_manager.get_template_structure(project_type_enum)
+                phases = template_structure["phases"]
+
+                template_guidance = f"""
+
+PROJECT TYPE: {project_type.upper()}
+RECOMMENDED PHASES: {' → '.join(phases)}
+
+When creating tickets, consider structuring work around these phases:
+{chr(10).join(f'- {phase}' for phase in phases)}
+
+Template guidance available at: templates/{project_type}_template.md
+"""
+        except Exception as e:
+            print(f"⚠️  Could not load template for {project_type}: {e}")
+
     # Adapt prompt to use generic model categories instead of specific Claude models
     # Extract just the filename from the full path for the prompt
     output_filename = os.path.basename(output_path)
-    prompt = f"""Create a file named '{output_filename}' in the current directory with MINIMAL tickets to solve the problem. 
+
+    # Get enhanced model selection guidance
+    enhanced_model_guidance = create_enhanced_model_prompt()
+
+    prompt = f"""Create a file named '{output_filename}' in the current directory with MINIMAL tickets to solve the problem.{template_guidance}
 
 CRITICAL: Generate the FEWEST tickets possible. Most issues should be 1-2 tickets max. Only create multiple tickets if there are truly independent parts or if a database migration MUST happen before code changes.
 
 Prefer direct code changes over analysis/design documents. Skip intermediate documents unless absolutely necessary.
 
-Note: For Claude Code specifically, use smart=opus 4, balanced=sonnet 4, fast=sonnet 4, coder=opus 4
+{enhanced_model_guidance}
 
 Each ticket MUST have this format:
 ## Ticket 001: [Title]
 **Status:** TODO
-**Model:** [smart, balanced, fast, or coder]
+**Model:** [smart, balanced, fast, or coder] - Select based on complexity analysis above
 **Dependencies:** [None or comma-separated ticket numbers like 001,002]
 **Description:** [Direct task description - be specific about what code to change]
+**Progress:** started
 
 **Acceptance Criteria:**
 - [ ] [Specific code changes to make]
@@ -402,6 +436,7 @@ Example for a bug fix (IDEAL - single ticket):
 **Model:** smart
 **Dependencies:** None
 **Description:** Change counter semantics from "last used" to "next available" and add migration for existing wallets
+**Progress:** started
 
 **Acceptance Criteria:**
 - [ ] Update database trait get_keyset_counter to return u32 instead of Option<u32>, defaulting to 0
@@ -416,6 +451,7 @@ Example when migration is truly needed separately:
 **Model:** fast
 **Dependencies:** None
 **Description:** Add migration to increment existing keyset counters by 1 to prepare for semantic change
+**Progress:** started
 
 **Acceptance Criteria:**
 - [ ] Add SQL migration: UPDATE keyset SET counter = counter + 1 WHERE counter > 0
@@ -427,6 +463,7 @@ Example when migration is truly needed separately:
 **Model:** smart
 **Dependencies:** 001
 **Description:** Change counter implementation to represent next available index instead of last used
+**Progress:** started
 
 **Acceptance Criteria:**
 - [ ] Change get_keyset_counter return type from Option<u32> to u32 (default 0)
@@ -442,12 +479,12 @@ Project: {project_description}"""
         # Determine the working directory for ticket generation
         # Use the directory of the output file as the working directory
         output_dir = os.path.dirname(os.path.abspath(output_path))
-        
+
         # Use provider abstraction to generate tickets
         # Increase timeout for ticket generation as it may take longer
         provider.config.timeout = 120  # 2 minutes should be enough
-        
-        result = provider.generate(
+
+        provider.generate(
             prompt,  # Pass as positional argument
             model=smart_model,
             mode="ticket_generation",
@@ -495,6 +532,31 @@ Project: {project_description}"""
             if coder_count > 0:
                 print(f"   💻 Coder: {coder_count} tickets")
 
+            # Validate dependencies after generation
+            print("\n🔍 Validating ticket dependencies...")
+            from hydra.validation.dependency_validator import DependencyValidator
+            validator = DependencyValidator()
+            validation_result = validator.validate_ticket_dependencies(output_path)
+
+            if validation_result.valid:
+                print("✅ Dependency validation passed")
+                if validation_result.issues:
+                    warning_count = sum(1 for issue in validation_result.issues
+                                      if issue.severity.value == 'warning')
+                    if warning_count > 0:
+                        print(f"⚠️  Found {warning_count} warnings (non-blocking)")
+            else:
+                print("❌ Dependency validation failed!")
+                print("\n📋 Issues found:")
+                for issue in validation_result.issues:
+                    severity_icon = "❌" if issue.severity.value == 'invalid' else "⚠️"
+                    print(f"  {severity_icon} Ticket {issue.ticket_id}: {issue.description}")
+                    if issue.suggested_fix:
+                        print(f"     💡 Fix: {issue.suggested_fix}")
+
+                # Still return True for generation success, but warn about dependencies
+                print("\n⚠️  Tickets generated but have dependency issues that need fixing")
+
             return True
         else:
             print("❌ Failed to generate tickets")
@@ -525,7 +587,7 @@ def validate_acceptance_criteria(ticket, project_dir):
 
         # Check for directory mentions like ".hydra directory"
         dir_pattern = r'\.hydra directory|\.hydra/[a-zA-Z0-9_/]+'
-        dir_matches = re.findall(dir_pattern, criterion)
+        re.findall(dir_pattern, criterion)
 
         # Check for specific file mentions
         if "interactive_base.py" in criterion:
@@ -629,7 +691,7 @@ def validate_acceptance_criteria(ticket, project_dir):
             from hydra.verification.ticket_verifier import TicketVerifier
             verifier = TicketVerifier(project_dir)
             result = verifier._verify_file_exists(criterion)
-            
+
             if result.status.value == 'passed':
                 print(f"   ✅ {i}. {result.evidence}")
             else:
@@ -668,9 +730,9 @@ def validate_acceptance_criteria(ticket, project_dir):
     return True
 
 
-def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None, workspace: Optional[SharedWorkspace] = None):
+def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None, workspace: Optional[SharedWorkspace] = None, skip_preflight=False):
     """Execute exactly like: 'execute ticket N in tickets.md'.
-    
+
     Args:
         tickets_path: Path to tickets.md file
         ticket_identifier: Ticket ID to execute
@@ -680,6 +742,31 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
     """
     print(f"🎫 Executing Ticket {ticket_identifier}")
     print("=" * 40)
+
+    # Run preflight validation unless skipped
+    if not skip_preflight:
+        print("🚀 Running preflight validation...")
+        from hydra.preflight import PreflightChecker
+        checker = PreflightChecker()
+        report = checker.run_preflight_checks(tickets_path)
+        
+        if report.has_critical_issues():
+            print("🚨 PREFLIGHT FAILED - Critical issues found!")
+            print("\nCritical Issues:")
+            for check in report.get_critical_issues():
+                print(f"❌ {check.description}: {check.message}")
+                for detail in check.details:
+                    print(f"   {detail}")
+            print(f"\nUse --skip-preflight to override, but execution may fail.")
+            return False
+        elif report.has_errors() or report.has_warnings():
+            print("⚠️  Preflight validation completed with warnings/errors:")
+            for check in report.get_failed_checks():
+                print(f"{check.status_emoji} {check.description}: {check.message}")
+        else:
+            print("✅ Preflight validation passed")
+    else:
+        print("⚡ Skipping preflight validation (--skip-preflight)")
 
     # Parse the specific ticket
     ticket = parse_ticket(tickets_path, ticket_identifier)
@@ -755,7 +842,7 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         print(f"🔧 Using {provider_type} provider with model: {ticket_model}")
     else:
         print(f"🔧 Using {provider_type} provider with default model")
-    
+
     # For claude_tmux, set the CLAUDE_MODEL environment variable
     if provider_type == 'claude_tmux' and ticket['model']:
         os.environ['CLAUDE_MODEL'] = ticket['model']
@@ -927,7 +1014,7 @@ Please provide the complete implementation with all necessary files and code."""
                         with open(full_path, 'r') as f:
                             content = f.read()
                         artifact_name = os.path.basename(file_path)
-                        saved_path = workspace.save_artifact(ticket_identifier, artifact_name, content)
+                        workspace.save_artifact(ticket_identifier, artifact_name, content)
                         print(f"   💾 Saved {artifact_name} to workspace")
 
         # Validate acceptance criteria before marking complete
@@ -1270,7 +1357,7 @@ def get_executable_tickets(tickets: Dict[str, dict], completed: Set[str]) -> Lis
 def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
                          completed_lock: threading.Lock, workspace: SharedWorkspace) -> bool:
     """Worker function for parallel ticket execution.
-    
+
     Args:
         ticket_id: Normalized ticket ID
         ticket_data: Ticket data dictionary
@@ -1312,7 +1399,7 @@ def get_quality_summary(tickets_path="tickets.md"):
         'quality_failed': 0
     }
 
-    for ticket_id, ticket_data in tickets.items():
+    for _ticket_id, ticket_data in tickets.items():
         status = ticket_data.get('status', 'TODO').upper()
         if status == 'DONE':
             summary['done'] += 1
@@ -1347,10 +1434,41 @@ def print_quality_summary(tickets_path="tickets.md"):
     print("=" * 40)
 
 
-def run_all_tickets(tickets_path="tickets.md", max_parallel=3):
+def run_all_tickets(tickets_path="tickets.md", max_parallel=3, skip_preflight=False):
     """Execute all tickets with dependency-aware parallel execution."""
     print("🎫 Running All Tickets with Parallel Execution")
     print("=" * 50)
+
+    # Run preflight validation unless skipped
+    if not skip_preflight:
+        print("🚀 Running comprehensive preflight validation...")
+        from hydra.preflight import PreflightChecker
+        checker = PreflightChecker()
+        report = checker.run_preflight_checks(tickets_path)
+        
+        if report.has_critical_issues():
+            print("🚨 PREFLIGHT FAILED - Critical issues found!")
+            print("\nCritical Issues:")
+            for check in report.get_critical_issues():
+                print(f"❌ {check.description}: {check.message}")
+                for detail in check.details:
+                    print(f"   {detail}")
+            print(f"\nRecommendations:")
+            for rec in report.get_recommendations():
+                print(f"💡 {rec}")
+            print(f"\nUse --skip-preflight to override, but execution may fail.")
+            return False
+        elif report.has_errors() or report.has_warnings():
+            print("⚠️  Preflight validation completed with warnings/errors:")
+            for check in report.get_failed_checks()[:5]:  # Show first 5
+                print(f"{check.status_emoji} {check.description}: {check.message}")
+            if len(report.get_failed_checks()) > 5:
+                print(f"   ... and {len(report.get_failed_checks()) - 5} more issues")
+            print("Proceeding with execution despite warnings...")
+        else:
+            print("✅ Preflight validation passed")
+    else:
+        print("⚡ Skipping preflight validation (--skip-preflight)")
 
     tickets = parse_all_tickets(tickets_path)
     if not tickets:
@@ -1358,6 +1476,29 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3):
         return False
 
     print(f"📋 Found {len(tickets)} tickets")
+
+    # Validate dependencies before execution
+    print("\n🔍 Validating ticket dependencies...")
+    from hydra.validation.dependency_validator import DependencyValidator
+    validator = DependencyValidator()
+    validation_result = validator.validate_ticket_dependencies(tickets_path)
+
+    if not validation_result.valid:
+        print("❌ Dependency validation failed! Cannot proceed with execution.")
+        print("\n📋 Critical issues found:")
+        for issue in validation_result.issues:
+            if issue.severity.value == 'invalid':
+                print(f"  ❌ Ticket {issue.ticket_id}: {issue.description}")
+                if issue.suggested_fix:
+                    print(f"     💡 Fix: {issue.suggested_fix}")
+        return False
+    else:
+        print("✅ Dependency validation passed")
+        if validation_result.issues:
+            warning_count = sum(1 for issue in validation_result.issues
+                              if issue.severity.value == 'warning')
+            if warning_count > 0:
+                print(f"⚠️  Found {warning_count} warnings (will proceed)")
 
     # Create shared workspace for this session
     workspace = get_shared_workspace()

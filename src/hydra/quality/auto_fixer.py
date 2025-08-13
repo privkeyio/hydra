@@ -17,7 +17,7 @@ class QualityAutoFixer:
 
     def fix_common_issues(self) -> List[Tuple[str, bool, str]]:
         """Fix common quality issues automatically.
-        
+
         Returns:
             List of (issue, fixed, message) tuples
 
@@ -46,7 +46,7 @@ class QualityAutoFixer:
         if not src_dir.exists():
             return fixes
 
-        for root, dirs, files in os.walk(src_dir):
+        for root, _dirs, files in os.walk(src_dir):
             root_path = Path(root)
 
             # Skip non-Python directories

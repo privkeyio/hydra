@@ -22,20 +22,20 @@ logger = logging.getLogger(__name__)
 
 class ResponseParser:
     """Main parser for extracting actions from LLM responses.
-    
+
     This parser supports multiple formats including:
     - Code blocks with file paths
     - Shell commands
     - JSON-structured actions
     - Directive-style instructions
     - Mixed-format responses
-    
+
     Attributes:
         strategy: The parsing strategy to use
         validate_actions: Whether to validate parsed actions
         allow_dangerous: Whether to allow potentially dangerous actions
         max_actions: Maximum number of actions to extract per response
-    
+
     """
 
     def __init__(
@@ -46,13 +46,13 @@ class ResponseParser:
         max_actions: int = 100,
     ) -> None:
         """Initialize the response parser.
-        
+
         Args:
             strategy: Custom parsing strategy to use
             validate_actions: Whether to validate parsed actions
             allow_dangerous: Whether to allow potentially dangerous actions
             max_actions: Maximum number of actions to extract
-        
+
         """
         self.strategy = strategy or CompositeParsingStrategy()
         self.validate_actions = validate_actions
@@ -61,17 +61,17 @@ class ResponseParser:
 
     def parse(self, response: str) -> List[Action]:
         """Parse a response and extract actions.
-        
+
         Args:
             response: The LLM response text to parse
-        
+
         Returns:
             List of extracted and validated actions
-        
+
         Raises:
             ParseError: If parsing fails
             ValidationError: If validation fails
-        
+
         """
         if not response or not response.strip():
             return []
@@ -106,13 +106,13 @@ class ResponseParser:
 
     def parse_code_blocks(self, response: str) -> List[Tuple[str, str]]:
         """Parse code blocks with file paths from response.
-        
+
         Args:
             response: The response containing code blocks
-        
+
         Returns:
             List of (file_path, content) tuples
-        
+
         """
         strategy = CodeBlockStrategy()
         actions = strategy.extract_actions(response)
@@ -126,13 +126,13 @@ class ResponseParser:
 
     def extract_shell_commands(self, response: str) -> List[str]:
         """Extract shell commands from response.
-        
+
         Args:
             response: The response containing shell commands
-        
+
         Returns:
             List of shell command strings
-        
+
         """
         strategy = CommandStrategy()
         actions = strategy.extract_actions(response)
@@ -146,13 +146,13 @@ class ResponseParser:
 
     def supports_format(self, response: str) -> Dict[str, bool]:
         """Check which formats are present in the response.
-        
+
         Args:
             response: The response to analyze
-        
+
         Returns:
             Dictionary mapping format names to presence booleans
-        
+
         """
         formats = {
             "code_blocks": bool(re.search(r"```[\w]*\n.*?```", response, re.DOTALL)),
@@ -176,16 +176,16 @@ class ResponseParser:
 
     def _validate_actions(self, actions: List[Action]) -> List[Action]:
         """Validate a list of actions.
-        
+
         Args:
             actions: Actions to validate
-        
+
         Returns:
             List of valid actions
-        
+
         Raises:
             ValidationError: If validation fails
-        
+
         """
         validated = []
 
@@ -235,13 +235,13 @@ class ResponseParser:
 
     def _validate_path(self, path: str) -> None:
         """Validate a file path.
-        
+
         Args:
             path: Path to validate
-        
+
         Raises:
             ValidationError: If path is invalid
-        
+
         """
         if not path:
             raise ValidationError("Empty path")
@@ -266,13 +266,13 @@ class ResponseParser:
 
     def _filter_dangerous_actions(self, actions: List[Action]) -> List[Action]:
         """Filter out potentially dangerous actions.
-        
+
         Args:
             actions: Actions to filter
-        
+
         Returns:
             List of safe actions
-        
+
         """
         safe_actions = []
         dangerous_types = {
@@ -312,13 +312,13 @@ class ResponseParser:
 
     def _post_process_actions(self, actions: List[Action]) -> List[Action]:
         """Post-process actions to normalize and enhance them.
-        
+
         Args:
             actions: Actions to post-process
-        
+
         Returns:
             List of processed actions
-        
+
         """
         processed = []
 
@@ -350,13 +350,13 @@ class ResponseParser:
 
     def _normalize_path(self, path: str) -> str:
         """Normalize a file path.
-        
+
         Args:
             path: Path to normalize
-        
+
         Returns:
             Normalized path string
-        
+
         """
         # Remove leading/trailing whitespace
         path = path.strip()
@@ -376,13 +376,13 @@ class ResponseParser:
 
     def _is_json_response(self, response: str) -> bool:
         """Check if the response is valid JSON.
-        
+
         Args:
             response: Response to check
-        
+
         Returns:
             True if response is valid JSON
-        
+
         """
         import json
 
@@ -394,13 +394,13 @@ class ResponseParser:
 
     def _is_test_action(self, action: Action) -> bool:
         """Check if an action is test-related.
-        
+
         Args:
             action: Action to check
-        
+
         Returns:
             True if action is test-related
-        
+
         """
         test_indicators = ["test", "spec", "pytest", "unittest", "jest", "mocha"]
 
@@ -415,13 +415,13 @@ class ResponseParser:
 
     def _is_documentation_action(self, action: Action) -> bool:
         """Check if an action is documentation-related.
-        
+
         Args:
             action: Action to check
-        
+
         Returns:
             True if action is documentation-related
-        
+
         """
         doc_extensions = [".md", ".rst", ".txt", ".adoc"]
         doc_dirs = ["docs", "documentation", "doc"]
@@ -445,29 +445,29 @@ class ResponseParser:
 
 class MultiFileParser:
     """Parser specifically for handling responses with multiple files.
-    
+
     This parser can handle responses that create or modify multiple files
     in a single response, maintaining proper separation and context.
     """
 
     def __init__(self, parser: Optional[ResponseParser] = None) -> None:
         """Initialize the multi-file parser.
-        
+
         Args:
             parser: Base parser to use for extraction
-        
+
         """
         self.parser = parser or ResponseParser()
 
     def parse_files(self, response: str) -> Dict[str, Dict[str, Any]]:
         """Parse multiple files from a response.
-        
+
         Args:
             response: Response containing multiple files
-        
+
         Returns:
             Dictionary mapping file paths to file info
-        
+
         """
         actions = self.parser.parse(response)
         files = {}
@@ -486,13 +486,13 @@ class MultiFileParser:
         self, response: str
     ) -> Dict[str, List[Tuple[str, str]]]:
         """Group parsed files by directory.
-        
+
         Args:
             response: Response containing files
-        
+
         Returns:
             Dictionary mapping directories to list of (filename, content) tuples
-        
+
         """
         import os
 

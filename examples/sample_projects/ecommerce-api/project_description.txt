@@ -1,0 +1,54 @@
+Build a complete e-commerce REST API with the following components:
+
+## Core Features
+- User registration and authentication with JWT tokens
+- Product catalog with categories, search, and filtering
+- Shopping cart functionality with session management
+- Order processing with payment integration
+- Inventory management with stock tracking
+- Admin panel for managing products and orders
+
+## Technical Requirements
+- FastAPI framework with async/await support
+- PostgreSQL database with SQLAlchemy ORM
+- Redis for caching and session storage
+- JWT-based authentication with refresh tokens
+- RESTful API design with proper HTTP status codes
+- Comprehensive input validation and error handling
+- API documentation with OpenAPI/Swagger
+- Unit and integration tests with 85%+ coverage
+- Docker containerization for deployment
+- Environment-based configuration management
+
+## Database Schema
+- Users table with roles and profiles
+- Products table with categories and variants
+- Orders table with order items and status tracking
+- Cart table for persistent shopping carts
+- Categories table with hierarchical structure
+- Inventory table for stock management
+
+## Security Requirements
+- Password hashing with bcrypt
+- JWT token validation on protected endpoints
+- Role-based access control (customer, admin)
+- Rate limiting to prevent abuse
+- Input sanitization and SQL injection protection
+- CORS configuration for frontend integration
+
+## Performance Requirements
+- Response times under 200ms for standard operations
+- Support for 1000+ concurrent users
+- Database query optimization with proper indexing
+- Caching strategy for frequently accessed data
+- Pagination for large data sets
+
+## Quality Standards
+- Follow PEP 8 coding standards
+- Type hints throughout the codebase
+- Comprehensive error handling with meaningful messages
+- Logging for debugging and monitoring
+- Code documentation and inline comments
+- Automated testing with pytest
+- Code coverage reporting
+- Static analysis with tools like ruff/flake8

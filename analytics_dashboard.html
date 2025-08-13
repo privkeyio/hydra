@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydra Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0.5rem 0;
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .metric-change {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        .positive { color: #28a745; }
+        .negative { color: #dc3545; }
+        .neutral { color: #6c757d; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+        }
+
+        .recommendations {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .recommendations h2 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        .recommendation-item {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .recommendation-high {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+
+        .recommendation-medium {
+            border-left-color: #ffc107;
+            background: #fffbf0;
+        }
+
+        .recommendation-low {
+            border-left-color: #28a745;
+            background: #f0fff4;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-excellent { background-color: #28a745; }
+        .status-good { background-color: #ffc107; }
+        .status-poor { background-color: #dc3545; }
+
+        .data-table {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .data-table h3 {
+            background: #f8f9fa;
+            padding: 1rem 1.5rem;
+            margin: 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 1rem 1.5rem;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .refresh-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 1rem 1.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,123,255,0.3);
+            transition: all 0.2s ease;
+        }
+
+        .refresh-button:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0,123,255,0.4);
+        }
+
+        .last-updated {
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Hydra Analytics Dashboard</h1>
+        <p>Real-time performance metrics and insights</p>
+    </div>
+
+    <div class="container">
+        <!-- Key Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Total Tickets</div>
+                <div class="metric-value" id="total-tickets">-</div>
+                <div class="metric-change neutral" id="tickets-change">Loading...</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-label">Success Rate</div>
+                <div class="metric-value" id="success-rate">-</div>
+                <div class="metric-change" id="success-change">Loading...</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-label">Avg Execution Time</div>
+                <div class="metric-value" id="avg-time">-</div>
+                <div class="metric-change" id="time-change">Loading...</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-label">Estimation Accuracy</div>
+                <div class="metric-value" id="estimation-accuracy">-</div>
+                <div class="metric-change" id="accuracy-change">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="chart-container">
+                <div class="chart-title">Success Rate by Model</div>
+                <div class="chart-wrapper">
+                    <canvas id="modelSuccessChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Estimation Accuracy Distribution</div>
+                <div class="chart-wrapper">
+                    <canvas id="accuracyChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Failure Category Breakdown</div>
+                <div class="chart-wrapper">
+                    <canvas id="failureChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Complexity Distribution</div>
+                <div class="chart-wrapper">
+                    <canvas id="complexityChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Performance Table -->
+        <div class="data-table">
+            <h3>Model Performance Breakdown</h3>
+            <div class="table-wrapper">
+                <table id="model-performance-table">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Total Tickets</th>
+                            <th>Success Rate</th>
+                            <th>Avg Time (min)</th>
+                            <th>Performance Score</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: #666;">Loading data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="recommendations">
+            <h2>Performance Recommendations</h2>
+            <div id="recommendations-list">
+                <div class="recommendation-item">Loading recommendations...</div>
+            </div>
+        </div>
+
+        <div class="last-updated" id="last-updated">
+            Last updated: <span id="update-time">Loading...</span>
+        </div>
+    </div>
+
+    <button class="refresh-button" onclick="loadDashboardData()">
+        Refresh Data
+    </button>
+
+    <script>
+        // Dashboard data and charts
+        let charts = {};
+        
+        // Sample data structure (replace with actual API calls)
+        const sampleData = {
+            metrics: {
+                total_tickets: 156,
+                completed_tickets: 142,
+                failed_tickets: 14,
+                overall_success_rate: 91.0,
+                average_execution_time: 1440, // seconds
+                estimation_accuracy: 78.5,
+                model_performance: {
+                    smart: {
+                        model_category: "smart",
+                        total_tickets: 45,
+                        success_rate: 95.6,
+                        performance_score: 88.2,
+                        average_completion_time: 2100,
+                        accuracy_vs_estimates: 82.1,
+                        complexity_handling_score: 92.4,
+                        failure_rate: 4.4
+                    },
+                    coder: {
+                        model_category: "coder", 
+                        total_tickets: 67,
+                        success_rate: 89.6,
+                        performance_score: 79.3,
+                        average_completion_time: 1680,
+                        accuracy_vs_estimates: 76.8,
+                        complexity_handling_score: 85.1,
+                        failure_rate: 10.4
+                    },
+                    balanced: {
+                        model_category: "balanced",
+                        total_tickets: 38,
+                        success_rate: 92.1,
+                        performance_score: 84.7,
+                        average_completion_time: 960,
+                        accuracy_vs_estimates: 79.3,
+                        complexity_handling_score: 78.2,
+                        failure_rate: 7.9
+                    },
+                    fast: {
+                        model_category: "fast",
+                        total_tickets: 6,
+                        success_rate: 100.0,
+                        performance_score: 91.5,
+                        average_completion_time: 480,
+                        accuracy_vs_estimates: 85.0,
+                        complexity_handling_score: 65.3,
+                        failure_rate: 0.0
+                    }
+                },
+                failure_patterns: {
+                    complexity_underestimated: 5,
+                    model_mismatch: 3,
+                    technical_error: 4,
+                    timeout: 2
+                },
+                complexity_trends: {
+                    small: [1.2, 1.8, 1.5, 2.1, 1.9],
+                    medium: [3.4, 4.1, 3.8, 4.5, 3.9],
+                    large: [7.2, 8.1, 6.9, 8.8, 7.5]
+                },
+                recommendations: [
+                    "Estimation accuracy is moderate (78.5%). Consider refining complexity estimation algorithms.",
+                    "Coder model has moderate failure rate (10.4%). Review task assignment criteria.",
+                    "Multiple tickets failed due to underestimated complexity. Improve complexity analysis or add safety margins."
+                ]
+            }
+        };
+
+        function updateMetrics(data) {
+            const metrics = data.metrics;
+            
+            document.getElementById('total-tickets').textContent = metrics.total_tickets;
+            document.getElementById('success-rate').textContent = metrics.overall_success_rate.toFixed(1) + '%';
+            document.getElementById('avg-time').textContent = (metrics.average_execution_time / 60).toFixed(1) + 'm';
+            document.getElementById('estimation-accuracy').textContent = metrics.estimation_accuracy.toFixed(1) + '%';
+            
+            // Update status indicators based on values
+            updateMetricStatus('success-change', metrics.overall_success_rate, [90, 75]);
+            updateMetricStatus('accuracy-change', metrics.estimation_accuracy, [80, 60]);
+            updateMetricStatus('time-change', 100 - (metrics.average_execution_time / 60 / 30 * 100), [70, 50]);
+        }
+
+        function updateMetricStatus(elementId, value, thresholds) {
+            const element = document.getElementById(elementId);
+            let status, text;
+            
+            if (value >= thresholds[0]) {
+                status = 'positive';
+                text = 'Excellent';
+            } else if (value >= thresholds[1]) {
+                status = 'neutral';
+                text = 'Good';
+            } else {
+                status = 'negative';
+                text = 'Needs Attention';
+            }
+            
+            element.className = `metric-change ${status}`;
+            element.innerHTML = `<span class="status-indicator status-${status === 'positive' ? 'excellent' : status === 'neutral' ? 'good' : 'poor'}"></span>${text}`;
+        }
+
+        function createModelSuccessChart(data) {
+            const ctx = document.getElementById('modelSuccessChart').getContext('2d');
+            
+            if (charts.modelSuccess) {
+                charts.modelSuccess.destroy();
+            }
+            
+            const modelData = data.metrics.model_performance;
+            const labels = Object.keys(modelData).map(key => key.charAt(0).toUpperCase() + key.slice(1));
+            const successRates = Object.values(modelData).map(model => model.success_rate);
+            
+            charts.modelSuccess = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Success Rate (%)',
+                        data: successRates,
+                        backgroundColor: [
+                            '#FF6384',
+                            '#36A2EB', 
+                            '#FFCE56',
+                            '#4BC0C0'
+                        ],
+                        borderWidth: 0,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createAccuracyChart(data) {
+            const ctx = document.getElementById('accuracyChart').getContext('2d');
+            
+            if (charts.accuracy) {
+                charts.accuracy.destroy();
+            }
+            
+            // Simulate estimation accuracy distribution
+            const accuracyData = {
+                'Accurate (±20%)': 65,
+                'Underestimated': 25,
+                'Overestimated': 10
+            };
+            
+            charts.accuracy = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(accuracyData),
+                    datasets: [{
+                        data: Object.values(accuracyData),
+                        backgroundColor: [
+                            '#28a745',
+                            '#ffc107', 
+                            '#dc3545'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createFailureChart(data) {
+            const ctx = document.getElementById('failureChart').getContext('2d');
+            
+            if (charts.failure) {
+                charts.failure.destroy();
+            }
+            
+            const failureData = data.metrics.failure_patterns;
+            const labels = Object.keys(failureData).map(key => 
+                key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+            );
+            const values = Object.values(failureData);
+            
+            charts.failure = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: [
+                            '#dc3545',
+                            '#fd7e14',
+                            '#ffc107',
+                            '#6f42c1'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createComplexityChart(data) {
+            const ctx = document.getElementById('complexityChart').getContext('2d');
+            
+            if (charts.complexity) {
+                charts.complexity.destroy();
+            }
+            
+            const complexityData = data.metrics.complexity_trends;
+            const labels = Object.keys(complexityData).map(key => 
+                key.charAt(0).toUpperCase() + key.slice(1)
+            );
+            const averages = Object.values(complexityData).map(scores => 
+                scores.reduce((a, b) => a + b, 0) / scores.length
+            );
+            
+            charts.complexity = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average Complexity Score',
+                        data: averages,
+                        backgroundColor: '#6f42c1',
+                        borderWidth: 0,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateModelPerformanceTable(data) {
+            const tbody = document.querySelector('#model-performance-table tbody');
+            const modelData = data.metrics.model_performance;
+            
+            tbody.innerHTML = '';
+            
+            Object.entries(modelData).forEach(([key, model]) => {
+                const row = document.createElement('tr');
+                
+                let statusClass = 'excellent';
+                if (model.performance_score < 60) statusClass = 'poor';
+                else if (model.performance_score < 80) statusClass = 'good';
+                
+                row.innerHTML = `
+                    <td>${key.charAt(0).toUpperCase() + key.slice(1)}</td>
+                    <td>${model.total_tickets}</td>
+                    <td>${model.success_rate.toFixed(1)}%</td>
+                    <td>${(model.average_completion_time / 60).toFixed(1)}</td>
+                    <td>${model.performance_score.toFixed(1)}</td>
+                    <td><span class="status-indicator status-${statusClass}"></span>${statusClass.charAt(0).toUpperCase() + statusClass.slice(1)}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateRecommendations(data) {
+            const container = document.getElementById('recommendations-list');
+            const recommendations = data.metrics.recommendations;
+            
+            container.innerHTML = '';
+            
+            recommendations.forEach((rec, index) => {
+                const div = document.createElement('div');
+                
+                let priority = 'low';
+                if (rec.toLowerCase().includes('failure') || rec.toLowerCase().includes('accuracy')) {
+                    priority = 'high';
+                } else if (rec.toLowerCase().includes('performance') || rec.toLowerCase().includes('review')) {
+                    priority = 'medium';
+                }
+                
+                div.className = `recommendation-item recommendation-${priority}`;
+                div.textContent = rec;
+                
+                container.appendChild(div);
+            });
+        }
+
+        function loadDashboardData() {
+            // In a real implementation, this would fetch from an API
+            // For demo purposes, we'll use the sample data
+            
+            updateMetrics(sampleData);
+            createModelSuccessChart(sampleData);
+            createAccuracyChart(sampleData);
+            createFailureChart(sampleData);
+            createComplexityChart(sampleData);
+            updateModelPerformanceTable(sampleData);
+            updateRecommendations(sampleData);
+            
+            document.getElementById('update-time').textContent = new Date().toLocaleString();
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardData();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(loadDashboardData, 30000);
+        });
+
+        // API integration example (commented out for demo)
+        /*
+        async function fetchAnalyticsData() {
+            try {
+                const response = await fetch('/api/analytics/dashboard');
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to fetch analytics data:', error);
+                return sampleData; // Fallback to sample data
+            }
+        }
+        */
+    </script>
+</body>
+</html>

@@ -40,7 +40,7 @@ class AgentPool:
 
     def __init__(self, max_agents: int = 4, idle_timeout: int = 300):
         """Initialize agent pool.
-        
+
         Args:
             max_agents: Maximum number of concurrent agents
             idle_timeout: Seconds before idle agents are terminated
@@ -76,10 +76,10 @@ class AgentPool:
 
     def spawn_agent(self, ticket_id: str) -> Optional[str]:
         """Spawn a new agent for a ticket.
-        
+
         Args:
             ticket_id: Ticket the agent will work on
-            
+
         Returns:
             Agent ID if spawned, None if pool is full
 
@@ -141,7 +141,7 @@ class AgentPool:
 
     def release_agent(self, agent_id: str):
         """Mark an agent as idle after completing a task.
-        
+
         Args:
             agent_id: Agent to release
 
@@ -156,7 +156,7 @@ class AgentPool:
 
     def terminate_agent(self, agent_id: str):
         """Terminate an agent immediately.
-        
+
         Args:
             agent_id: Agent to terminate
 
@@ -166,7 +166,7 @@ class AgentPool:
 
     def _terminate_agent(self, agent_id: str):
         """Internal method to terminate an agent (assumes lock is held).
-        
+
         Args:
             agent_id: Agent to terminate
 
@@ -211,7 +211,7 @@ class AgentPool:
 
     def get_status(self) -> Dict:
         """Get current pool status.
-        
+
         Returns:
             Dictionary with pool statistics
 

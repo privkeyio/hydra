@@ -180,11 +180,11 @@ class ClaudeFileInterceptor:
         self, output: str, agent_id: str
     ) -> Optional[Tuple[str, str]]:
         """Detect file operations in Claude Code output.
-        
+
         Args:
             output: The output from Claude Code session
             agent_id: The agent/session identifier
-            
+
         Returns:
             Tuple of (operation_type, file_path) or None
 
@@ -199,12 +199,12 @@ class ClaudeFileInterceptor:
 
     def acquire_file_lock(self, agent_id: str, file_path: str, operation: str) -> bool:
         """Acquire a file lock before operation.
-        
+
         Args:
             agent_id: The agent requesting the lock
             file_path: Path to the file
             operation: Type of operation (read/write/edit)
-            
+
         Returns:
             True if lock acquired, False otherwise
 
@@ -250,7 +250,7 @@ class ClaudeFileInterceptor:
 
     def release_agent_locks(self, agent_id: str):
         """Release all locks held by an agent.
-        
+
         Args:
             agent_id: The agent whose locks should be released
 
@@ -266,7 +266,7 @@ class ClaudeFileInterceptor:
 
     def get_lock_status(self) -> Dict[str, any]:
         """Get current lock status for monitoring.
-        
+
         Returns:
             Dictionary with lock statistics
 

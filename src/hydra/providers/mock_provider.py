@@ -10,11 +10,11 @@ class MockProvider(BaseProvider):
 
     def __init__(self, config: LLMConfig, fail_mode: bool = False):
         """Initialize mock provider.
-        
+
         Args:
             config: Provider configuration
             fail_mode: If True, operations will fail for error testing
-        
+
         """
         super().__init__(config)
         self.fail_mode = fail_mode
@@ -112,20 +112,20 @@ class MockProvider(BaseProvider):
 
     def set_response_override(self, prompt: str, response: str):
         """Set a custom response for a specific prompt.
-        
+
         Args:
             prompt: The prompt to override
             response: The response to return
-        
+
         """
         self.response_overrides[prompt] = response
 
     def get_call_history(self) -> List[Dict[str, Any]]:
         """Get the history of calls made to this provider.
-        
+
         Returns:
             List of call records
-        
+
         """
         return self.call_history
 

@@ -106,11 +106,11 @@ class ArtifactTracker:
 
     def discover_artifacts(self, ticket_id: str, before_snapshot: Set[str]) -> List[TicketArtifact]:
         """Discover artifacts created/modified by a ticket.
-        
+
         Args:
             ticket_id: The ticket that was executed
             before_snapshot: Set of file paths that existed before ticket execution
-            
+
         Returns:
             List of artifacts created or modified
 
@@ -270,7 +270,7 @@ class ArtifactTracker:
         acceptance_criteria_met: Optional[List[str]] = None
     ):
         """Record the completion of a ticket and its artifacts.
-        
+
         Args:
             ticket_id: The completed ticket ID
             title: Ticket title
@@ -326,11 +326,11 @@ class ArtifactTracker:
 
     def get_dependency_context(self, ticket_id: str, dependencies: List[str]) -> str:
         """Get context from dependent tickets for inclusion in prompt.
-        
+
         Args:
             ticket_id: The ticket about to be executed
             dependencies: List of ticket IDs this ticket depends on
-            
+
         Returns:
             Context string to include in the prompt
 
@@ -404,7 +404,7 @@ class ArtifactTracker:
 
     def get_file_snapshot(self) -> Set[str]:
         """Get a snapshot of current files in the project.
-        
+
         Returns:
             Set of relative file paths
 
@@ -423,7 +423,7 @@ class ArtifactTracker:
 
     def clear_context(self, ticket_id: Optional[str] = None):
         """Clear context for a specific ticket or all tickets.
-        
+
         Args:
             ticket_id: Specific ticket to clear, or None for all
 

@@ -1,20 +1,21 @@
 """File creation enforcement for Claude Code execution."""
 
 import re
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 
 def extract_required_files(ticket: Dict[str, Any]) -> List[str]:
     """Extract all files that MUST be created from ticket acceptance criteria.
-    
+
     Args:
         ticket: Parsed ticket dictionary
-        
+
     Returns:
         List of file paths that must be created
+
     """
     required_files = []
-    
+
     # Enhanced patterns that match more documentation requirements
     file_patterns = [
         r"[Cc]reate\s+(?:reusable\s+)?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)(?:\s+utility|\s+file)?",
@@ -28,7 +29,7 @@ def extract_required_files(ticket: Dict[str, Any]) -> List[str]:
         r"(?:in|to)\s+(test-results/[a-zA-Z0-9_\-]+\.[a-zA-Z0-9]+)",
         r"(?:in|to)\s+(docs/[a-zA-Z0-9_\-]+\.[a-zA-Z0-9]+)",
     ]
-    
+
     # Check acceptance criteria
     for criteria in ticket.get('acceptance_criteria', []):
         for pattern in file_patterns:
@@ -39,7 +40,7 @@ def extract_required_files(ticket: Dict[str, Any]) -> List[str]:
                     file_path = match.strip()
                     if file_path not in required_files:
                         required_files.append(file_path)
-    
+
     # Also check output files section
     for output_file in ticket.get('output_files', []):
         if isinstance(output_file, str) and '.' in output_file:
@@ -47,23 +48,24 @@ def extract_required_files(ticket: Dict[str, Any]) -> List[str]:
             file_path = output_file.split('(')[0].strip()
             if file_path not in required_files and not any(skip in file_path.lower() for skip in ['updated', 'modified']):
                 required_files.append(file_path)
-    
+
     return required_files
 
 
 def build_documentation_emphasis(required_files: List[str]) -> str:
     """Build special emphasis for documentation/reporting files.
-    
+
     Args:
         required_files: List of required files
-        
+
     Returns:
         Extra prompt text for documentation files
+
     """
     doc_files = [f for f in required_files if 'test-results/' in f or '.md' in f or 'metrics.json' in f]
     if not doc_files:
         return ""
-    
+
     prompt = "\n📊 DOCUMENTATION REQUIREMENTS:\n"
     prompt += "These files MUST be created with actual test results/metrics:\n"
     for doc_file in doc_files:
@@ -83,20 +85,21 @@ def build_documentation_emphasis(required_files: List[str]) -> str:
 
 def build_file_creation_prompt(ticket_id: str, required_files: List[str]) -> str:
     """Build an explicit file creation prompt for Claude.
-    
+
     Args:
         ticket_id: Ticket identifier
         required_files: List of files that must be created
-        
+
     Returns:
         Prompt text emphasizing file creation
+
     """
     if not required_files:
         return ""
-    
+
     prompt = f"\n\n🚨🚨🚨 CRITICAL FILE CREATION REQUIREMENTS FOR TICKET {ticket_id} 🚨🚨🚨\n"
     prompt += "YOU MUST CREATE THE FOLLOWING FILES (DO NOT JUST MODIFY EXISTING FILES):\n\n"
-    
+
     for i, file_path in enumerate(required_files, 1):
         # Suggest common locations if path doesn't include directory
         if '/' not in file_path:
@@ -125,35 +128,36 @@ def build_file_creation_prompt(ticket_id: str, required_files: List[str]) -> str
                 prompt += f"{i}. CREATE NEW FILE: {file_path}\n"
         else:
             prompt += f"{i}. CREATE NEW FILE: {file_path}\n"
-    
+
     prompt += "\n⚠️ THESE ARE NOT OPTIONAL - YOU MUST CREATE ALL THESE FILES!\n"
     prompt += "⚠️ DO NOT JUST MODIFY EXISTING FILES - CREATE THE NEW FILES LISTED ABOVE!\n"
     prompt += "⚠️ USE THE 'Write' TOOL OR 'touch' COMMAND TO CREATE THESE FILES!\n"
-    
+
     # Add documentation emphasis if needed
     doc_emphasis = build_documentation_emphasis(required_files)
     if doc_emphasis:
         prompt += doc_emphasis
-    
+
     prompt += "\nAfter creating these files, implement the functionality as described in the acceptance criteria.\n"
     prompt += "🚨🚨🚨 END OF CRITICAL FILE CREATION REQUIREMENTS 🚨🚨🚨\n\n"
-    
+
     return prompt
 
 
 def enforce_file_creation(ticket: Dict[str, Any]) -> str:
     """Generate enforcement prompt for file creation.
-    
+
     Args:
         ticket: Parsed ticket dictionary
-        
+
     Returns:
         Enhanced prompt with explicit file creation instructions
+
     """
     required_files = extract_required_files(ticket)
-    
+
     if not required_files:
         return ""
-    
+
     ticket_id = ticket.get('number', 'Unknown')
     return build_file_creation_prompt(ticket_id, required_files)

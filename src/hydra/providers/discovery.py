@@ -65,14 +65,14 @@ class ProviderDiscovery:
     @classmethod
     def discover_all(cls) -> List[ProviderConfig]:
         """Discover all available AI tools in the system.
-        
+
         Returns:
             List[ProviderConfig]: List of configurations for discovered providers.
 
         """
         discovered = []
 
-        for tool_name, tool_info in cls.KNOWN_TOOLS.items():
+        for _tool_name, tool_info in cls.KNOWN_TOOLS.items():
             for command in tool_info['commands']:
                 if cls._is_command_available(command):
                     config = ProviderConfig(
@@ -89,10 +89,10 @@ class ProviderDiscovery:
     @classmethod
     def discover_by_name(cls, tool_name: str) -> Optional[ProviderConfig]:
         """Discover a specific AI tool by name.
-        
+
         Args:
             tool_name: Name of the tool to discover.
-            
+
         Returns:
             Optional[ProviderConfig]: Configuration if tool is found, None otherwise.
 
@@ -116,10 +116,10 @@ class ProviderDiscovery:
     @classmethod
     def find_executable_path(cls, command: str) -> Optional[str]:
         """Find the full path to an executable command.
-        
+
         Args:
             command: Command name to find.
-            
+
         Returns:
             Optional[str]: Full path to executable if found, None otherwise.
 
@@ -129,10 +129,10 @@ class ProviderDiscovery:
     @classmethod
     def _is_command_available(cls, command: str) -> bool:
         """Check if a command is available in the system PATH.
-        
+
         Args:
             command: Command name to check.
-            
+
         Returns:
             bool: True if command is available.
 
@@ -142,10 +142,10 @@ class ProviderDiscovery:
     @classmethod
     def probe_tool_capabilities(cls, executable_path: str) -> Set[ProviderCapability]:
         """Probe a tool to determine its capabilities.
-        
+
         Args:
             executable_path: Path to the tool executable.
-            
+
         Returns:
             Set[ProviderCapability]: Detected capabilities.
 
@@ -191,11 +191,11 @@ class ProviderDiscovery:
     def create_config_from_path(cls, executable_path: str,
                               provider_name: Optional[str] = None) -> ProviderConfig:
         """Create a provider configuration from an executable path.
-        
+
         Args:
             executable_path: Path to the tool executable.
             provider_name: Optional provider name. If None, derives from executable.
-            
+
         Returns:
             ProviderConfig: Configuration for the tool.
 
@@ -215,10 +215,10 @@ class ProviderDiscovery:
     @classmethod
     def scan_directory(cls, directory: str) -> List[ProviderConfig]:
         """Scan a directory for AI tools.
-        
+
         Args:
             directory: Directory path to scan.
-            
+
         Returns:
             List[ProviderConfig]: List of configurations for found tools.
 
@@ -230,7 +230,7 @@ class ProviderDiscovery:
             return configs
 
         # Look for known command patterns
-        for tool_name, tool_info in cls.KNOWN_TOOLS.items():
+        for _tool_name, tool_info in cls.KNOWN_TOOLS.items():
             for command in tool_info['commands']:
                 executable_path = directory_path / command
                 if executable_path.exists() and executable_path.is_file():
@@ -247,7 +247,7 @@ class ProviderDiscovery:
     @classmethod
     def get_supported_tools(cls) -> List[str]:
         """Get list of supported tool names.
-        
+
         Returns:
             List[str]: List of supported tool names.
 
@@ -258,7 +258,7 @@ class ProviderDiscovery:
     def add_tool_definition(cls, tool_name: str, commands: List[str],
                           provider_name: str, capabilities: Set[ProviderCapability]) -> None:
         """Add a new tool definition for discovery.
-        
+
         Args:
             tool_name: Name of the tool.
             commands: List of command names to look for.

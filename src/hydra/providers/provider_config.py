@@ -313,7 +313,7 @@ class ProviderConfigManager:
         api_key = self._expand_env_var(config_dict.get('api_key'))
         base_url = self._expand_env_var(config_dict.get('base_url'))
         cli_path = self._expand_env_var(config_dict.get('cli_path'))
-        
+
         # For Claude providers, use dynamic path resolution if not explicitly set
         if name == 'claude' and cli_path == 'claude':
             from hydra.utils.claude_path import get_claude_cli_path
@@ -382,11 +382,11 @@ class ProviderConfigManager:
         # (i.e., if it's explicitly selected via LLM_PROVIDER or if it's the only enabled provider)
         provider_name = os.getenv('LLM_PROVIDER')
         is_selected = (provider_name == config.name)
-        
+
         # Count enabled providers
         enabled_count = sum(1 for c in self._configs.values() if c.enabled)
         is_only_provider = (config.enabled and enabled_count == 1)
-        
+
         # Validate API providers have required credentials
         if config.type in ['venice_api', 'anthropic_api', 'openai_api']:
             if not config.api_key and config.enabled and (is_selected or is_only_provider):
@@ -510,7 +510,7 @@ class ProviderConfigManager:
         if 'claude' in self._configs and self._configs['claude'].enabled:
             # Check if the Claude CLI is actually available
             if self._configs['claude'].cli_path and (
-                os.path.exists(self._configs['claude'].cli_path) or 
+                os.path.exists(self._configs['claude'].cli_path) or
                 shutil.which(self._configs['claude'].cli_path)
             ):
                 return self._configs['claude']

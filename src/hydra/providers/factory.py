@@ -180,7 +180,7 @@ class LLMProviderFactory:
 
 def create_claude_provider_factory():
     """Create a factory function for Claude providers suitable for WarmSessionPool.
-    
+
     Returns:
         Callable that creates InteractiveAIProvider instances
 

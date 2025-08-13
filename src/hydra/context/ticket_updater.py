@@ -38,11 +38,11 @@ class TicketUpdater:
 
     def update_future_tickets(self, completed_ticket_id: str, artifacts: List[TicketArtifact]) -> int:
         """Update all future tickets that reference this completed ticket's artifacts.
-        
+
         Args:
             completed_ticket_id: The ticket that just completed
             artifacts: List of artifacts created by the completed ticket
-            
+
         Returns:
             Number of updates made
 
@@ -200,13 +200,13 @@ class TicketUpdater:
         artifact_map: Dict[str, List[TicketArtifact]]
     ) -> Optional[str]:
         """Update a specific ticket section with actual file references.
-        
+
         Args:
             content: The full tickets.md content
             ticket_id: The ticket to update
             referenced_ticket: The ticket being referenced
             artifact_map: Map of artifact types to artifacts
-            
+
         Returns:
             Updated content or None if no updates made
 
@@ -347,7 +347,7 @@ class TicketUpdater:
         artifacts: List[TicketArtifact]
     ) -> Tuple[str, int]:
         """Update any informal references to this ticket throughout the document.
-        
+
         Returns:
             Tuple of (updated_content, number_of_updates)
 
@@ -389,7 +389,7 @@ class TicketUpdater:
         artifacts: List[TicketArtifact]
     ) -> List[Dict[str, str]]:
         """Preview what updates would be made without actually making them.
-        
+
         Returns:
             List of proposed updates with before/after text
 
@@ -403,7 +403,7 @@ class TicketUpdater:
             content = f.read()
 
         dependent_tickets = self._find_dependent_tickets(completed_ticket_id)
-        artifact_map = self._create_artifact_map(artifacts)
+        self._create_artifact_map(artifacts)
 
         for dep_ticket_id in dependent_tickets:
             # Find references in this ticket

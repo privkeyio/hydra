@@ -54,7 +54,7 @@ class ConfigCache:
 
     def __init__(self, ttl_seconds: int = 300):
         """Initialize config cache.
-        
+
         Args:
             ttl_seconds: Time-to-live for cached configs in seconds
 
@@ -120,7 +120,7 @@ class ProviderPool:
 
     def __init__(self, max_size: int = 10):
         """Initialize provider pool.
-        
+
         Args:
             max_size: Maximum number of providers to keep in pool
 
@@ -225,7 +225,7 @@ class LazyProviderProxy:
 
     def __init__(self, provider_type: str, config: Optional[LLMConfig] = None):
         """Initialize lazy proxy.
-        
+
         Args:
             provider_type: Type of provider to create
             config: Provider configuration
@@ -261,7 +261,7 @@ class LazyProviderProxy:
 
 def memoize_provider_config(ttl_seconds: int = 300):
     """Decorator to memoize provider configurations.
-    
+
     Args:
         ttl_seconds: Time-to-live for cached configs
 
@@ -404,7 +404,7 @@ def get_performance_monitor() -> PerformanceMonitor:
 
 def optimize_provider_switching(func: Callable) -> Callable:
     """Decorator to optimize provider switching in functions.
-    
+
     This decorator:
     1. Caches provider instances
     2. Monitors performance

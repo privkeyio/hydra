@@ -36,11 +36,11 @@ class FastProviderSwitch:
 
     def switch_to(self, provider_type: str, **kwargs) -> BaseProvider:
         """Switch to a different provider with minimal overhead.
-        
+
         Args:
             provider_type: Type of provider to switch to
             **kwargs: Additional provider parameters
-            
+
         Returns:
             The new active provider
 
@@ -68,7 +68,7 @@ class FastProviderSwitch:
 
     def switch_back(self) -> Optional[BaseProvider]:
         """Switch back to previous provider.
-        
+
         Returns:
             The previous provider or None if stack is empty
 
@@ -83,11 +83,11 @@ class FastProviderSwitch:
     @contextmanager
     def temporary_switch(self, provider_type: str, **kwargs):
         """Context manager for temporary provider switch.
-        
+
         Args:
             provider_type: Type of provider to switch to temporarily
             **kwargs: Additional provider parameters
-            
+
         Yields:
             The temporary provider
 
@@ -103,7 +103,7 @@ class FastProviderSwitch:
 
     def preload_providers(self, provider_types: list[str]) -> None:
         """Preload providers into pool for fast switching.
-        
+
         Args:
             provider_types: List of provider types to preload
 
@@ -111,7 +111,7 @@ class FastProviderSwitch:
         for provider_type in provider_types:
             try:
                 # This will initialize and cache the provider
-                provider = self._registry.get_or_create(
+                self._registry.get_or_create(
                     provider_type,
                     cache=True,
                     lazy=False
@@ -122,10 +122,10 @@ class FastProviderSwitch:
 
     def get_fastest_provider(self, category: str = "fast") -> BaseProvider:
         """Get the fastest available provider for a category.
-        
+
         Args:
             category: Provider category (fast, balanced, smart)
-            
+
         Returns:
             The fastest provider for the category
 
@@ -182,11 +182,11 @@ def get_fast_switch() -> FastProviderSwitch:
 
 def switch_provider(provider_type: str, **kwargs) -> BaseProvider:
     """Quick function to switch providers.
-    
+
     Args:
         provider_type: Type of provider to switch to
         **kwargs: Additional provider parameters
-        
+
     Returns:
         The new active provider
 
@@ -197,11 +197,11 @@ def switch_provider(provider_type: str, **kwargs) -> BaseProvider:
 @contextmanager
 def use_provider(provider_type: str, **kwargs):
     """Context manager for using a specific provider temporarily.
-    
+
     Args:
         provider_type: Type of provider to use
         **kwargs: Additional provider parameters
-        
+
     Yields:
         The provider instance
 

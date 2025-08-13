@@ -48,7 +48,7 @@ jobs:
         echo "Full lint check for review (non-blocking):"
         ruff check src/ --exclude="src/hydra/templates/templates" --exit-zero
     
-    - name: Run tests
+    - name: Run core tests
       env:
         LLM_PROVIDER: mock
         REDIS_URL: redis://localhost:6379/0
@@ -56,3 +56,12 @@ jobs:
         TESTING: "1"
       run: |
         timeout 18m python -m pytest tests/ -v --tb=short --timeout=300
+    
+    - name: Run CI integration tests
+      env:
+        LLM_PROVIDER: mock
+        REDIS_URL: redis://localhost:6379/0
+        DATABASE_URL: sqlite:///test.db
+        TESTING: "1"
+      run: |
+        timeout 5m python -m pytest tests/test_ticket_creation.py tests/test_parallel_execution.py tests/test_verify_parallel.py tests/test_ci_integration.py -v --tb=short --timeout=60

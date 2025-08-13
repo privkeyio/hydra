@@ -776,13 +776,13 @@ def _handle_sync_parallel_execution(args):
             from hydra.preflight import PreflightChecker
             checker = PreflightChecker()
             report = checker.run_preflight_checks(str(tickets_path))
-            
+
             if report.has_critical_issues():
                 print("🚨 PREFLIGHT FAILED - Critical issues found!")
                 print("\nCritical Issues:")
                 for check in report.get_critical_issues():
                     print(f"❌ {check.description}: {check.message}")
-                print(f"\nUse --skip-preflight to override, but execution may fail.")
+                print("\nUse --skip-preflight to override, but execution may fail.")
                 return 1
             elif report.has_errors() or report.has_warnings():
                 print("⚠️  Preflight validation completed with warnings/errors:")
@@ -944,13 +944,13 @@ def _handle_async_parallel_execution(args):
                 from hydra.preflight import PreflightChecker
                 checker = PreflightChecker()
                 report = checker.run_preflight_checks(str(tickets_path))
-                
+
                 if report.has_critical_issues():
                     print("🚨 PREFLIGHT FAILED - Critical issues found!")
                     print("\nCritical Issues:")
                     for check in report.get_critical_issues():
                         print(f"❌ {check.description}: {check.message}")
-                    print(f"\nUse --skip-preflight to override, but execution may fail.")
+                    print("\nUse --skip-preflight to override, but execution may fail.")
                     return 1
                 elif report.has_errors() or report.has_warnings():
                     print("⚠️  Preflight validation completed with warnings/errors:")
@@ -1108,13 +1108,13 @@ def _handle_batch_execution(args):
                 from hydra.preflight import PreflightChecker
                 checker = PreflightChecker()
                 report = checker.run_preflight_checks(str(tickets_path))
-                
+
                 if report.has_critical_issues():
                     print("🚨 PREFLIGHT FAILED - Critical issues found!")
                     print("\nCritical Issues:")
                     for check in report.get_critical_issues():
                         print(f"❌ {check.description}: {check.message}")
-                    print(f"\nUse --skip-preflight to override, but execution may fail.")
+                    print("\nUse --skip-preflight to override, but execution may fail.")
                     return 1
                 elif report.has_errors() or report.has_warnings():
                     print("⚠️  Preflight validation completed with warnings/errors:")

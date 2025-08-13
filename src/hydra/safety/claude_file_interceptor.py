@@ -4,6 +4,7 @@ Intercepts file operations from Claude Code sessions and applies file locking
 to prevent concurrent modification conflicts in parallel execution.
 """
 
+import logging
 import re
 import threading
 import time
@@ -13,6 +14,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from hydra.safety.file_lock import get_file_lock_manager
+
+logger = logging.getLogger(__name__)
 
 
 class OperationType(Enum):

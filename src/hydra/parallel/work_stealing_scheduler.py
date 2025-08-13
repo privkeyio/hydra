@@ -131,7 +131,7 @@ class WorkStealingScheduler:
             # Handle thread creation failures gracefully (e.g., in test environments)
             logger.warning(f"Failed to start rebalance thread: {e}")
             self.rebalance_thread = None
-            # Scheduler can still work without background rebalancing
+            self.running = False  # Set running to False if thread creation fails
 
     def stop(self):
         """Stop the scheduler and cleanup resources."""

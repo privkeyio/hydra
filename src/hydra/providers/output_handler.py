@@ -871,7 +871,7 @@ class OutputHandlerFactory:
 
             return DefaultHandler()
 
-        return handler_class(provider_name)
+        return handler_class()
 
     @classmethod
     def register(cls, provider_name: str, handler_class: type) -> None:

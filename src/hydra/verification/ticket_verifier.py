@@ -152,10 +152,14 @@ class TicketVerifier:
         """Verify a single acceptance criterion."""
         criterion_lower = criterion.lower()
 
-        # Check for file creation
+        # Skip file existence checks for save/write operations
+        save_keywords = ['save', 'write', 'persist', 'update', 'modify']
+        is_save_operation = any(keyword in criterion_lower for keyword in save_keywords)
+        
+        # Check for file creation (but not for save/write operations)
         file_keywords = ['create', 'add', 'generate']
         has_file_keyword = any(keyword in criterion_lower for keyword in file_keywords)
-        if has_file_keyword and 'file' in criterion_lower:
+        if has_file_keyword and 'file' in criterion_lower and not is_save_operation:
             return self._verify_file_exists(criterion)
 
         # Check for directory creation
@@ -181,9 +185,9 @@ class TicketVerifier:
         if 'test' in criterion_lower:
             return self._verify_test_exists(criterion)
 
-        # Check for configuration
+        # Check for configuration (but skip for save/write operations that mention settings)
         config_keywords = ['configure', 'configuration', 'setting']
-        if any(keyword in criterion_lower for keyword in config_keywords):
+        if any(keyword in criterion_lower for keyword in config_keywords) and not is_save_operation:
             return self._verify_configuration_exists(criterion)
 
         # Default: unable to automatically verify

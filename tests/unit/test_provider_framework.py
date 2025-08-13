@@ -826,7 +826,7 @@ class TestErrorScenarios:
         provider = MockProvider(config)
 
         # Simulate streaming error
-        def error_stream():
+        def error_stream(prompt: str, **kwargs):
             yield "Start"
             raise RuntimeError("Stream error")
 

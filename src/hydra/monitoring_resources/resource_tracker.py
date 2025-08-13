@@ -293,16 +293,17 @@ class ResourceTracker:
         if self.running:
             return
 
-        self.running = True
         try:
             self.monitor_thread = threading.Thread(
                 target=self._monitoring_loop, daemon=True
             )
             self.monitor_thread.start()
+            self.running = True  # Only set running to True after successful start
             logger.info("Resource monitoring started")
         except RuntimeError as e:
             logger.warning(f"Could not start monitoring thread: {e}")
-            self.running = False  # Make sure running is set to False on failure
+            self.running = False
+            self.monitor_thread = None
 
     def stop_monitoring(self):
         """Stop the resource monitoring loop."""

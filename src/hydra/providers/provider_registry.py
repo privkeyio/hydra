@@ -236,7 +236,7 @@ class ProviderRegistry:
     def create_provider(
         self,
         provider_type: Optional[str] = None,
-        config: Optional[ProviderConfig] = None,
+        config: Optional[Any] = None,  # Accept both ProviderConfig and LLMConfig
         **kwargs
     ) -> BaseProvider:
         """Create a provider instance.
@@ -310,7 +310,7 @@ class ProviderRegistry:
         self,
         provider_type: str,
         provider_class: Type[BaseProvider],
-        config: ProviderConfig,
+        config: Any,  # Accept both ProviderConfig and LLMConfig
         kwargs: dict
     ) -> BaseProvider:
         """Create the actual provider instance.
@@ -318,7 +318,7 @@ class ProviderRegistry:
         Args:
             provider_type: Provider type
             provider_class: Provider class
-            config: Provider configuration
+            config: Provider configuration (ProviderConfig or LLMConfig)
             kwargs: Additional parameters
 
         Returns:
@@ -333,12 +333,19 @@ class ProviderRegistry:
                 logger.debug(f"Using pooled provider: {provider_type}")
                 return provider
 
-            llm_config = config.to_llm_config()
+            # Handle both ProviderConfig and LLMConfig
+            if hasattr(config, 'to_llm_config'):
+                # It's a ProviderConfig
+                llm_config = config.to_llm_config()
+            else:
+                # It's already an LLMConfig or similar
+                llm_config = config
+                
             # Add any additional kwargs
             for key, value in kwargs.items():
                 if hasattr(llm_config, key):
                     setattr(llm_config, key, value)
-                else:
+                elif hasattr(llm_config, 'extra_params'):
                     llm_config.extra_params[key] = value
 
             provider = provider_class(llm_config)

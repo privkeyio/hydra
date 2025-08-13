@@ -730,6 +730,90 @@ def validate_acceptance_criteria(ticket, project_dir):
     return True
 
 
+def validate_code_changes(project_dir):
+    """Validate that code changes don't contain obvious errors or suspicious patterns.
+    
+    Returns:
+        tuple: (is_valid, suspicious_patterns)
+
+    """
+    suspicious_patterns = []
+
+    # Get list of modified files
+    git_result = subprocess.run(
+        ["git", "diff", "--name-only"],
+        capture_output=True,
+        text=True,
+        cwd=project_dir
+    )
+
+    if git_result.returncode != 0:
+        return True, []  # Skip validation if git is not available
+
+    modified_files = git_result.stdout.strip().split('\n') if git_result.stdout else []
+
+    # Also check unstaged files
+    git_unstaged = subprocess.run(
+        ["git", "diff", "--name-only", "--cached"],
+        capture_output=True,
+        text=True,
+        cwd=project_dir
+    )
+    if git_unstaged.stdout:
+        modified_files.extend(git_unstaged.stdout.strip().split('\n'))
+
+    # Pattern checks for each file
+    for file_path in modified_files:
+        if not file_path or not file_path.endswith(('.py', '.js', '.ts', '.tsx', '.jsx')):
+            continue
+
+        full_path = os.path.join(project_dir, file_path)
+        if not os.path.exists(full_path):
+            continue
+
+        try:
+            with open(full_path, 'r') as f:
+                content = f.read()
+
+            # Check for obviously wrong patterns
+            patterns_to_check = [
+                # Random test functions that don't belong
+                (r'def\s+(hello_world|test_function|foo|bar|baz)\s*\(\s*\)\s*:',
+                 "Suspicious test/placeholder function"),
+                # Print statements with obvious test content
+                (r'print\s*\(\s*["\']Hello,?\s+World["\']',
+                 "Hello World debug statement"),
+                # TODO comments that suggest incomplete code
+                (r'#\s*TODO:\s*implement\s+this',
+                 "Unimplemented TODO"),
+                # Obvious placeholder returns
+                (r'return\s+["\']placeholder["\']',
+                 "Placeholder return value"),
+                # Hardcoded credentials (basic check)
+                (r'(password|api_key|secret)\s*=\s*["\'][^"\']+["\']',
+                 "Potential hardcoded credential"),
+                # Functions that just pass or return None without logic
+                (r'def\s+\w+\([^)]*\):\s*\n\s*(pass|return\s+None)\s*$',
+                 "Empty function implementation"),
+            ]
+
+            for pattern, description in patterns_to_check:
+                matches = re.findall(pattern, content, re.MULTILINE | re.IGNORECASE)
+                if matches:
+                    suspicious_patterns.append({
+                        'file': file_path,
+                        'pattern': description,
+                        'matches': matches[:3]  # Limit to first 3 matches
+                    })
+
+        except Exception as e:
+            print(f"Warning: Could not validate {file_path}: {e}")
+            continue
+
+    is_valid = len(suspicious_patterns) == 0
+    return is_valid, suspicious_patterns
+
+
 def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None, workspace: Optional[SharedWorkspace] = None, skip_preflight=False):
     """Execute exactly like: 'execute ticket N in tickets.md'.
 
@@ -749,7 +833,7 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         from hydra.preflight import PreflightChecker
         checker = PreflightChecker()
         report = checker.run_preflight_checks(tickets_path)
-        
+
         if report.has_critical_issues():
             print("🚨 PREFLIGHT FAILED - Critical issues found!")
             print("\nCritical Issues:")
@@ -757,7 +841,7 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
                 print(f"❌ {check.description}: {check.message}")
                 for detail in check.details:
                     print(f"   {detail}")
-            print(f"\nUse --skip-preflight to override, but execution may fail.")
+            print("\nUse --skip-preflight to override, but execution may fail.")
             return False
         elif report.has_errors() or report.has_warnings():
             print("⚠️  Preflight validation completed with warnings/errors:")
@@ -1016,6 +1100,24 @@ Please provide the complete implementation with all necessary files and code."""
                         artifact_name = os.path.basename(file_path)
                         workspace.save_artifact(ticket_identifier, artifact_name, content)
                         print(f"   💾 Saved {artifact_name} to workspace")
+
+        # Validate code changes for suspicious patterns
+        print("\n🔍 Validating code changes for suspicious patterns...")
+        code_valid, suspicious_patterns = validate_code_changes(project_dir)
+
+        if not code_valid:
+            print("⚠️  Warning: Suspicious code patterns detected!")
+            for pattern_info in suspicious_patterns:
+                print(f"\n   File: {pattern_info['file']}")
+                print(f"   Issue: {pattern_info['pattern']}")
+                for match in pattern_info['matches']:
+                    print(f"      • {match[:50]}...")  # Show first 50 chars
+
+            print("\n❌ Code validation failed! Please review and fix suspicious patterns.")
+            print("   Ticket execution halted to prevent introducing bad code.")
+            return False
+        else:
+            print("✅ No suspicious code patterns detected")
 
         # Validate acceptance criteria before marking complete
         print("\n🔍 Validating acceptance criteria...")
@@ -1445,7 +1547,7 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3, skip_preflight=Fa
         from hydra.preflight import PreflightChecker
         checker = PreflightChecker()
         report = checker.run_preflight_checks(tickets_path)
-        
+
         if report.has_critical_issues():
             print("🚨 PREFLIGHT FAILED - Critical issues found!")
             print("\nCritical Issues:")
@@ -1453,10 +1555,10 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3, skip_preflight=Fa
                 print(f"❌ {check.description}: {check.message}")
                 for detail in check.details:
                     print(f"   {detail}")
-            print(f"\nRecommendations:")
+            print("\nRecommendations:")
             for rec in report.get_recommendations():
                 print(f"💡 {rec}")
-            print(f"\nUse --skip-preflight to override, but execution may fail.")
+            print("\nUse --skip-preflight to override, but execution may fail.")
             return False
         elif report.has_errors() or report.has_warnings():
             print("⚠️  Preflight validation completed with warnings/errors:")

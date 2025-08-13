@@ -4,6 +4,7 @@ Automatically verifies that acceptance criteria are met after ticket execution.
 """
 
 import re
+import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -97,6 +98,20 @@ class TicketVerifier:
         if not ticket:
             raise ValueError(f"Ticket {ticket_id} not found")
 
+        # First check for suspicious code patterns in recent changes
+        suspicious_code = self.check_suspicious_patterns_in_diff()
+        if suspicious_code:
+            print("\n⚠️  WARNING: Suspicious code patterns detected in recent changes!")
+            for issue in suspicious_code:
+                print(f"   • {issue}")
+            # Add to recommendations but don't fail verification entirely
+            recommendations = [
+                "Review and fix suspicious code patterns detected:",
+                *suspicious_code[:5]  # Limit to top 5 issues
+            ]
+        else:
+            recommendations = []
+
         results = []
         for criterion in ticket['acceptance_criteria']:
             # Skip already completed criteria
@@ -118,7 +133,8 @@ class TicketVerifier:
         partial = sum(1 for r in results if r.status == CriterionStatus.PARTIAL)
 
         # Generate recommendations
-        recommendations = self._generate_recommendations(results)
+        additional_recommendations = self._generate_recommendations(results)
+        recommendations.extend(additional_recommendations)
 
         return TicketVerificationReport(
             ticket_id=ticket_id,
@@ -522,6 +538,74 @@ class TicketVerifier:
                     continue
 
         return None
+
+    def check_suspicious_patterns_in_diff(self) -> List[str]:
+        """Check git diff for suspicious code patterns.
+        
+        Returns:
+            List of suspicious patterns found
+
+        """
+        suspicious_issues = []
+
+        try:
+            # Get the diff of staged and unstaged changes
+            git_diff = subprocess.run(
+                ["git", "diff", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root
+            )
+
+            if git_diff.returncode != 0:
+                return []
+
+            diff_content = git_diff.stdout
+
+            # Patterns to check in the diff
+            suspicious_patterns = [
+                (r'\+.*def\s+(hello_world|test_function|foo|bar|baz)\s*\(\s*\)\s*:',
+                 "Suspicious test/placeholder function added"),
+                (r'\+.*print\s*\(\s*["\']Hello,?\s+World["\']',
+                 "Hello World debug statement added"),
+                (r'\+.*#\s*TODO:\s*implement\s+this',
+                 "Unimplemented TODO added"),
+                (r'\+.*return\s+["\']placeholder["\']',
+                 "Placeholder return value added"),
+                (r'\+.*(password|api_key|secret)\s*=\s*["\'][^"\']+["\']',
+                 "Potential hardcoded credential added"),
+                (r'\+.*def\s+\w+\([^)]*\):\s*\n\s*\+\s*(pass|return\s+None)\s*$',
+                 "Empty function implementation added"),
+                (r'\+.*console\.log\s*\(\s*["\']test["\']',
+                 "Test console.log added"),
+                (r'\+.*debugger;',
+                 "Debugger statement added"),
+            ]
+
+            # Check each pattern
+            for pattern, description in suspicious_patterns:
+                matches = re.findall(pattern, diff_content, re.MULTILINE | re.IGNORECASE)
+                if matches:
+                    # Extract context around the match
+                    for match in matches[:3]:  # Limit to first 3
+                        suspicious_issues.append(f"{description}: {match[:50]}...")
+
+            # Check for large blocks of commented code being added
+            commented_lines = re.findall(r'\+\s*#.*', diff_content)
+            if len(commented_lines) > 20:
+                suspicious_issues.append(f"Large amount of commented code added ({len(commented_lines)} lines)")
+
+            # Check for files that shouldn't normally be modified
+            protected_files = ['package-lock.json', 'yarn.lock', '.gitignore']
+            for protected_file in protected_files:
+                if f'diff --git a/{protected_file}' in diff_content or f'b/{protected_file}' in diff_content:
+                    suspicious_issues.append(f"Protected file modified: {protected_file}")
+
+        except Exception:
+            # Silently fail if git is not available
+            pass
+
+        return suspicious_issues
 
     def _generate_recommendations(self, results: List[VerificationResult]) -> List[str]:
         """Generate recommendations based on verification results."""

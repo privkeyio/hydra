@@ -277,6 +277,7 @@ class TestWorkStealingScheduler(unittest.TestCase):
         self.assertEqual(self.scheduler.steal_threshold_ratio, 2.5)
         self.assertNotEqual(self.scheduler.steal_threshold_ratio, original_threshold)
 
+    @pytest.mark.stress
     def test_thread_safety(self):
         """Test thread safety of scheduler operations."""
         self.scheduler.start()

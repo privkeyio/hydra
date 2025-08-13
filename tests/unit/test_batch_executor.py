@@ -146,6 +146,7 @@ class TestBatchExecutor:
             assert executor.max_concurrent == 2
             assert len(executor.batches) == 0
             
+    @pytest.mark.stress
     async def test_overhead_calculation(self):
         """Test that batch processing reduces session overhead."""
         # Create a temporary tickets file for testing

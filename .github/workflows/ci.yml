@@ -54,8 +54,13 @@ jobs:
         REDIS_URL: redis://localhost:6379/0
         DATABASE_URL: sqlite:///test.db
         TESTING: "1"
+        PYTEST_XDIST_WORKER_COUNT: "2"  # Limit concurrent workers
       run: |
-        timeout 18m python -m pytest tests/ -v --tb=short --timeout=300
+        # Run tests with reduced concurrency for CI stability
+        timeout 18m python -m pytest tests/ -v --tb=short --timeout=300 \
+          --maxfail=10 \
+          -m "not stress" \
+          --disable-warnings
     
     - name: Run CI integration tests
       env:

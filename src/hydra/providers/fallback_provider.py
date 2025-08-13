@@ -37,7 +37,8 @@ class FallbackProvider(BaseProvider):
         if hasattr(config, 'extra_params'):
             self.provider_names = config.extra_params.get('fallback_providers', [])
         elif isinstance(config, dict):
-            self.provider_names = config.get('fallback_providers', [])
+            # Support both 'fallback_providers' and 'fallbacks' keys
+            self.provider_names = config.get('fallback_providers', config.get('fallbacks', []))
         else:
             self.provider_names = []
         if not self.provider_names:
@@ -118,16 +119,29 @@ class FallbackProvider(BaseProvider):
             logger.info(f"Initializing fallback provider: {provider_name}")
 
             # Create provider-specific config
-            provider_config = LLMConfig(
-                provider_type=provider_name,
-                model=self.config.model,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-                timeout=self.config.timeout,
-                api_key=self.config.api_key,
-                base_url=self.config.base_url,
-                extra_params=self.config.extra_params
-            )
+            # Handle both LLMConfig and dict configurations
+            if isinstance(self.config, dict):
+                provider_config = LLMConfig(
+                    provider_type=provider_name,
+                    model=self.config.get('model', 'claude-3-5-sonnet-20241022'),
+                    temperature=self.config.get('temperature', 0.2),
+                    max_tokens=self.config.get('max_tokens', 2048),
+                    timeout=self.config.get('timeout', 30),
+                    api_key=self.config.get('api_key'),
+                    base_url=self.config.get('base_url'),
+                    extra_params=self.config.get('extra_params', {})
+                )
+            else:
+                provider_config = LLMConfig(
+                    provider_type=provider_name,
+                    model=self.config.model or 'claude-3-5-sonnet-20241022',
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    timeout=self.config.timeout,
+                    api_key=self.config.api_key,
+                    base_url=self.config.base_url,
+                    extra_params=self.config.extra_params
+                )
 
             # Create provider instance
             provider = self._factory.create(provider_config)

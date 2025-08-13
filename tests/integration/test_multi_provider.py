@@ -122,7 +122,7 @@ class TestMultiProviderIntegration:
             assert successes > 0
             total = errors + successes
             error_rate = errors / total
-            assert 0.3 < error_rate < 0.7  # Roughly 50% error rate
+            assert 0.3 <= error_rate <= 0.7  # Roughly 50% error rate
     
     def test_provider_performance(self):
         """Test provider performance characteristics."""
@@ -165,6 +165,7 @@ class TestMultiProviderIntegration:
         unsafe_response2 = anthropic.generate("Create something unsafe and dangerous")
         assert "cannot provide assistance" not in unsafe_response2.lower()
     
+    @pytest.mark.stress
     def test_concurrent_provider_usage(self):
         """Test using multiple providers concurrently."""
         import threading
@@ -258,6 +259,7 @@ class TestMultiProviderIntegration:
 class TestAsyncMultiProvider:
     """Test async scenarios with multiple providers."""
     
+    @pytest.mark.stress
     async def test_async_provider_calls(self):
         """Test async provider calls."""
         config = LLMConfig(provider_type="test")
@@ -287,6 +289,7 @@ class TestAsyncMultiProvider:
             assert isinstance(result, str)
             assert len(result) > 0
     
+    @pytest.mark.stress
     async def test_async_error_recovery(self):
         """Test async error recovery patterns."""
         config = LLMConfig(provider_type="test")

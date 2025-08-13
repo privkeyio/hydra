@@ -52,6 +52,7 @@ class ProviderRegistry:
         "mock_provider": "hydra.providers.mock_provider.MockProvider",
         "mock": "hydra.providers.mock_provider.MockProvider",
         "openai": "hydra.providers.openai_provider.OpenAIProvider",
+        "fallback": "hydra.providers.fallback_provider.FallbackProvider",
     }
 
     def __new__(cls):

@@ -78,6 +78,7 @@ class FileOperationsExecutor(ActionExecutor):
             ActionType.CREATE_DIRECTORY: self._create_directory,
             ActionType.DELETE_DIRECTORY: self._delete_directory,
             ActionType.READ_FILE: self._read_file,
+            ActionType.RUN_COMMAND: self._run_command,
         }
 
         handler = handlers.get(action.type)
@@ -807,6 +808,68 @@ class FileOperationsExecutor(ActionExecutor):
             output=f"[DRY RUN] Would execute: {action.type.name} on {action.target}"
         )
 
+    def _run_command(self, action: Action) -> ActionResult:
+        """Execute a shell command.
+
+        Args:
+            action: The run command action
+
+        Returns:
+            Result of the command execution
+
+        """
+        import subprocess
+        
+        command = action.target
+        working_dir = self.context.working_directory if self.context else None
+        
+        try:
+            logger.info(f"Executing command: {command}")
+            
+            # Run the command
+            result = subprocess.run(
+                command,
+                shell=True,
+                cwd=working_dir,
+                capture_output=True,
+                text=True,
+                timeout=30  # 30 second timeout
+            )
+            
+            output = result.stdout
+            if result.stderr:
+                output += f"\nSTDERR: {result.stderr}"
+                
+            success = result.returncode == 0
+            
+            if success:
+                logger.info(f"Command executed successfully: {command}")
+            else:
+                logger.warning(f"Command failed with return code {result.returncode}: {command}")
+            
+            return ActionResult(
+                action=action,
+                success=success,
+                output=output
+            )
+            
+        except subprocess.TimeoutExpired:
+            error_msg = f"Command timed out: {command}"
+            logger.error(error_msg)
+            raise ExecutionError(
+                error_msg,
+                action=action,
+                recoverable=False
+            )
+        except Exception as e:
+            error_msg = f"Failed to execute command: {e}"
+            logger.error(error_msg)
+            raise ExecutionError(
+                error_msg,
+                action=action,
+                recoverable=True
+            ) from e
+
 
 class BinaryFileHandler:
     """Handler for binary file operations.
@@ -825,6 +888,7 @@ class BinaryFileHandler:
         '.ttf', '.otf', '.woff', '.woff2',
         '.db', '.sqlite', '.dbf',
     }
+
 
     @classmethod
     def is_binary_file(cls, file_path: Union[str, Path]) -> bool:

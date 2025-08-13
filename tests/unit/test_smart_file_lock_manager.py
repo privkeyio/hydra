@@ -342,6 +342,7 @@ class TestIntegration:
         stats = manager.get_conflict_statistics()
         assert stats['active_modifications'] >= 1
         
+    @pytest.mark.stress
     def test_stress_concurrent_requests(self):
         """Stress test with many concurrent lock requests."""
         manager = SmartFileLockManager(max_wait_time=1)

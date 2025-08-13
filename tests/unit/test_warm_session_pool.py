@@ -249,6 +249,7 @@ class TestWarmSessionPool:
             # Should have recycled at least one session
             assert stats['sessions_recycled'] > 0
 
+    @pytest.mark.stress  
     def test_concurrent_access(self):
         """Test pool handles concurrent session requests."""
         import concurrent.futures

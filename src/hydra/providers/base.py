@@ -58,7 +58,15 @@ class LLMProvider(ABC):
     @property
     def model(self) -> str:
         """Return the current model."""
+        # Handle both LLMConfig and dict configurations
+        if isinstance(self.config, dict):
+            return self.config.get('model', 'unknown')
         return self.config.model
 
     def __repr__(self):
-        return f"{self.name}(model={self.config.model})"
+        # Handle both LLMConfig and dict configurations
+        if isinstance(self.config, dict):
+            model = self.config.get('model', 'unknown')
+        else:
+            model = self.config.model
+        return f"{self.name}(model={model})"

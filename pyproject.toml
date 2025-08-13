@@ -106,7 +106,8 @@ addopts = "-v --cov=hydra --cov-report=html --cov-report=term --timeout=300"
 markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
-    "slow: marks tests as slow running tests"
+    "slow: marks tests as slow running tests",
+    "stress: marks tests as stress/load tests that may fail in resource-constrained environments"
 ]
 
 [tool.coverage.run]

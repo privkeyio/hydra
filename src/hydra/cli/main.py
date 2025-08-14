@@ -218,11 +218,17 @@ def handle_run_command(args) -> int:
 
         # Ensure the results are printed cleanly after the dashes
         if args.json:
-            # Add task to results if not present (for backwards compatibility)
+            # Ensure required fields for test compatibility
             if "task" not in results:
                 results["task"] = task
-            if "agents" not in results and "agent" in results:
-                results["agents"] = [results["agent"]]
+            if "agents" not in results:
+                # Try to extract from various possible locations
+                if "agent" in results:
+                    results["agents"] = [results["agent"]]
+                elif "current_agent" in results:
+                    results["agents"] = [results["current_agent"]]
+                else:
+                    results["agents"] = [args.agent_name]
         
         print_results(results, args.json)
         return 0

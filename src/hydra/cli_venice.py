@@ -7,6 +7,8 @@ from pathlib import Path
 import click
 import requests
 
+from hydra.providers.session_manager import get_session_manager
+
 
 @click.group()
 def venice():
@@ -24,10 +26,11 @@ def list_models():
         sys.exit(1)
 
     url = "https://api.venice.ai/api/v1/models"
-    headers = {"Authorization": f"Bearer {api_key}"}
 
     try:
-        response = requests.get(url, headers=headers)
+        session_manager = get_session_manager()
+        session = session_manager.get_session("venice")
+        response = session.get(url)
         response.raise_for_status()
 
         models = response.json()
@@ -144,7 +147,9 @@ def generate(model, output, prompt):
             )
 
             if result['success']:
-                click.echo(f"✅ Generated {result['actions_executed']} files in {output}")
+                click.echo(
+                    f"✅ Generated {result['actions_executed']} files in {output}"
+                )
             else:
                 click.echo(f"⚠️  Generation completed with issues: {result['errors']}")
         else:
@@ -177,13 +182,14 @@ def setup():
     # Test the key
     click.echo("\n3. Testing API key...")
     url = "https://api.venice.ai/api/v1/models"
-    headers = {"Authorization": f"Bearer {api_key}"}
 
     try:
-        response = requests.get(url, headers=headers)
+        session_manager = get_session_manager()
+        session = session_manager.get_session("venice")
+        response = session.get(url)
         response.raise_for_status()
         click.echo("   ✅ API key is valid!")
-    except:
+    except Exception:
         click.echo("   ❌ Invalid API key")
         sys.exit(1)
 

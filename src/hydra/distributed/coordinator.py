@@ -177,7 +177,7 @@ class DistributedCoordinator:
             return
 
         self.running = True
-        
+
         # Start resource monitoring if not already started
         if not self._monitoring_started:
             self.resource_tracker.start_monitoring()
@@ -254,7 +254,7 @@ class DistributedCoordinator:
         await runner.setup()
         site = web.TCPSite(runner, '0.0.0.0', self.port)
         await site.start()
-        
+
         # Store the runner for cleanup
         self.server = runner
 
@@ -1110,13 +1110,13 @@ class DistributedCoordinator:
         try:
             state_data = asdict(self.distributed_state)
             state_data['last_updated'] = time.time()
-            
+
             # Convert enums to values for JSON serialization
             if 'tasks' in state_data:
                 for task_id, task in state_data['tasks'].items():
                     if 'status' in task and hasattr(task['status'], 'value'):
                         task['status'] = task['status'].value
-                        
+
             if 'instances' in state_data:
                 for instance_id, instance in state_data['instances'].items():
                     if 'role' in instance and hasattr(instance['role'], 'value'):

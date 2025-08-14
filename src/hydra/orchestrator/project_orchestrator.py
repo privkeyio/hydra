@@ -226,7 +226,7 @@ class ProjectOrchestrator:
             # Map model type to provider model
             model_category_map = {
                 ModelType.FAST: "fast",
-                ModelType.BALANCED: "balanced", 
+                ModelType.BALANCED: "balanced",
                 ModelType.SMART: "smart",
                 ModelType.OPUS: "smart",  # OPUS maps to smart category
                 ModelType.SONNET: "balanced",  # SONNET maps to balanced category

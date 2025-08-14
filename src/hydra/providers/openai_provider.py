@@ -1,10 +1,13 @@
 """OpenAI provider implementation."""
-import json
 from typing import Any, Dict, List
 
+import orjson
 from openai import OpenAI
 
+from hydra.caching import lru_cache_with_bypass
+
 from .base import LLMConfig, LLMProvider
+from .session_manager import get_session_manager
 
 
 class OpenAIProvider(LLMProvider):
@@ -21,9 +24,15 @@ class OpenAIProvider(LLMProvider):
 
     def __init__(self, config: LLMConfig):
         super().__init__(config)
+
+        # Use shared session manager for HTTP connections
+        session_manager = get_session_manager()
+        http_client = session_manager.get_session("openai")
+
         self.client = OpenAI(
             api_key=self.config.api_key,
-            base_url=self.config.base_url  # Allow custom endpoints
+            base_url=self.config.base_url,  # Allow custom endpoints
+            http_client=http_client
         )
 
     @property
@@ -81,7 +90,7 @@ class OpenAIProvider(LLMProvider):
                 **self.config.extra_params
             )
 
-            return json.loads(response.choices[0].message.content)
+            return orjson.loads(response.choices[0].message.content)
 
         except Exception:
             # Fallback to regular generation
@@ -89,10 +98,11 @@ class OpenAIProvider(LLMProvider):
             response = self.generate(json_prompt, **kwargs)
 
             try:
-                return json.loads(response.strip())
-            except json.JSONDecodeError as e:
+                return orjson.loads(response.strip())
+            except orjson.JSONDecodeError as e:
                 raise ValueError(f"Failed to parse JSON response: {e}") from e
 
+    @lru_cache_with_bypass(maxsize=16)
     def list_models(self) -> List[str]:
         """List available OpenAI models."""
         try:
@@ -112,3 +122,10 @@ class OpenAIProvider(LLMProvider):
                 "o1-preview",
                 "o1-mini"
             ]
+
+    def cleanup(self) -> None:
+        """Clean up provider resources."""
+        super().cleanup()
+        # Close HTTP session for this provider
+        session_manager = get_session_manager()
+        session_manager.close_session("openai")

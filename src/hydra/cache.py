@@ -25,15 +25,23 @@ class CacheConfig:
 class HydraCache:
     """Redis-based caching system for Hydra."""
 
+    _connection_pool: Optional[ConnectionPool] = None
+
     def __init__(self, config: Optional[CacheConfig] = None):
         self.config = config or CacheConfig()
-        self.pool = ConnectionPool.from_url(
-            self.config.redis_url,
-            decode_responses=True,
-            max_connections=20
-        )
+        self.pool = self._get_or_create_pool()
         self.redis_client = redis.Redis(connection_pool=self.pool)
         self._setup_memory_limits()
+
+    def _get_or_create_pool(self) -> ConnectionPool:
+        """Get or create a singleton Redis connection pool."""
+        if HydraCache._connection_pool is None:
+            HydraCache._connection_pool = ConnectionPool.from_url(
+                self.config.redis_url,
+                decode_responses=True,
+                max_connections=20
+            )
+        return HydraCache._connection_pool
 
     def _setup_memory_limits(self):
         """Configure Redis memory limits."""

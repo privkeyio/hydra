@@ -257,7 +257,7 @@ class ModelRouter:
 
             if confidence < self.config['confidence_threshold']:
                 selected_model = self.config['fallback_model']
-            
+
             # Fallback to default model if still None
             if not selected_model:
                 selected_model = "claude-3-5-sonnet-20241022"

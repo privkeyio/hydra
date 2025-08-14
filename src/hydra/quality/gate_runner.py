@@ -302,7 +302,7 @@ class QualityGateRunner:
         if self.config["checks"].get("verification", {}).get("enabled", True):
             result = self._run_ticket_verification(ticket_id)
             results.append(result)
-        
+
         # Run AI detection check (non-blocking)
         if self.config["checks"].get("ai_detection", {}).get("enabled", True):
             result = self._run_ai_detection()
@@ -440,15 +440,15 @@ class QualityGateRunner:
                 output="",
                 error=str(e)
             )
-    
+
     def _run_ai_detection(self) -> CheckResult:
         """Run AI-generated code detection check."""
         start_time = time.time()
-        
+
         try:
             detector = AIGeneratedCodeDetector()
             all_issues = []
-            
+
             # Check Python files
             for py_file in self.project_root.rglob("*.py"):
                 # Skip virtual environments and build directories
@@ -456,7 +456,7 @@ class QualityGateRunner:
                     continue
                 issues = detector.detect_in_file(py_file)
                 all_issues.extend(issues)
-            
+
             # Check JavaScript/TypeScript files
             for ext in ['*.js', '*.jsx', '*.ts', '*.tsx']:
                 for js_file in self.project_root.rglob(ext):
@@ -464,22 +464,22 @@ class QualityGateRunner:
                         continue
                     issues = detector.detect_in_file(js_file)
                     all_issues.extend(issues)
-            
+
             # Check other source files
             for ext in ['*.go', '*.rs', '*.java', '*.cpp', '*.c', '*.rb']:
                 for src_file in self.project_root.rglob(ext):
                     issues = detector.detect_in_file(src_file)
                     all_issues.extend(issues)
-            
+
             duration = time.time() - start_time
-            
+
             # Generate report
             report_text = detector.generate_report(all_issues)
-            
+
             # Count severities
             errors = [i for i in all_issues if i.get('severity') == 'error']
             warnings = [i for i in all_issues if i.get('severity', 'warning') == 'warning']
-            
+
             # Determine status - NEVER FAIL, only warn
             if errors:
                 # Even with errors, we only warn since this shouldn't block
@@ -488,23 +488,23 @@ class QualityGateRunner:
                 status = CheckStatus.WARNING
             else:
                 status = CheckStatus.PASSED
-            
-            output = f"AI Pattern Detection Results:\n"
+
+            output = "AI Pattern Detection Results:\n"
             output += f"Errors: {len(errors)}, Warnings: {len(warnings)}\n"
             output += f"Total patterns found: {len(all_issues)}\n\n"
-            
+
             if len(all_issues) > 0:
                 output += "Top issues (see full report for details):\n"
                 for issue in all_issues[:3]:  # Show first 3 issues
                     output += f"- {issue['file']}:{issue['line']} - {issue['pattern']}\n"
-            
+
             return CheckResult(
                 name="quality:ai_detection",
                 status=status,
                 duration=duration,
                 output=output[:5000]  # Limit output size
             )
-            
+
         except Exception as e:
             return CheckResult(
                 name="quality:ai_detection",

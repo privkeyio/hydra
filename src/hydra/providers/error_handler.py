@@ -250,6 +250,7 @@ class ProviderErrorHandler:
             
         Returns:
             Corresponding ErrorType
+
         """
         mapping = {
             ErrorCategory.AUTHENTICATION: ErrorType.AUTHENTICATION_ERROR,

@@ -94,7 +94,7 @@ class TicketVerifier:
         """Verify all acceptance criteria for a ticket."""
         # Late import to avoid circular dependency
         from hydra.ticket_workflow import parse_ticket
-        
+
         ticket = parse_ticket(tickets_path, ticket_id)
         if not ticket:
             raise ValueError(f"Ticket {ticket_id} not found")
@@ -156,7 +156,7 @@ class TicketVerifier:
         # Skip file existence checks for save/write operations
         save_keywords = ['save', 'write', 'persist', 'update', 'modify']
         is_save_operation = any(keyword in criterion_lower for keyword in save_keywords)
-        
+
         # Check for file creation (but not for save/write operations)
         file_keywords = ['create', 'add', 'generate']
         has_file_keyword = any(keyword in criterion_lower for keyword in file_keywords)

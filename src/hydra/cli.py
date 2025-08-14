@@ -91,6 +91,11 @@ def create_parser():
         "--model",
         help="Override the model (e.g., qwen-2.5-coder-32b, gpt-4)"
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Bypass all caching (model lists, parsed tickets, etc.)"
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -182,6 +187,10 @@ def create_parser():
         "--skip-preflight", action="store_true",
         help="Skip pre-flight validation checks"
     )
+    execute_ticket_parser.add_argument(
+        "--no-cache", action="store_true",
+        help="Bypass all caching (model lists, parsed tickets, etc.)"
+    )
 
     # Run all tickets
     run_tickets_parser = ticket_subparsers.add_parser(
@@ -193,6 +202,10 @@ def create_parser():
     run_tickets_parser.add_argument(
         "--skip-preflight", action="store_true",
         help="Skip pre-flight validation checks"
+    )
+    run_tickets_parser.add_argument(
+        "--no-cache", action="store_true",
+        help="Bypass all caching (model lists, parsed tickets, etc.)"
     )
 
     # Verify ticket completion
@@ -1840,6 +1853,13 @@ def _handle_context_preview_updates(tracker, ticket_id, project_dir):
 
 def main():
     """Execute the main CLI entry point."""
+    # Install uvloop for better async performance if available
+    try:
+        import uvloop
+        uvloop.install()
+    except ImportError:
+        pass
+
     parser = create_parser()
     args = parser.parse_args()
 
@@ -1853,6 +1873,10 @@ def main():
     if hasattr(args, 'model') and args.model:
         os.environ['LLM_MODEL'] = args.model
         print(f"🔧 Using model: {args.model}")
+
+    if hasattr(args, 'no_cache') and args.no_cache:
+        os.environ['NO_CACHE'] = '1'
+        print("🚫 Cache disabled")
 
     # Handle template commands
     if args.command == "template":

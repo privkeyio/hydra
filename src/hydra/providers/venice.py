@@ -1,7 +1,6 @@
 """Venice AI provider implementation."""
 
 import asyncio
-import json
 import logging
 import os
 import re
@@ -10,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import orjson
 from openai import AsyncOpenAI, OpenAI
 
 from hydra.action_executor import (
@@ -155,10 +155,14 @@ class VeniceProvider(BaseProvider):
 
     def __init__(self, config: LLMConfig):
         super().__init__(config)
+
+        # Note: OpenAI client doesn't support requests.Session, it uses httpx internally
+        # We'll let it manage its own connection pooling
         self.client = OpenAI(
             api_key=self.config.api_key,
             base_url=self.config.base_url
         )
+        # Note: AsyncOpenAI will use its own async client internally
         self.async_client = AsyncOpenAI(
             api_key=self.config.api_key,
             base_url=self.config.base_url
@@ -198,9 +202,11 @@ class VeniceProvider(BaseProvider):
             ]
 
             # Filter out conflicting parameters from extra_params
-            filtered_extra_params = {k: v for k, v in self.config.extra_params.items() 
-                                   if k not in ['temperature', 'max_tokens', 'model', 'messages']}
-            
+            filtered_extra_params = {
+                k: v for k, v in self.config.extra_params.items()
+                if k not in ['temperature', 'max_tokens', 'model', 'messages']
+            }
+
             response = self.client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
@@ -234,15 +240,15 @@ class VeniceProvider(BaseProvider):
             if response.endswith("```"):
                 response = response[:-3]
 
-            return json.loads(response.strip())
-        except json.JSONDecodeError as e:
+            return orjson.loads(response.strip())
+        except orjson.JSONDecodeError as e:
             # Fallback: try to find JSON in the response
             import re
             json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
             if json_match:
                 try:
-                    return json.loads(json_match.group())
-                except json.JSONDecodeError:
+                    return orjson.loads(json_match.group())
+                except orjson.JSONDecodeError:
                     pass
 
             raise ValueError(
@@ -484,7 +490,10 @@ class VeniceProvider(BaseProvider):
             Formatted prompt for code generation
 
         """
-        return f"Please write clean, well-documented code for: {prompt}. Include the code in a code block."
+        return (
+            f"Please write clean, well-documented code for: {prompt}. "
+            "Include the code in a code block."
+        )
 
     def extract_code_blocks(self, response: str) -> List[CodeBlock]:
         """Extract code blocks from response.
@@ -750,9 +759,11 @@ class VeniceProvider(BaseProvider):
             ]
 
             # Filter out conflicting parameters from extra_params
-            filtered_extra_params = {k: v for k, v in self.config.extra_params.items() 
-                                   if k not in ['temperature', 'max_tokens', 'model', 'messages']}
-            
+            filtered_extra_params = {
+                k: v for k, v in self.config.extra_params.items()
+                if k not in ['temperature', 'max_tokens', 'model', 'messages']
+            }
+
             response = await self.async_client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
@@ -1152,3 +1163,10 @@ class VeniceProvider(BaseProvider):
                 commands.append(action.target)
 
         return file_operations, commands
+
+    def cleanup(self) -> None:
+        """Clean up provider resources."""
+        super().cleanup()
+        # Close HTTP session for this provider
+        session_manager = get_session_manager()
+        session_manager.close_session("venice")

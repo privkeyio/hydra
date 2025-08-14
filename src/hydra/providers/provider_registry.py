@@ -341,7 +341,7 @@ class ProviderRegistry:
             else:
                 # It's already an LLMConfig or similar
                 llm_config = config
-                
+
             # Add any additional kwargs
             for key, value in kwargs.items():
                 if hasattr(llm_config, key):

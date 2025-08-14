@@ -13,6 +13,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Set, Tuple
 
+from hydra.caching import get_cache_key, get_file_meta_cache
 from hydra.intelligence.model_selector import create_enhanced_model_prompt
 from hydra.monitoring import monitoring
 from hydra.quality.ai_detection import AIGeneratedCodeDetector
@@ -217,6 +218,14 @@ def parse_ticket(tickets_path, ticket_identifier):
         print(f"❌ {tickets_path} not found")
         return None
 
+    # Check cache first
+    cache = get_file_meta_cache()
+    cache_key = get_cache_key(tickets_path, ticket_identifier)
+    cached_result = cache.get(cache_key, tickets_path)
+
+    if cached_result is not None:
+        return cached_result
+
     with open(tickets_path, 'r') as f:
         content = f.read()
 
@@ -338,6 +347,9 @@ def parse_ticket(tickets_path, ticket_identifier):
     if unchecked_criteria == 0 and checked_criteria > 0:
         ticket['completed'] = True
         print(f"✅ Ticket {ticket_identifier} is already completed (all {checked_criteria} criteria checked)")
+
+    # Cache the parsed ticket
+    cache.set(cache_key, ticket, tickets_path)
 
     return ticket
 
@@ -578,20 +590,20 @@ def check_for_ai_generated_code(project_dir):
             text=True,
             cwd=project_dir
         )
-        
+
         if git_diff.returncode != 0:
             return []
-        
+
         detector = AIGeneratedCodeDetector()
         issues = detector.detect_in_diff(git_diff.stdout)
-        
+
         # Format issues for display
         formatted_issues = []
         for issue in issues:
             formatted_issues.append(
                 f"{issue['file']}:{issue['line']} - {issue['pattern']}"
             )
-        
+
         return formatted_issues
     except Exception:
         return []
@@ -603,7 +615,7 @@ def validate_acceptance_criteria(ticket, project_dir):
     failed_criteria = []
 
     print(f"🔍 Checking {len(criteria)} acceptance criteria:")
-    
+
     # First, check for AI-generated code patterns in recent changes
     ai_issues = check_for_ai_generated_code(project_dir)
     if ai_issues:
@@ -727,7 +739,7 @@ def validate_acceptance_criteria(ticket, project_dir):
 
         # Generic file checks - use proper validation
         # But skip if it's about saving/writing to existing files or using functions
-        elif (any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']) and 
+        elif (any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']) and
               not any(keyword in criterion_lower for keyword in ['save', 'write', 'using', 'update', 'modify', 'persist', 'call', 'invoke', 'existing'])):
             from hydra.verification.ticket_verifier import TicketVerifier
             verifier = TicketVerifier(project_dir)
@@ -1438,6 +1450,14 @@ def parse_all_tickets(tickets_path: str) -> Dict[str, dict]:
     if not os.path.exists(tickets_path):
         return {}
 
+    # Check cache first
+    cache = get_file_meta_cache()
+    cache_key = get_cache_key("parse_all_tickets", tickets_path)
+    cached_result = cache.get(cache_key, tickets_path)
+
+    if cached_result is not None:
+        return cached_result
+
     with open(tickets_path, 'r') as f:
         content = f.read()
 
@@ -1465,6 +1485,9 @@ def parse_all_tickets(tickets_path: str) -> Dict[str, dict]:
                     # Store the original format for execution
                     tickets[normalized_id]['raw_id'] = ticket_num
             break
+
+    # Cache the parsed tickets
+    cache.set(cache_key, tickets, tickets_path)
 
     return tickets
 
@@ -1673,7 +1696,7 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3, skip_preflight=Fa
     if os.getenv('CI') == 'true':
         max_parallel = min(max_parallel, 2)
         print(f"🔧 CI mode: Limited max parallel to {max_parallel}")
-    
+
     try:
         with ThreadPoolExecutor(max_workers=max_parallel) as executor:
             while len(completed) + len(failed) < total_tickets:

@@ -1,6 +1,6 @@
 """Mock LLM provider for testing."""
 from datetime import datetime
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List
 
 from .base import LLMConfig
 from .base_provider import (
@@ -31,7 +31,7 @@ class MockProvider(BaseProvider):
         self.response_overrides: Dict[str, str] = {}
         self._mock_sessions: Dict[str, Session] = {}
         self._current_model = "mock-model-1"
-        
+
         # Now call super().__init__() which will call validate_config()
         super().__init__(config)
 
@@ -125,10 +125,10 @@ class MockProvider(BaseProvider):
             "context": context,
             "kwargs": kwargs
         })
-        
+
         if self.fail_mode:
             raise RuntimeError("Mock provider configured to fail")
-            
+
         # Return basic code response
         return "def generated_function():\n    return 'Generated code'"
 
@@ -158,7 +158,7 @@ class MockProvider(BaseProvider):
 
     def list_sessions(self) -> List[Session]:
         """List all active sessions."""
-        return [s for s in self._mock_sessions.values() 
+        return [s for s in self._mock_sessions.values()
                 if s.state == SessionState.ACTIVE]
 
     def kill_session(self, session_id: str) -> bool:
@@ -254,7 +254,7 @@ class MockProvider(BaseProvider):
         code_start = 0
         code_lines = []
         language = "python"
-        
+
         for i, line in enumerate(lines):
             if line.strip().startswith('```'):
                 if not in_code:
@@ -279,7 +279,7 @@ class MockProvider(BaseProvider):
                     language = "python"
             elif in_code:
                 code_lines.append(line)
-        
+
         # If no markdown blocks found, check for indented code
         if not blocks:
             for i, line in enumerate(lines):
@@ -299,7 +299,7 @@ class MockProvider(BaseProvider):
                             executable=True
                         ))
                     break
-        
+
         return blocks
 
     def supports_interactive(self) -> bool:

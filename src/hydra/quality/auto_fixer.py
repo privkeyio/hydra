@@ -25,11 +25,11 @@ class QualityAutoFixer:
 
         """
         fixes = []
-        
+
         # Check for AI-generated code first - this can't be auto-fixed
         ai_issues = self._check_ai_generated_code()
         if ai_issues:
-            fixes.append(("AI-generated code detected", False, 
+            fixes.append(("AI-generated code detected", False,
                          f"Found {len(ai_issues)} AI-generated patterns that need manual review"))
 
         # Fix 1: Add missing __init__.py files
@@ -206,7 +206,7 @@ class QualityAutoFixer:
             return result.returncode == 0
         except:
             return True  # Assume OK if can't validate
-    
+
     def _check_ai_generated_code(self) -> List:
         """Check for AI-generated code patterns in recent changes."""
         try:
@@ -217,10 +217,10 @@ class QualityAutoFixer:
                 text=True,
                 cwd=self.project_root
             )
-            
+
             if git_diff.returncode != 0:
                 return []
-            
+
             detector = AIGeneratedCodeDetector()
             issues = detector.detect_in_diff(git_diff.stdout)
             return issues

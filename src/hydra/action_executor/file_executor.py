@@ -819,13 +819,13 @@ class FileOperationsExecutor(ActionExecutor):
 
         """
         import subprocess
-        
+
         command = action.target
         working_dir = self.context.working_directory if self.context else None
-        
+
         try:
             logger.info(f"Executing command: {command}")
-            
+
             # Run the command
             result = subprocess.run(
                 command,
@@ -835,24 +835,26 @@ class FileOperationsExecutor(ActionExecutor):
                 text=True,
                 timeout=30  # 30 second timeout
             )
-            
+
             output = result.stdout
             if result.stderr:
                 output += f"\nSTDERR: {result.stderr}"
-                
+
             success = result.returncode == 0
-            
+
             if success:
                 logger.info(f"Command executed successfully: {command}")
             else:
-                logger.warning(f"Command failed with return code {result.returncode}: {command}")
-            
+                logger.warning(
+                    f"Command failed with return code {result.returncode}: {command}"
+                )
+
             return ActionResult(
                 action=action,
                 success=success,
                 output=output
             )
-            
+
         except subprocess.TimeoutExpired:
             error_msg = f"Command timed out: {command}"
             logger.error(error_msg)

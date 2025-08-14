@@ -79,37 +79,37 @@ class CodeBlockStrategy(ParsingStrategy):
 
         # Find all individual code blocks by properly matching opening and closing backticks
         all_blocks = self._find_code_blocks(response)
-        
+
         for lang, content in all_blocks:
             # Look for file path patterns in the first few lines of each block
             lines = content.split('\n')
             if not lines:
                 continue
-                
+
             # Check first line for path comment patterns
             first_line = lines[0].strip()
             path = None
-            
+
             # Try different comment styles
             path_patterns = [
                 r'^(?://|#|--)\s*(.+)$',  # Comment with path
                 r'^#\s*file:\s*(.+)$',   # Explicit file: directive
                 r'^(?://|#|--)\s*file:\s*(.+)$',  # Comment file: directive
             ]
-            
+
             for pattern in path_patterns:
                 match = re.match(pattern, first_line)
                 if match:
                     path = match.group(1).strip()
                     break
-            
+
             if path and not re.search(r'[\\<>:"|?*]', path):
                 # Remove the path line from content
                 remaining_content = '\n'.join(lines[1:])
-                
+
                 # Determine action type (default to CREATE_FILE)
                 action_type = ActionType.CREATE_FILE
-                
+
                 actions.append(
                     Action(
                         type=action_type,
@@ -152,24 +152,24 @@ class CodeBlockStrategy(ParsingStrategy):
         """Find all code blocks by properly matching backticks."""
         blocks = []
         lines = response.split('\n')
-        
+
         i = 0
         while i < len(lines):
             line = lines[i].strip()
-            
+
             # Look for opening ```
             if line.startswith('```'):
                 # Extract language if present
                 lang = line[3:].strip() if len(line) > 3 else ""
-                
+
                 # Find the matching closing ``` using depth counting
                 content_lines = []
                 j = i + 1
                 depth = 1  # We found one opening ```
-                
+
                 while j < len(lines) and depth > 0:
                     current_line = lines[j].strip()
-                    
+
                     if current_line.startswith('```'):
                         if current_line == '```':
                             # This is a closing ```
@@ -177,11 +177,11 @@ class CodeBlockStrategy(ParsingStrategy):
                         else:
                             # This is an opening ``` (has language or content)
                             depth += 1
-                    
+
                     if depth > 0:
                         content_lines.append(lines[j])
                     j += 1
-                
+
                 if depth == 0:
                     # Found properly matched closing backticks
                     blocks.append((lang, '\n'.join(content_lines)))
@@ -191,7 +191,7 @@ class CodeBlockStrategy(ParsingStrategy):
                     i += 1
             else:
                 i += 1
-        
+
         return blocks
 
 

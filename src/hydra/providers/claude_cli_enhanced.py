@@ -1,6 +1,5 @@
 """Claude Cli Enhanced module."""
 
-import json
 import os
 import re
 import subprocess
@@ -11,6 +10,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple
+
+import orjson
 
 from .base import LLMProvider
 
@@ -204,7 +205,7 @@ class SlashCommandProcessor:
                 'temperature': self.session.variables.get('temperature', 0.7),
                 'max_tokens': self.session.variables.get('max_tokens', 4096)
             }
-            return json.dumps(config, indent=2), False
+            return orjson.dumps(config, option=orjson.OPT_INDENT_2).decode(), False
 
         parts = args.split('=', 1)
         if len(parts) == 2:
@@ -766,13 +767,13 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
             if response.endswith("```"):
                 response = response[:-3]
 
-            return json.loads(response.strip())
-        except json.JSONDecodeError as e:
+            return orjson.loads(response.strip())
+        except orjson.JSONDecodeError as e:
             json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
             if json_match:
                 try:
-                    return json.loads(json_match.group())
-                except json.JSONDecodeError:
+                    return orjson.loads(json_match.group())
+                except orjson.JSONDecodeError:
                     pass
 
             raise ValueError(f"Failed to parse JSON response: {e}") from e
@@ -803,7 +804,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
             'last_accessed': session.last_accessed
         }
 
-        path.write_text(json.dumps(session_data, indent=2))
+        path.write_text(orjson.dumps(session_data, option=orjson.OPT_INDENT_2).decode())
         return str(path)
 
     def load_session(self, path: str) -> str:
@@ -811,7 +812,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
         if not path.exists():
             raise FileNotFoundError(f"Session file not found: {path}")
 
-        session_data = json.loads(path.read_text())
+        session_data = orjson.loads(path.read_text())
 
         session = SessionState(
             session_id=session_data['session_id'],

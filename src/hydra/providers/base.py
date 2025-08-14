@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from hydra.caching import lru_cache_with_bypass
+
 
 @dataclass
 class LLMConfig:
@@ -48,6 +50,11 @@ class LLMProvider(ABC):
     def list_models(self) -> List[str]:
         """List available models for this provider."""
         pass
+
+    @lru_cache_with_bypass(maxsize=32)
+    def cached_list_models(self) -> List[str]:
+        """Cached version of list_models for better performance."""
+        return self.list_models()
 
     @property
     @abstractmethod

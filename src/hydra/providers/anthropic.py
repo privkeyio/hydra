@@ -1,10 +1,11 @@
 """Anthropic Claude provider implementation."""
-import json
 from typing import Any, Dict, List
 
+import orjson
 from anthropic import Anthropic
 
 from .base import LLMConfig, LLMProvider
+from .session_manager import get_session_manager
 
 
 class AnthropicProvider(LLMProvider):
@@ -21,7 +22,15 @@ class AnthropicProvider(LLMProvider):
 
     def __init__(self, config: LLMConfig):
         super().__init__(config)
-        self.client = Anthropic(api_key=self.config.api_key)
+
+        # Use shared session manager for HTTP connections
+        session_manager = get_session_manager()
+        http_client = session_manager.get_session("anthropic")
+
+        self.client = Anthropic(
+            api_key=self.config.api_key,
+            http_client=http_client
+        )
 
     @property
     def name(self) -> str:
@@ -67,8 +76,8 @@ class AnthropicProvider(LLMProvider):
             if response.endswith("```"):
                 response = response[:-3]
 
-            return json.loads(response.strip())
-        except json.JSONDecodeError as e:
+            return orjson.loads(response.strip())
+        except orjson.JSONDecodeError as e:
             raise ValueError(
                 f"Failed to parse JSON response: {e}\nResponse: {response}"
             ) from e
@@ -83,3 +92,10 @@ class AnthropicProvider(LLMProvider):
             "claude-3-sonnet-20240229",
             "claude-3-haiku-20240307"
         ]
+
+    def cleanup(self) -> None:
+        """Clean up provider resources."""
+        super().cleanup()
+        # Close HTTP session for this provider
+        session_manager = get_session_manager()
+        session_manager.close_session("anthropic")

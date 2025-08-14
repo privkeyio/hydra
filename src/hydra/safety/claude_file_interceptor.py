@@ -327,7 +327,7 @@ class SmartFileLockManager:
             except RuntimeError as e:
                 logger.warning(f"Could not start deadlock monitoring thread: {e}")
                 self._deadlock_monitoring = False
-    
+
     def predict_file_modifications(self, agent_id: str, ticket_content: str) -> List[FileModification]:
         """Predict file modifications from ticket description with high accuracy."""
         modifications = []

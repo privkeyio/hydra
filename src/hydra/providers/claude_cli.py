@@ -1,8 +1,9 @@
 """Claude CLI provider implementation."""
-import json
 import os
 import subprocess
 from typing import Any, Dict, List
+
+import orjson
 
 from .base import LLMProvider
 
@@ -138,15 +139,15 @@ please say "{completion_msg}" at the end.
             if response.endswith("```"):
                 response = response[:-3]
 
-            return json.loads(response.strip())
-        except json.JSONDecodeError as e:
+            return orjson.loads(response.strip())
+        except orjson.JSONDecodeError as e:
             # Try to find JSON in response
             import re
             json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
             if json_match:
                 try:
-                    return json.loads(json_match.group())
-                except json.JSONDecodeError:
+                    return orjson.loads(json_match.group())
+                except orjson.JSONDecodeError:
                     pass
 
             raise ValueError(f"Failed to parse JSON response: {e}") from e

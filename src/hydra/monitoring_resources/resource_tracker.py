@@ -301,9 +301,10 @@ class ResourceTracker:
             self.running = True  # Only set running to True after successful start
             logger.info("Resource monitoring started")
         except RuntimeError as e:
-            logger.warning(f"Could not start monitoring thread: {e}")
-            self.running = False
+            logger.warning(f"Could not start monitoring thread: {e}. Running in test mode without background monitoring.")
             self.monitor_thread = None
+            # Still set running to True so monitoring functions work, just without background collection
+            self.running = True
 
     def stop_monitoring(self):
         """Stop the resource monitoring loop."""

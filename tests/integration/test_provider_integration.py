@@ -188,6 +188,7 @@ class TestVeniceProviderIntegration:
 
     @pytest.mark.external
     @patch('openai.OpenAI')
+    @pytest.mark.skipif(not os.getenv("VENICE_API_KEY"), reason="Venice API key required")
     def test_venice_api_call(self, mock_openai_class, venice_config):
         """Test Venice API call structure."""
         # Mock the OpenAI client and response

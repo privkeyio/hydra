@@ -1,5 +1,6 @@
 """Integration tests for Venice provider execute_ticket functionality."""
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -113,6 +114,7 @@ class TestVeniceProviderIntegration:
             assert len(result["results"]) > 0
 
     @pytest.mark.external
+    @pytest.mark.skipif(not os.getenv("VENICE_API_KEY"), reason="Venice API key required")
     def test_execute_ticket_with_commands(self, venice_provider, temp_dir):
         """Test executing commands through execute_ticket."""
         mock_response = """

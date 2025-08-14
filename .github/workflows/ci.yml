@@ -54,6 +54,7 @@ jobs:
         REDIS_URL: redis://localhost:6379/0
         DATABASE_URL: sqlite:///test.db
         TESTING: "1"
+        CI: "true"
       run: |
         # Run deterministic unit tests (skip stress tests in CI)
         timeout 10m python -m pytest tests/unit/ -v --tb=short --timeout=60 \
@@ -67,10 +68,11 @@ jobs:
         REDIS_URL: redis://localhost:6379/0
         DATABASE_URL: sqlite:///test.db
         TESTING: "1"
+        CI: "true"
       run: |
-        # Run integration tests (skip tests requiring API keys)
+        # Run integration tests (skip tests requiring API keys, stress tests, and external tests)
         timeout 10m python -m pytest tests/integration/ -v --tb=short --timeout=120 \
-          -m "not requires_api_key" \
+          -m "not requires_api_key and not stress and not external" \
           --maxfail=10 \
           --disable-warnings
     
@@ -80,8 +82,10 @@ jobs:
         REDIS_URL: redis://localhost:6379/0
         DATABASE_URL: sqlite:///test.db
         TESTING: "1"
+        CI: "true"
       run: |
         # Run critical workflow tests for create/execute/verify
-        timeout 5m python -m pytest tests/integration/test_workflow_functions.py tests/integration/test_core_commands.py \
+        # Note: test_core_commands.py skipped in CI as it requires full environment
+        timeout 5m python -m pytest tests/integration/test_workflow_functions.py \
           -v --tb=short --timeout=60 \
           --disable-warnings

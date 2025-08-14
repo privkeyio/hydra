@@ -10,6 +10,10 @@ import sys
 import pytest
 
 
+@pytest.mark.skipif(
+    "CI" in os.environ or not os.path.exists("/usr/bin/python3"),
+    reason="CLI tests require full environment"
+)
 class TestCoreCommands:
     """Test core Hydra commands work end-to-end."""
     

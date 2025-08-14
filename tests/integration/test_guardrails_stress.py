@@ -192,6 +192,7 @@ class TestGuardrailsUnderLoad:
             assert results['denied'] >= 8
     
     @pytest.mark.skipif(TEST_MODE, reason="Skip thread-intensive tests in test mode")
+    @pytest.mark.stress
     def test_emergency_shutdown_during_load(self):
         """Test emergency shutdown while operations are in progress."""
         guardrails = ProductionGuardrails()
@@ -231,6 +232,7 @@ class TestGuardrailsUnderLoad:
         assert guardrails.shutdown_event.is_set()
         assert len(operations_completed) < 10
     
+    @pytest.mark.stress
     def test_sustained_load_stability(self):
         """Test system stability under sustained load."""
         guardrails = ProductionGuardrails()
@@ -295,6 +297,7 @@ class TestGuardrailsUnderLoad:
         assert memory_increase < 100
     
     @pytest.mark.skipif(TEST_MODE, reason="Skip thread-intensive tests in test mode")
+    @pytest.mark.stress
     def test_cascading_failure_prevention(self):
         """Test prevention of cascading failures across operations."""
         guardrails = ProductionGuardrails()

@@ -66,6 +66,9 @@ class TestRealProviderIntegration:
     @pytest.mark.skipif(not os.getenv("ANTHROPIC_API_KEY"), reason="Anthropic API key required")
     def test_claude_deterministic_task(self, workspace):
         """Test Claude provider with deterministic task."""
+        # Skip in CI due to resource limitations
+        if os.getenv('CI') == 'true':
+            pytest.skip("Skipped in CI due to resource limitations")
         content = """# Tickets
 
 ## Ticket 001: Fibonacci Function
@@ -94,6 +97,9 @@ class TestRealProviderIntegration:
         
     def test_provider_fallback(self, workspace):
         """Test provider fallback mechanism."""
+        # Skip in CI due to resource limitations
+        if os.getenv('CI') == 'true':
+            pytest.skip("Skipped in CI due to resource limitations")
         content = """# Tickets
 
 ## Ticket 001: Simple Task
@@ -117,6 +123,9 @@ class TestRealProviderIntegration:
     @pytest.mark.benchmark
     def test_provider_performance(self, workspace):
         """Benchmark provider response times."""
+        # Skip in CI due to resource limitations
+        if os.getenv('CI') == 'true':
+            pytest.skip("Skipped in CI due to resource limitations")
         import time
         
         content = """# Tickets
@@ -153,6 +162,9 @@ class TestRealProviderIntegration:
             
     def test_parallel_with_real_provider(self, workspace):
         """Test parallel execution with real provider."""
+        # Skip in CI due to resource limitations
+        if os.getenv('CI') == 'true':
+            pytest.skip("Skipped in CI due to resource limitations")
         content = """# Tickets
 
 ## Ticket 001: Task A

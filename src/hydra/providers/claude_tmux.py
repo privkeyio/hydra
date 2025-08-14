@@ -761,15 +761,21 @@ class ClaudeTmuxProvider(BaseProvider):
         # Kill any existing session with the same name
         self._kill_session(session_name)
 
-        # Create new tmux session
-        subprocess.run(
-            [
-                "tmux", "new-session", "-d", "-s", session_name,
-                "-c", project_dir,
-                self.claude_path
-            ],
-            check=True
-        )
+        # Create new tmux session with resource handling
+        try:
+            subprocess.run(
+                [
+                    "tmux", "new-session", "-d", "-s", session_name,
+                    "-c", project_dir,
+                    self.claude_path
+                ],
+                check=True,
+                timeout=30
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            if isinstance(e, OSError) and e.errno == 11:  # Resource temporarily unavailable
+                raise ValueError(f"Unable to create tmux session - system resources exhausted: {e}")
+            raise ValueError(f"Failed to create tmux session '{session_name}': {e}")
 
         # Create and store session object
         session = Session(

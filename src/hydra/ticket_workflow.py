@@ -1658,65 +1658,99 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3, skip_preflight=Fa
 
     total_tickets = len(tickets)
 
-    with ThreadPoolExecutor(max_workers=max_parallel) as executor:
-        while len(completed) + len(failed) < total_tickets:
-            executable = get_executable_tickets(tickets, completed)
+    # Limit max_parallel in CI environments to prevent resource exhaustion
+    if os.getenv('CI') == 'true':
+        max_parallel = min(max_parallel, 2)
+        print(f"🔧 CI mode: Limited max parallel to {max_parallel}")
+    
+    try:
+        with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+            while len(completed) + len(failed) < total_tickets:
+                executable = get_executable_tickets(tickets, completed)
 
-            if not executable:
-                if len(completed) + len(failed) < total_tickets:
-                    remaining = set(tickets.keys()) - completed - failed
-                    print(f"⚠️ No executable tickets. Remaining: {remaining}")
+                if not executable:
+                    if len(completed) + len(failed) < total_tickets:
+                        remaining = set(tickets.keys()) - completed - failed
+                        print(f"⚠️ No executable tickets. Remaining: {remaining}")
 
-                    for tid in remaining:
-                        needed_deps = deps.get(tid, set()) - completed
-                        if needed_deps:
-                            print(f"  {tid} waiting for: {needed_deps}")
-                break
+                        for tid in remaining:
+                            needed_deps = deps.get(tid, set()) - completed
+                            if needed_deps:
+                                print(f"  {tid} waiting for: {needed_deps}")
+                    break
 
-            print(f"\n📊 Progress: {len(completed)}/{total_tickets} completed")
-            print(f"🔄 Executing batch: {executable}")
+                print(f"\n📊 Progress: {len(completed)}/{total_tickets} completed")
+                print(f"🔄 Executing batch: {executable}")
 
-            futures = {}
-            for ticket_id in executable:
-                future = executor.submit(
-                    execute_ticket_worker,
-                    ticket_id,
-                    tickets[ticket_id],  # Pass ticket data
-                    tickets_path,
-                    completed_lock,
-                    workspace  # Pass shared workspace
-                )
-                futures[future] = ticket_id
+                futures = {}
+                for ticket_id in executable:
+                    try:
+                        future = executor.submit(
+                            execute_ticket_worker,
+                            ticket_id,
+                            tickets[ticket_id],  # Pass ticket data
+                            tickets_path,
+                            completed_lock,
+                            workspace  # Pass shared workspace
+                        )
+                        futures[future] = ticket_id
+                    except RuntimeError as e:
+                        if "can't start new thread" in str(e):
+                            print(f"⚠️ Thread pool exhausted, executing {ticket_id} sequentially")
+                            # Execute sequentially as fallback
+                            success = execute_ticket_worker(
+                                ticket_id,
+                                tickets[ticket_id],
+                                tickets_path,
+                                completed_lock,
+                                workspace
+                            )
+                            with completed_lock:
+                                if success:
+                                    completed.add(ticket_id)
+                                else:
+                                    failed.add(ticket_id)
+                            continue
+                        else:
+                            raise
 
-            for future in as_completed(futures):
-                ticket_id = futures[future]
-                success = future.result()
+                for future in as_completed(futures):
+                    ticket_id = futures[future]
+                    success = future.result()
 
-                with completed_lock:
-                    if success:
-                        completed.add(ticket_id)
+                    with completed_lock:
+                        if success:
+                            completed.add(ticket_id)
 
-                        dependents = reverse_deps.get(ticket_id, set())
-                        if dependents:
-                            ready = [
-                                d for d in dependents
-                                if all(dep in completed for dep in deps.get(d, set()))
-                            ]
-                            if ready:
-                                print(f"🔓 Unlocked tickets: {ready}")
-                    else:
-                        failed.add(ticket_id)
-                        print(f"⛔ Stopping - ticket {ticket_id} failed")
+                            dependents = reverse_deps.get(ticket_id, set())
+                            if dependents:
+                                ready = [
+                                    d for d in dependents
+                                    if all(dep in completed for dep in deps.get(d, set()))
+                                ]
+                                if ready:
+                                    print(f"🔓 Unlocked tickets: {ready}")
+                        else:
+                            failed.add(ticket_id)
+                            print(f"⛔ Stopping - ticket {ticket_id} failed")
 
-                        for f in futures:
-                            if not f.done():
-                                f.cancel()
+                            for f in futures:
+                                if not f.done():
+                                    f.cancel()
 
-                        executor.shutdown(wait=False)
+                            executor.shutdown(wait=False)
+                            break
+
+                    if failed:
                         break
 
-            if failed:
-                break
+                if failed:
+                    break
+
+    except Exception as e:
+        print(f"\n❌ Parallel execution failed: {e}")
+        print(f"📁 Workspace preserved for debugging: {workspace.workspace_path}")
+        return False
 
     print(f"\n{'='*50}")
     print("🎉 Final Summary:")

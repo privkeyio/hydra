@@ -105,9 +105,10 @@ python_functions = "test_*"
 addopts = "-v --cov=hydra --cov-report=html --cov-report=term --timeout=300"
 markers = [
     "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
+    "unit: marks tests as unit tests", 
     "slow: marks tests as slow running tests",
-    "stress: marks tests as stress/load tests that may fail in resource-constrained environments"
+    "stress: marks tests as stress/load tests that may fail in resource-constrained environments",
+    "external: marks tests that require external services (APIs, credentials, etc.)"
 ]
 
 [tool.coverage.run]

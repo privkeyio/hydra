@@ -348,6 +348,26 @@ class MockProvider(BaseProvider):
         """
         return self.call_history
 
+    def estimate_cost(self, prompt: str, max_tokens: int = 1000, **kwargs) -> float:
+        """Estimate cost for the given prompt.
+
+        Args:
+            prompt: The input prompt
+            max_tokens: Maximum tokens to generate
+            **kwargs: Additional parameters
+
+        Returns:
+            Estimated cost in dollars (mock value)
+
+        """
+        # Mock cost calculation based on token count
+        # Approximate 4 characters per token
+        input_tokens = len(prompt) // 4
+        total_tokens = input_tokens + max_tokens
+        # Mock rate: $0.01 per 1000 tokens
+        cost = (total_tokens / 1000) * 0.01
+        return round(cost, 4)
+
     def reset(self):
         """Reset the provider state."""
         self.call_history.clear()

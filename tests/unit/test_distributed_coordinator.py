@@ -331,6 +331,7 @@ class TestDistributedCoordinator:
             mock_election.assert_called_once()
     
     @pytest.mark.asyncio
+    @pytest.mark.stress
     async def test_state_persistence(self, coordinator, temp_state_dir):
         """Test saving and loading distributed state."""
         # Set up some state

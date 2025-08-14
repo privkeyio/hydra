@@ -112,6 +112,7 @@ class TestVeniceProviderIntegration:
             assert result["success"] is True
             assert len(result["results"]) > 0
 
+    @pytest.mark.external
     def test_execute_ticket_with_commands(self, venice_provider, temp_dir):
         """Test executing commands through execute_ticket."""
         mock_response = """
@@ -255,6 +256,7 @@ class TestVeniceProviderIntegration:
         assert len(file_ops) >= 0
         assert len(commands) >= 0
 
+    @pytest.mark.external
     def test_execute_ticket_with_rollback(self, venice_provider, temp_dir):
         """Test rollback functionality on failure."""
         mock_response = """

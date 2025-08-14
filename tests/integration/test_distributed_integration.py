@@ -74,6 +74,7 @@ class TestDistributedIntegration:
                     await coordinator.stop()
     
     @pytest.mark.asyncio
+    @pytest.mark.stress
     async def test_multi_instance_cluster_formation(self, coordinator_cluster):
         """Test cluster formation with multiple instances."""
         coordinators = list(coordinator_cluster.values())
@@ -212,6 +213,7 @@ class TestDistributedIntegration:
         assert "shared-resource" not in leader.distributed_state.locks
     
     @pytest.mark.asyncio
+    @pytest.mark.stress
     async def test_leader_failover_scenario(self, coordinator_cluster):
         """Test leader failover and re-election."""
         coordinators = list(coordinator_cluster.values())
@@ -432,6 +434,7 @@ class TestDistributedIntegration:
         assert low_load_assignments > high_load_assignments
     
     @pytest.mark.asyncio
+    @pytest.mark.stress
     async def test_persistent_state_across_restarts(self, temp_dirs):
         """Test that state persists across coordinator restarts."""
         temp_dir = temp_dirs['instance1']

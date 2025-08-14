@@ -108,6 +108,7 @@ class TestClaudeProviderIntegration:
 
     @patch('pathlib.Path.exists')
     @patch('subprocess.run')
+    @pytest.mark.external
     def test_claude_code_generation(self, mock_run, mock_path_exists, claude_config):
         """Test Claude code generation functionality."""
         mock_path_exists.return_value = True  # Mock Claude CLI exists
@@ -185,6 +186,7 @@ class TestVeniceProviderIntegration:
         # Check mappings resolve to Venice models
         assert "llama" in mapping["sonnet"].lower()
 
+    @pytest.mark.external
     @patch('openai.OpenAI')
     def test_venice_api_call(self, mock_openai_class, venice_config):
         """Test Venice API call structure."""

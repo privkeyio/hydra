@@ -4,6 +4,7 @@ Intercepts file operations from Claude Code sessions and applies file locking
 to prevent concurrent modification conflicts in parallel execution.
 """
 
+import logging
 import re
 import threading
 import time
@@ -13,6 +14,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from hydra.safety.file_lock import get_file_lock_manager
+
+logger = logging.getLogger(__name__)
 
 
 class OperationType(Enum):
@@ -85,6 +88,8 @@ class FileModification:
             changes.add('tests')
         if 'style' in content or 'format' in content:
             changes.add('formatting')
+        if 'rewrite' in content or 'refactor' in content:
+            changes.add('major_restructure')
 
         return changes
 
@@ -180,11 +185,11 @@ class ClaudeFileInterceptor:
         self, output: str, agent_id: str
     ) -> Optional[Tuple[str, str]]:
         """Detect file operations in Claude Code output.
-        
+
         Args:
             output: The output from Claude Code session
             agent_id: The agent/session identifier
-            
+
         Returns:
             Tuple of (operation_type, file_path) or None
 
@@ -199,12 +204,12 @@ class ClaudeFileInterceptor:
 
     def acquire_file_lock(self, agent_id: str, file_path: str, operation: str) -> bool:
         """Acquire a file lock before operation.
-        
+
         Args:
             agent_id: The agent requesting the lock
             file_path: Path to the file
             operation: Type of operation (read/write/edit)
-            
+
         Returns:
             True if lock acquired, False otherwise
 
@@ -250,7 +255,7 @@ class ClaudeFileInterceptor:
 
     def release_agent_locks(self, agent_id: str):
         """Release all locks held by an agent.
-        
+
         Args:
             agent_id: The agent whose locks should be released
 
@@ -266,7 +271,7 @@ class ClaudeFileInterceptor:
 
     def get_lock_status(self) -> Dict[str, any]:
         """Get current lock status for monitoring.
-        
+
         Returns:
             Dictionary with lock statistics
 
@@ -308,10 +313,21 @@ class SmartFileLockManager:
             'resolved_conflicts': 0
         }
 
-        # Start deadlock detection thread
-        self._deadlock_thread = threading.Thread(target=self._deadlock_monitor, daemon=True)
-        self._deadlock_thread.start()
+        # Don't start deadlock detection thread in __init__ to avoid issues in tests
+        self._deadlock_thread = None
+        self._deadlock_monitoring = False
 
+    def start_deadlock_monitoring(self):
+        """Start the deadlock monitoring thread if not already started."""
+        if not self._deadlock_monitoring:
+            try:
+                self._deadlock_thread = threading.Thread(target=self._deadlock_monitor, daemon=True)
+                self._deadlock_thread.start()
+                self._deadlock_monitoring = True
+            except RuntimeError as e:
+                logger.warning(f"Could not start deadlock monitoring thread: {e}")
+                self._deadlock_monitoring = False
+    
     def predict_file_modifications(self, agent_id: str, ticket_content: str) -> List[FileModification]:
         """Predict file modifications from ticket description with high accuracy."""
         modifications = []

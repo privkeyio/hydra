@@ -4,6 +4,7 @@ Runs multiple Claude Code agents concurrently on independent tickets.
 """
 
 import json
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -83,6 +84,9 @@ class ParallelExecutor:
         self.file_lock_manager = get_file_lock_manager()
         from hydra.safety.claude_file_interceptor import SmartFileLockManager
         self.smart_lock_manager = SmartFileLockManager()
+        # Start deadlock monitoring for production use
+        if not os.environ.get('TESTING'):
+            self.smart_lock_manager.start_deadlock_monitoring()
 
         # Initialize artifact tracker for context passing
         self.artifact_tracker = ArtifactTracker(project_root)
@@ -410,7 +414,7 @@ PYTHON CODE QUALITY REQUIREMENTS:
 - Avoid unused imports
 - Add error handling where appropriate
 
-Be minimalistic, surgical and future proof! 
+Be minimalistic, surgical and future proof!
 Avoid using any code or comments that may be construed as AI generated.
 Make sure you do a good job because other LLMs said your code sucked!
 
@@ -432,7 +436,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 description=f"Ticket {ticket_id}: {node.title}",
                 prompt=prompt,
                 working_directory=str(self.project_root),
-                timeout=300,
+                timeout=900,
                 task_id=ticket_id  # Pass ticket ID for unique tmux session
             )
 
@@ -696,16 +700,16 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 deps_failed = any(
                     dep in self.failed_tickets for dep in node.dependencies
                 )
-                
+
                 # Also check if dependencies were blocked (transitive failure from earlier deps)
                 deps_blocked = any(
-                    self.tickets.get(dep) and self.tickets[dep].status == ExecutionStatus.BLOCKED 
+                    self.tickets.get(dep) and self.tickets[dep].status == ExecutionStatus.BLOCKED
                     for dep in node.dependencies
                 )
-                
+
                 # Check if dependencies are missing (not completed when they should be)
                 deps_missing = any(
-                    dep not in self.completed_tickets and 
+                    dep not in self.completed_tickets and
                     dep not in self.quality_failed_tickets
                     for dep in node.dependencies
                 )
@@ -936,11 +940,11 @@ Check your project directory for all the generated calculator files.
 <body>
     <div class="container">
         <h1>🚀 Hydra Project Completion</h1>
-        
+
         <div class="success-banner">
             🎉 All {summary['total_tickets']} Tickets Completed Successfully!
         </div>
-        
+
         <div class="stats">
             <div class="stat-card">
                 <div class="stat-label">Total Tickets</div>
@@ -959,7 +963,7 @@ Check your project directory for all the generated calculator files.
                 <div class="stat-value">{summary['duration']:.0f}s</div>
             </div>
         </div>
-        
+
         <div class="tickets-list">
             <h2>📋 Completed Tickets</h2>
 """

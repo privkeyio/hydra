@@ -20,12 +20,12 @@ class FileLockManager:
 
     def acquire_lock(self, agent_id: str, file_path: str, timeout: float = 30) -> bool:
         """Acquire a lock on a file for an agent.
-        
+
         Args:
             file_path: Path to the file to lock
             agent_id: ID of the agent requesting the lock
             timeout: Maximum time to wait for lock in seconds
-            
+
         Returns:
             True if lock acquired, False if timeout
 
@@ -52,7 +52,7 @@ class FileLockManager:
 
     def release_lock(self, agent_id: str, file_path: str):
         """Release a lock on a file.
-        
+
         Args:
             file_path: Path to the file to unlock
             agent_id: ID of the agent releasing the lock
@@ -73,7 +73,7 @@ class FileLockManager:
 
     def release_all_locks(self, agent_id: str):
         """Release all locks held by an agent.
-        
+
         Args:
             agent_id: ID of the agent
 
@@ -90,10 +90,10 @@ class FileLockManager:
 
     def is_locked(self, file_path: str) -> bool:
         """Check if a file is currently locked.
-        
+
         Args:
             file_path: Path to check
-            
+
         Returns:
             True if file is locked
 
@@ -105,10 +105,10 @@ class FileLockManager:
 
     def get_lock_holder(self, file_path: str) -> Optional[str]:
         """Get the agent holding a lock on a file.
-        
+
         Args:
             file_path: Path to check
-            
+
         Returns:
             Agent ID or None if not locked
 
@@ -120,10 +120,10 @@ class FileLockManager:
 
     def get_agent_locks(self, agent_id: str) -> Set[str]:
         """Get all files locked by an agent.
-        
+
         Args:
             agent_id: Agent to check
-            
+
         Returns:
             Set of locked file paths
 
@@ -133,7 +133,7 @@ class FileLockManager:
 
     def get_locked_files(self) -> Set[str]:
         """Get all currently locked files.
-        
+
         Returns:
             Set of all locked file paths
 

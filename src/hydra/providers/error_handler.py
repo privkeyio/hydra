@@ -171,7 +171,8 @@ class ProviderErrorHandler:
             severity=severity,
             message=self._get_user_friendly_message(category, error),
             original_error=error,
-            context=context or {}
+            context=context or {},
+            error_type=self._get_error_type(category)
         )
 
         # Log the error
@@ -234,8 +235,35 @@ class ProviderErrorHandler:
         if any(x in error_str for x in ['init', 'setup', 'config', 'not found at']):
             return ErrorCategory.INITIALIZATION, ErrorSeverity.CRITICAL
 
+        # Critical errors
+        if any(x in error_str for x in ['critical', 'fatal', 'severe']):
+            return ErrorCategory.UNKNOWN, ErrorSeverity.CRITICAL
+
         # Default
         return ErrorCategory.UNKNOWN, ErrorSeverity.MEDIUM
+
+    def _get_error_type(self, category: ErrorCategory) -> ErrorType:
+        """Get error type from category for backward compatibility.
+        
+        Args:
+            category: Error category
+            
+        Returns:
+            Corresponding ErrorType
+        """
+        mapping = {
+            ErrorCategory.AUTHENTICATION: ErrorType.AUTHENTICATION_ERROR,
+            ErrorCategory.NETWORK: ErrorType.NETWORK_ERROR,
+            ErrorCategory.API_LIMIT: ErrorType.API_LIMIT_ERROR,
+            ErrorCategory.INVALID_REQUEST: ErrorType.INVALID_REQUEST_ERROR,
+            ErrorCategory.MODEL_UNAVAILABLE: ErrorType.MODEL_UNAVAILABLE_ERROR,
+            ErrorCategory.SESSION: ErrorType.SESSION_ERROR,
+            ErrorCategory.TIMEOUT: ErrorType.TIMEOUT_ERROR,
+            ErrorCategory.RESOURCE: ErrorType.RESOURCE_ERROR,
+            ErrorCategory.INITIALIZATION: ErrorType.INITIALIZATION_ERROR,
+            ErrorCategory.UNKNOWN: ErrorType.PROVIDER_ERROR,
+        }
+        return mapping.get(category, ErrorType.PROVIDER_ERROR)
 
     def _get_user_friendly_message(self, category: ErrorCategory, error: Exception) -> str:
         """Generate user-friendly error message.

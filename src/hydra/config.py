@@ -4,12 +4,16 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
-from dotenv import load_dotenv
 
 from hydra.providers import LLMConfig, provider_factory
 
-# Load environment variables
-load_dotenv()
+# Load environment variables if dotenv is available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not installed, skip loading
+    pass
 
 
 class HydraConfig:

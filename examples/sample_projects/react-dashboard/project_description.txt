@@ -1,0 +1,81 @@
+Build a modern React dashboard application with FastAPI backend for data visualization and analytics.
+
+## Frontend Requirements (React)
+- Modern React 18 with TypeScript and functional components
+- Responsive dashboard layout with navigation sidebar
+- Data visualization components using Chart.js or D3.js
+- Interactive data tables with sorting, filtering, and pagination
+- Real-time data updates using WebSocket connections
+- Form components for data input and configuration
+- Loading states and error handling throughout the UI
+- CSS modules or styled-components for styling
+- Mobile-responsive design with breakpoints
+
+## Backend Requirements (FastAPI)
+- FastAPI with async/await for high performance
+- PostgreSQL database with SQLAlchemy ORM
+- REST API endpoints for CRUD operations
+- WebSocket endpoints for real-time data streaming
+- Data aggregation and analytics endpoints
+- File upload and processing capabilities
+- Background task processing with Celery
+- API documentation with OpenAPI/Swagger
+- Input validation with Pydantic models
+
+## Data Models
+- Users with roles and permissions
+- Dashboard configurations and layouts
+- Data sources and connection configs
+- Analytics reports and saved queries
+- File uploads and processing status
+- Audit logs for user actions
+
+## Technical Specifications
+- Frontend build with Vite for fast development
+- TypeScript throughout both frontend and backend
+- Shared type definitions between frontend and backend
+- API client generation from OpenAPI specs
+- State management with Redux Toolkit or Zustand
+- Frontend testing with Jest and React Testing Library
+- Backend testing with pytest and test database
+- Docker containers for development and deployment
+- Environment-based configuration
+- Code formatting with Prettier and ESLint
+
+## UI Components
+- Dashboard layout with header, sidebar, and main content
+- Chart components for line, bar, pie, and scatter plots
+- Data table component with advanced features
+- Form components with validation and error display
+- Modal dialogs and confirmation prompts
+- Navigation menu with breadcrumbs
+- User profile and settings panels
+- Loading spinners and skeleton screens
+- Toast notifications for user feedback
+
+## API Endpoints
+- Authentication and user management
+- Dashboard CRUD operations
+- Data source management and validation
+- Analytics data aggregation
+- File upload and processing
+- Real-time data streaming
+- User preferences and settings
+- Audit log retrieval
+
+## Performance Requirements
+- Frontend bundle size under 500KB gzipped
+- API response times under 100ms for simple queries
+- Real-time updates with minimal latency
+- Efficient data pagination and virtual scrolling
+- Optimized database queries with proper indexing
+- Caching strategies for frequently accessed data
+
+## Quality Standards
+- 90%+ test coverage for both frontend and backend
+- Accessibility compliance (WCAG 2.1 AA)
+- Security best practices for API and authentication
+- Cross-browser compatibility (Chrome, Firefox, Safari)
+- Performance monitoring and error tracking
+- Code documentation and TypeScript types
+- Consistent code style with automated formatting

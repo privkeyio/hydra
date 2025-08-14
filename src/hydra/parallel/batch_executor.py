@@ -422,13 +422,13 @@ BATCH EXECUTION INSTRUCTIONS:
 
 QUALITY REQUIREMENTS:
 - Add module docstrings to all new Python files
-- Include __init__.py in all new package directories  
+- Include __init__.py in all new package directories
 - Use proper type hints for all functions
 - Follow PEP 8 style guidelines
 - Avoid unused imports
 - Add error handling where appropriate
 
-Be minimalistic, surgical and future proof! 
+Be minimalistic, surgical and future proof!
 Avoid using any code or comments that may be construed as AI generated.
 Make sure you do a good job because other LLMs said your code sucked!
 
@@ -536,7 +536,7 @@ REMINDER: Complete ALL {len(batch.ticket_ids)} tickets in this batch: {', '.join
 
         # Calculate final statistics
         duration = time.time() - start_time
-        total_tickets_processed = len([t for t in self.tickets.keys() if t in self.completed_tickets or t in self.failed_tickets])
+        len([t for t in self.tickets.keys() if t in self.completed_tickets or t in self.failed_tickets])
 
         # Calculate overhead savings
         sessions_without_batching = len(self.tickets)

@@ -197,12 +197,16 @@ class VeniceProvider(BaseProvider):
                 {"role": "user", "content": prompt}
             ]
 
+            # Filter out conflicting parameters from extra_params
+            filtered_extra_params = {k: v for k, v in self.config.extra_params.items() 
+                                   if k not in ['temperature', 'max_tokens', 'model', 'messages']}
+            
             response = self.client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **self.config.extra_params
+                **filtered_extra_params
             )
 
             return response.choices[0].message.content
@@ -466,8 +470,21 @@ class VeniceProvider(BaseProvider):
                 "provider": "venice",
                 "model": self.config.model,
                 "timestamp": datetime.now().isoformat(),
+                "requires_code_extraction": len(code_blocks) > 0,
             }
         )
+
+    def _format_code_prompt(self, prompt: str) -> str:
+        """Format a prompt for code generation.
+
+        Args:
+            prompt: The original prompt
+
+        Returns:
+            Formatted prompt for code generation
+
+        """
+        return f"Please write clean, well-documented code for: {prompt}. Include the code in a code block."
 
     def extract_code_blocks(self, response: str) -> List[CodeBlock]:
         """Extract code blocks from response.
@@ -732,12 +749,16 @@ class VeniceProvider(BaseProvider):
                 {"role": "user", "content": prompt}
             ]
 
+            # Filter out conflicting parameters from extra_params
+            filtered_extra_params = {k: v for k, v in self.config.extra_params.items() 
+                                   if k not in ['temperature', 'max_tokens', 'model', 'messages']}
+            
             response = await self.async_client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **self.config.extra_params
+                **filtered_extra_params
             )
 
             return response.choices[0].message.content

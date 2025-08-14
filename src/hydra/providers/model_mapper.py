@@ -40,7 +40,7 @@ class ModelMapper:
 
     def _load_provider_mappings(self) -> Dict[str, Dict[str, ModelMapping]]:
         """Load provider-specific model mappings.
-        
+
         Returns:
             Dictionary of provider -> model category -> model mapping
 
@@ -57,27 +57,27 @@ class ModelMapper:
                 ),
                 ModelCategory.BALANCED: ModelMapping(
                     category=ModelCategory.BALANCED,
-                    provider_model="claude-sonnet-4-20250514",
-                    display_name="Claude Sonnet 4",
+                    provider_model="claude-3-5-sonnet-20241022",
+                    display_name="Claude 3.5 Sonnet",
                     context_window=200000,
                     max_output_tokens=8192,
-                    relative_cost=0.5
+                    relative_cost=0.3
                 ),
                 ModelCategory.SMART: ModelMapping(
                     category=ModelCategory.SMART,
-                    provider_model="claude-opus-4-1-20250805",
-                    display_name="Claude Opus 4.1",
+                    provider_model="claude-3-opus-20240229",
+                    display_name="Claude 3 Opus",
                     context_window=200000,
-                    max_output_tokens=8192,
+                    max_output_tokens=4096,
                     relative_cost=1.0
                 ),
                 ModelCategory.CODER: ModelMapping(
                     category=ModelCategory.CODER,
-                    provider_model="claude-sonnet-4-20250514",
-                    display_name="Claude Sonnet 4",
+                    provider_model="claude-3-5-sonnet-20241022",
+                    display_name="Claude 3.5 Sonnet",
                     context_window=200000,
                     max_output_tokens=8192,
-                    relative_cost=0.5
+                    relative_cost=0.3
                 ),
             },
             "venice": {
@@ -114,11 +114,45 @@ class ModelMapper:
                     relative_cost=0.15
                 ),
             },
+            "mock": {
+                ModelCategory.FAST: ModelMapping(
+                    category=ModelCategory.FAST,
+                    provider_model="mock-fast-model",
+                    display_name="Mock Fast Model",
+                    context_window=4096,
+                    max_output_tokens=2048,
+                    relative_cost=0.1
+                ),
+                ModelCategory.BALANCED: ModelMapping(
+                    category=ModelCategory.BALANCED,
+                    provider_model="mock-balanced-model",
+                    display_name="Mock Balanced Model",
+                    context_window=8192,
+                    max_output_tokens=4096,
+                    relative_cost=0.3
+                ),
+                ModelCategory.SMART: ModelMapping(
+                    category=ModelCategory.SMART,
+                    provider_model="mock-smart-model",
+                    display_name="Mock Smart Model",
+                    context_window=16384,
+                    max_output_tokens=8192,
+                    relative_cost=0.8
+                ),
+                ModelCategory.CODER: ModelMapping(
+                    category=ModelCategory.CODER,
+                    provider_model="mock-coder-model",
+                    display_name="Mock Coder Model",
+                    context_window=16384,
+                    max_output_tokens=8192,
+                    relative_cost=0.6
+                ),
+            },
         }
 
     def _load_legacy_mappings(self) -> Dict[str, ModelCategory]:
         """Load legacy model name mappings for backward compatibility.
-        
+
         Returns:
             Dictionary of legacy name -> model category
 
@@ -170,11 +204,11 @@ class ModelMapper:
         provider: Optional[str] = None
     ) -> Optional[str]:
         """Map a model name to provider-specific model identifier.
-        
+
         Args:
             model_name: Generic or legacy model name
             provider: Target provider (auto-detected if not specified)
-            
+
         Returns:
             Provider-specific model identifier or None if not found
 
@@ -229,14 +263,16 @@ class ModelMapper:
 
     def get_model_category(self, model_name: str) -> Optional[ModelCategory]:
         """Get the category for a model name.
-        
+
         Args:
             model_name: Model name to categorize
-            
+
         Returns:
             Model category or None
 
         """
+        if not model_name:
+            return None
         model_name = model_name.strip().lower()
 
         # Check legacy mappings
@@ -260,10 +296,10 @@ class ModelMapper:
 
     def get_provider_models(self, provider: str) -> Dict[str, str]:
         """Get all available models for a provider.
-        
+
         Args:
             provider: Provider name
-            
+
         Returns:
             Dictionary of category -> model identifier
 
@@ -280,11 +316,11 @@ class ModelMapper:
         provider: Optional[str] = None
     ) -> Optional[str]:
         """Suggest a model based on task complexity.
-        
+
         Args:
             task_complexity: simple, moderate, complex, or critical
             provider: Target provider
-            
+
         Returns:
             Suggested model identifier
 
@@ -315,7 +351,7 @@ _mapper = None
 
 def get_model_mapper() -> ModelMapper:
     """Get the global model mapper instance.
-    
+
     Returns:
         ModelMapper instance
 
@@ -328,11 +364,11 @@ def get_model_mapper() -> ModelMapper:
 
 def map_model(model_name: str, provider: Optional[str] = None) -> Optional[str]:
     """Convenience function to map a model name.
-    
+
     Args:
         model_name: Model name to map
         provider: Target provider
-        
+
     Returns:
         Provider-specific model identifier
 
@@ -346,11 +382,11 @@ def get_model_for_complexity(
     provider: Optional[str] = None
 ) -> Optional[str]:
     """Get appropriate model for task complexity.
-    
+
     Args:
         complexity: Task complexity level
         provider: Target provider
-        
+
     Returns:
         Model identifier
 

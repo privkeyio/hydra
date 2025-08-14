@@ -188,6 +188,11 @@ class ProviderFactory:
             config_copy = config_dict.copy()
             config_copy.pop('name', None)
             config_copy.pop('type', None)
+            
+            # Handle legacy 'model' parameter by mapping to 'default_model'
+            if 'model' in config_copy:
+                config_copy['default_model'] = config_copy.pop('model')
+            
             return ProviderConfig(
                 name=provider_type,
                 type=provider_type,

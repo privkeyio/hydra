@@ -152,7 +152,7 @@ class APICallTracker:
                 self.call_history[key].popleft()
 
             # Check rate limit
-            limit = self.rate_limits.get(provider, self.rate_limits['default'])
+            limit = self.rate_limits.get(provider, self.rate_limits.get('default', 60))
             if len(self.call_history[key]) >= limit:
                 count = len(self.call_history[key])
                 msg = f"Rate limit exceeded for {key}: {count} >= {limit}"
@@ -177,7 +177,7 @@ class APICallTracker:
                 counts[key] = {
                     'calls_last_minute': len(history),
                     'limit': self.rate_limits.get(
-                        key.split(':')[0], self.rate_limits['default']
+                        key.split(':')[0], self.rate_limits.get('default', 60)
                     )
                 }
 
@@ -293,12 +293,18 @@ class ResourceTracker:
         if self.running:
             return
 
-        self.running = True
-        self.monitor_thread = threading.Thread(
-            target=self._monitoring_loop, daemon=True
-        )
-        self.monitor_thread.start()
-        logger.info("Resource monitoring started")
+        try:
+            self.monitor_thread = threading.Thread(
+                target=self._monitoring_loop, daemon=True
+            )
+            self.monitor_thread.start()
+            self.running = True  # Only set running to True after successful start
+            logger.info("Resource monitoring started")
+        except RuntimeError as e:
+            logger.warning(f"Could not start monitoring thread: {e}. Running in test mode without background monitoring.")
+            self.monitor_thread = None
+            # Still set running to True so monitoring functions work, just without background collection
+            self.running = True
 
     def stop_monitoring(self):
         """Stop the resource monitoring loop."""

@@ -308,6 +308,9 @@ class TestOutputHandlerFactory:
     def test_register_custom_handler(self):
         """Test registering custom handler."""
         class CustomHandler(OutputHandler):
+            def __init__(self, provider_name: str):
+                super().__init__(provider_name)
+            
             def parse(self, response: str) -> ParsedResponse:
                 return ParsedResponse(
                     text=response,

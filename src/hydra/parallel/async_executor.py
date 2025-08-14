@@ -6,6 +6,7 @@ Replaces ThreadPoolExecutor with asyncio for true async concurrency.
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -91,6 +92,9 @@ class AsyncParallelExecutor:
         self.file_lock_manager = get_file_lock_manager()
         from hydra.safety.claude_file_interceptor import SmartFileLockManager
         self.smart_lock_manager = SmartFileLockManager()
+        # Start deadlock monitoring for production use
+        if not os.environ.get('TESTING'):
+            self.smart_lock_manager.start_deadlock_monitoring()
 
     async def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md asynchronously."""
@@ -289,7 +293,7 @@ tickets."""
                 description=f"Ticket {ticket_id}: {node.title}",
                 prompt=prompt,
                 working_directory=str(self.project_root),
-                timeout=300,
+                timeout=900,
                 task_id=ticket_id
             )
 

@@ -70,10 +70,10 @@ class PerformanceProfiler:
 
     def __init__(self, max_history: int = 10000):
         """Initialize profiler.
-        
+
         Args:
             max_history: Maximum number of operations to keep in history
-            
+
         """
         self._operations: deque[OperationMetrics] = deque(maxlen=max_history)
         self._active_operations: Dict[int, OperationMetrics] = {}
@@ -87,10 +87,10 @@ class PerformanceProfiler:
 
     def enable_profiling(self, memory: bool = False) -> None:
         """Enable performance profiling.
-        
+
         Args:
             memory: Whether to enable memory profiling
-            
+
         """
         self._profiling_enabled = True
         self._memory_profiling = memory
@@ -114,15 +114,15 @@ class PerformanceProfiler:
         capture_stack: bool = False
     ):
         """Context manager to profile an operation.
-        
+
         Args:
             operation: Name of the operation
             provider_type: Type of provider
             capture_stack: Whether to capture call stack
-            
+
         Yields:
             OperationMetrics instance
-            
+
         """
         if not self._profiling_enabled:
             yield None
@@ -191,13 +191,13 @@ class PerformanceProfiler:
 
     def profile_function(self, func: Callable) -> pstats.Stats:
         """Profile a function using cProfile.
-        
+
         Args:
             func: Function to profile
-            
+
         Returns:
             Profile statistics
-            
+
         """
         profiler = cProfile.Profile()
         profiler.enable()
@@ -216,14 +216,14 @@ class PerformanceProfiler:
 
     def get_hotspots(self, provider_type: Optional[str] = None, top_n: int = 10) -> List[Tuple[str, float]]:
         """Get performance hotspots.
-        
+
         Args:
             provider_type: Provider to analyze (None for all)
             top_n: Number of top hotspots to return
-            
+
         Returns:
             List of (operation, avg_time_ms) tuples
-            
+
         """
         with self._lock:
             # Group operations by name
@@ -248,13 +248,13 @@ class PerformanceProfiler:
 
     def get_provider_profile(self, provider_type: str) -> ProviderProfileData:
         """Get profile data for a provider.
-        
+
         Args:
             provider_type: Provider type
-            
+
         Returns:
             Provider profile data
-            
+
         """
         with self._lock:
             profile = self._provider_profiles.get(provider_type)
@@ -282,14 +282,14 @@ class PerformanceProfiler:
         limit: int = 10
     ) -> List[OperationMetrics]:
         """Get operations slower than threshold.
-        
+
         Args:
             threshold_ms: Time threshold in milliseconds
             limit: Maximum number of operations to return
-            
+
         Returns:
             List of slow operations
-            
+
         """
         with self._lock:
             slow_ops = [
@@ -301,13 +301,13 @@ class PerformanceProfiler:
 
     def get_memory_leaks(self, threshold_kb: int = 1024) -> List[OperationMetrics]:
         """Find operations with potential memory leaks.
-        
+
         Args:
             threshold_kb: Memory delta threshold in KB
-            
+
         Returns:
             List of operations with high memory usage
-            
+
         """
         if not self._memory_profiling:
             return []
@@ -322,10 +322,10 @@ class PerformanceProfiler:
 
     def generate_report(self) -> str:
         """Generate performance report.
-        
+
         Returns:
             Formatted performance report
-            
+
         """
         with self._lock:
             report = ["=" * 80]
@@ -383,10 +383,10 @@ class PerformanceProfiler:
 
     def optimize_recommendations(self) -> List[str]:
         """Generate optimization recommendations based on profiling data.
-        
+
         Returns:
             List of optimization recommendations
-            
+
         """
         recommendations = []
 
@@ -449,10 +449,10 @@ def get_profiler() -> PerformanceProfiler:
 
 def profile_provider_operation(operation: str):
     """Decorator to profile provider operations.
-    
+
     Args:
         operation: Name of the operation
-        
+
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
@@ -470,10 +470,10 @@ def profile_provider_operation(operation: str):
 
 def enable_profiling(memory: bool = False) -> None:
     """Enable global performance profiling.
-    
+
     Args:
         memory: Whether to enable memory profiling
-        
+
     """
     get_profiler().enable_profiling(memory=memory)
 
@@ -485,19 +485,19 @@ def disable_profiling() -> None:
 
 def get_performance_report() -> str:
     """Get performance report from global profiler.
-    
+
     Returns:
         Formatted performance report
-        
+
     """
     return get_profiler().generate_report()
 
 
 def get_optimization_recommendations() -> List[str]:
     """Get optimization recommendations from global profiler.
-    
+
     Returns:
         List of recommendations
-        
+
     """
     return get_profiler().optimize_recommendations()

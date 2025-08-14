@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from typing import Set
 
-from src.hydra.providers.discovery import ProviderDiscovery
-from src.hydra.providers.interactive_base import ProviderConfig, ProviderCapability
+from hydra.providers.discovery import ProviderDiscovery
+from hydra.providers.interactive_base import ProviderConfig, ProviderCapability
 
 
 class TestProviderDiscovery:
@@ -24,7 +24,7 @@ class TestProviderDiscovery:
         assert isinstance(claude_info['commands'], list)
         assert isinstance(claude_info['capabilities'], set)
     
-    @patch('src.hydra.providers.discovery.ProviderDiscovery._is_command_available')
+    @patch('hydra.providers.discovery.ProviderDiscovery._is_command_available')
     def test_discover_all(self, mock_is_available):
         """Test discovering all available tools."""
         # Mock claude as available, aider as not available
@@ -42,7 +42,7 @@ class TestProviderDiscovery:
         assert claude_config.tool_executable in ['claude', 'claude-cli']
         assert ProviderCapability.FILE_OPERATIONS in claude_config.capabilities
     
-    @patch('src.hydra.providers.discovery.ProviderDiscovery._is_command_available')
+    @patch('hydra.providers.discovery.ProviderDiscovery._is_command_available')
     def test_discover_by_name(self, mock_is_available):
         """Test discovering a specific tool by name."""
         mock_is_available.return_value = True
@@ -157,10 +157,7 @@ class TestProviderDiscovery:
             mock_is_dir.return_value = True
             
             # Mock that claude executable exists in directory
-            def mock_file_exists(path_obj):
-                return str(path_obj).endswith('claude')
-            
-            mock_is_file.side_effect = mock_file_exists
+            mock_is_file.return_value = True
             
             configs = ProviderDiscovery.scan_directory('/usr/bin')
             
@@ -225,20 +222,20 @@ class TestProviderDiscovery:
             discovered = ProviderDiscovery.discover_all()
             assert len(discovered) == 0
     
-    @patch('pathlib.Path')
-    def test_scan_directory_path_handling(self, mock_path_class):
+    def test_scan_directory_path_handling(self):
         """Test directory scanning with various path conditions."""
-        # Test when directory doesn't exist
-        mock_path = Mock()
-        mock_path.exists.return_value = False
-        mock_path_class.return_value = mock_path
-        
-        configs = ProviderDiscovery.scan_directory('/nonexistent')
-        assert len(configs) == 0
-        
-        # Test when path is not a directory
-        mock_path.exists.return_value = True
-        mock_path.is_dir.return_value = False
-        
-        configs = ProviderDiscovery.scan_directory('/not/a/dir')
-        assert len(configs) == 0
+        with patch('pathlib.Path.exists') as mock_exists, \
+             patch('pathlib.Path.is_dir') as mock_is_dir:
+            
+            # Test when directory doesn't exist
+            mock_exists.return_value = False
+            
+            configs = ProviderDiscovery.scan_directory('/nonexistent')
+            assert len(configs) == 0
+            
+            # Test when path is not a directory
+            mock_exists.return_value = True
+            mock_is_dir.return_value = False
+            
+            configs = ProviderDiscovery.scan_directory('/not/a/dir')
+            assert len(configs) == 0

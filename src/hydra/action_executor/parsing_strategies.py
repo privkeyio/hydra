@@ -52,19 +52,23 @@ class CodeBlockStrategy(ParsingStrategy):
     # Regex patterns for different code block formats
     PATTERNS = {
         "markdown_with_header": re.compile(
-            r"```(?P<lang>\w+)?\n#\s*file:\s*(?P<path>[\w\-./]+)\n(?P<content>.*?)```",
+            r"```(?P<lang>\w+)?\n#\s*file:\s*(?P<path>[^\\<>:\"|?*\n]+)\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE,
         ),
         "create_file_instruction": re.compile(
-            r"(?:Create|Write|Add)\s+(?:file\s+)?(?P<path>[\w\-./]+):\s*\n```(?:\w+)?\n(?P<content>.*?)```",
+            r"(?:Create|Write|Add)\s+(?:file\s+)?(?P<path>[^\\<>:\"|?*\n]+):\s*\n```(?:\w+)?\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE | re.IGNORECASE,
         ),
         "modify_file_instruction": re.compile(
-            r"(?:Modify|Update|Edit|Change)\s+(?:file\s+)?(?P<path>[\w\-./]+):\s*\n```(?:\w+)?\n(?P<content>.*?)```",
+            r"(?:Modify|Update|Edit|Change)\s+(?:file\s+)?(?P<path>[^\\<>:\"|?*\n]+):\s*\n```(?:\w+)?\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE | re.IGNORECASE,
         ),
         "file_path_comment": re.compile(
-            r"```(?P<lang>\w+)?\n(?://|#|--)\s*(?P<path>[\w\-./]+)\n(?P<content>.*?)```",
+            r"```(?P<lang>\w+)?\n\s*(?://|#|--)\s*(?P<path>[^\\<>:\"|?*\n]+)\n(?P<content>.*?)```",
+            re.DOTALL | re.MULTILINE,
+        ),
+        "simple_comment_pattern": re.compile(
+            r"```(?P<lang>\w+)?\n\s*#\s*(?P<path>[^\\<>:\"|?*\n]+)\n(?P<content>.*?)```",
             re.DOTALL | re.MULTILINE,
         ),
     }
@@ -73,10 +77,57 @@ class CodeBlockStrategy(ParsingStrategy):
         """Extract file creation/modification actions from code blocks."""
         actions = []
 
+        # Find all individual code blocks by properly matching opening and closing backticks
+        all_blocks = self._find_code_blocks(response)
+        
+        for lang, content in all_blocks:
+            # Look for file path patterns in the first few lines of each block
+            lines = content.split('\n')
+            if not lines:
+                continue
+                
+            # Check first line for path comment patterns
+            first_line = lines[0].strip()
+            path = None
+            
+            # Try different comment styles
+            path_patterns = [
+                r'^(?://|#|--)\s*(.+)$',  # Comment with path
+                r'^#\s*file:\s*(.+)$',   # Explicit file: directive
+                r'^(?://|#|--)\s*file:\s*(.+)$',  # Comment file: directive
+            ]
+            
+            for pattern in path_patterns:
+                match = re.match(pattern, first_line)
+                if match:
+                    path = match.group(1).strip()
+                    break
+            
+            if path and not re.search(r'[\\<>:"|?*]', path):
+                # Remove the path line from content
+                remaining_content = '\n'.join(lines[1:])
+                
+                # Determine action type (default to CREATE_FILE)
+                action_type = ActionType.CREATE_FILE
+                
+                actions.append(
+                    Action(
+                        type=action_type,
+                        target=path,
+                        content=remaining_content,
+                        metadata={"pattern": "code_block_with_path", "language": lang},
+                    )
+                )
+
+        # Also try the legacy patterns for backward compatibility
         for pattern_name, pattern in self.PATTERNS.items():
             for match in pattern.finditer(response):
-                path = match.group("path")
+                path = match.group("path").strip()
                 content = match.group("content")
+
+                # Skip if we already found this path above
+                if any(action.target == path for action in actions):
+                    continue
 
                 # Determine action type based on pattern
                 if "create" in pattern_name.lower():
@@ -84,7 +135,6 @@ class CodeBlockStrategy(ParsingStrategy):
                 elif "modify" in pattern_name.lower():
                     action_type = ActionType.MODIFY_FILE
                 else:
-                    # Default to CREATE_FILE for ambiguous cases
                     action_type = ActionType.CREATE_FILE
 
                 actions.append(
@@ -97,6 +147,52 @@ class CodeBlockStrategy(ParsingStrategy):
                 )
 
         return actions
+
+    def _find_code_blocks(self, response: str) -> List[tuple]:
+        """Find all code blocks by properly matching backticks."""
+        blocks = []
+        lines = response.split('\n')
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Look for opening ```
+            if line.startswith('```'):
+                # Extract language if present
+                lang = line[3:].strip() if len(line) > 3 else ""
+                
+                # Find the matching closing ``` using depth counting
+                content_lines = []
+                j = i + 1
+                depth = 1  # We found one opening ```
+                
+                while j < len(lines) and depth > 0:
+                    current_line = lines[j].strip()
+                    
+                    if current_line.startswith('```'):
+                        if current_line == '```':
+                            # This is a closing ```
+                            depth -= 1
+                        else:
+                            # This is an opening ``` (has language or content)
+                            depth += 1
+                    
+                    if depth > 0:
+                        content_lines.append(lines[j])
+                    j += 1
+                
+                if depth == 0:
+                    # Found properly matched closing backticks
+                    blocks.append((lang, '\n'.join(content_lines)))
+                    i = j
+                else:
+                    # No matching closing backticks found, skip this block
+                    i += 1
+            else:
+                i += 1
+        
+        return blocks
 
 
 class CommandStrategy(ParsingStrategy):
@@ -252,35 +348,35 @@ class DirectiveStrategy(ParsingStrategy):
     DIRECTIVE_PATTERNS = [
         (
             re.compile(
-                r"^(?P<action>CREATE|ADD|WRITE)\s+FILE:\s*(?P<target>[\w\-./]+)",
+                r"^(?P<action>CREATE|ADD|WRITE)\s+FILE:\s*(?P<target>[^\\<>:\"|?*\n]+)",
                 re.MULTILINE | re.IGNORECASE,
             ),
             ActionType.CREATE_FILE,
         ),
         (
             re.compile(
-                r"^(?P<action>MODIFY|UPDATE|EDIT)\s+FILE:\s*(?P<target>[\w\-./]+)",
+                r"^(?P<action>MODIFY|UPDATE|EDIT)\s+FILE:\s*(?P<target>[^\\<>:\"|?*\n]+)",
                 re.MULTILINE | re.IGNORECASE,
             ),
             ActionType.MODIFY_FILE,
         ),
         (
             re.compile(
-                r"^(?P<action>DELETE|REMOVE)\s+(?:FILE:\s*)?(?P<target>[\w\-./]+)",
+                r"^(?P<action>DELETE|REMOVE)\s+(?:FILE:\s*)?(?P<target>[^\\<>:\"|?*\n]+)",
                 re.MULTILINE | re.IGNORECASE,
             ),
             ActionType.DELETE_FILE,
         ),
         (
             re.compile(
-                r"^(?P<action>MOVE|RENAME):\s*(?P<source>[\w\-./]+)\s*->\s*(?P<target>[\w\-./]+)",
+                r"^(?P<action>MOVE|RENAME):\s*(?P<source>[^\\<>:\"|?*\n]+)\s*->\s*(?P<target>[^\\<>:\"|?*\n]+)",
                 re.MULTILINE | re.IGNORECASE,
             ),
             ActionType.MOVE_FILE,
         ),
         (
             re.compile(
-                r"^(?P<action>COPY):\s*(?P<source>[\w\-./]+)\s*->\s*(?P<target>[\w\-./]+)",
+                r"^(?P<action>COPY):\s*(?P<source>[^\\<>:\"|?*\n]+)\s*->\s*(?P<target>[^\\<>:\"|?*\n]+)",
                 re.MULTILINE | re.IGNORECASE,
             ),
             ActionType.COPY_FILE,

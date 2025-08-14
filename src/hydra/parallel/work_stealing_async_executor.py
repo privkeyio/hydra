@@ -5,6 +5,7 @@ Integrates WorkStealingScheduler with AsyncParallelExecutor for optimal load bal
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -97,6 +98,9 @@ class WorkStealingAsyncExecutor:
         self.file_lock_manager = get_file_lock_manager()
         from hydra.safety.claude_file_interceptor import SmartFileLockManager
         self.smart_lock_manager = SmartFileLockManager()
+        # Start deadlock monitoring for production use
+        if not os.environ.get('TESTING'):
+            self.smart_lock_manager.start_deadlock_monitoring()
 
         # Start work stealing scheduler
         self.work_stealing_scheduler.start()
@@ -311,13 +315,13 @@ DO NOT work on any other ticket even if it appears first or seems easier. You ar
 
 PYTHON CODE QUALITY REQUIREMENTS:
 - Add module docstrings to all Python files
-- Include __init__.py in all new package directories  
+- Include __init__.py in all new package directories
 - Use proper type hints for all functions
 - Follow PEP 8 style guidelines
 - Avoid unused imports
 - Add error handling where appropriate
 
-Be minimalistic, surgical and future proof! 
+Be minimalistic, surgical and future proof!
 Avoid using any code or comments that may be construed as AI generated.
 Make sure you do a good job because other LLMs said your code sucked!
 
@@ -332,7 +336,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 description=f"Ticket {ticket_id}: {node.title}",
                 prompt=prompt,
                 working_directory=str(self.project_root),
-                timeout=300,
+                timeout=900,
                 task_id=ticket_id
             )
 

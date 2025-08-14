@@ -157,3 +157,5 @@ agent_activity.log*
 *.tmp
 *.bak
 .temp/
+
+.hydra/

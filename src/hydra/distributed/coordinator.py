@@ -156,7 +156,8 @@ class DistributedCoordinator:
 
         # Resource monitoring
         self.resource_tracker = ResourceTracker(update_interval=2.0)
-        self.resource_tracker.start_monitoring()
+        # Don't start monitoring in __init__ to avoid thread creation issues in tests
+        self._monitoring_started = False
 
         # State persistence
         self.state_manager = HydraStateManager(self.state_dir.parent)
@@ -176,6 +177,11 @@ class DistributedCoordinator:
             return
 
         self.running = True
+        
+        # Start resource monitoring if not already started
+        if not self._monitoring_started:
+            self.resource_tracker.start_monitoring()
+            self._monitoring_started = True
 
         # Create HTTP session
         self.session = aiohttp.ClientSession(
@@ -212,8 +218,7 @@ class DistributedCoordinator:
 
         # Stop HTTP server
         if self.server:
-            self.server.close()
-            await self.server.wait_closed()
+            await self.server.cleanup()
 
         # Close HTTP session
         if self.session:
@@ -244,17 +249,14 @@ class DistributedCoordinator:
         self.app.router.add_post('/locks/{resource_id}', self._handle_acquire_lock)
         self.app.router.add_delete('/locks/{resource_id}', self._handle_release_lock)
 
-        self.server = await asyncio.start_server(
-            lambda r, w: None,  # Placeholder
-            host='0.0.0.0',
-            port=self.port
-        )
-
         # Start web server
         runner = web.AppRunner(self.app)
         await runner.setup()
         site = web.TCPSite(runner, '0.0.0.0', self.port)
         await site.start()
+        
+        # Store the runner for cleanup
+        self.server = runner
 
     async def _start_background_tasks(self):
         """Start background tasks for coordination."""
@@ -556,12 +558,19 @@ class DistributedCoordinator:
             # Convert dictionaries back to dataclass instances
             instances = {}
             for instance_id, instance_data in state_data.get('instances', {}).items():
+                # Handle role enum conversion
+                if 'role' in instance_data and isinstance(instance_data['role'], str):
+                    instance_data['role'] = InstanceRole(instance_data['role'])
                 instances[instance_id] = InstanceInfo(**instance_data)
 
             tasks = {}
             for task_id, task_data in state_data.get('tasks', {}).items():
-                task_data['status'] = TaskStatus(task_data['status'])
-                tasks[task_id] = DistributedTask(**task_data)
+                # Make a copy to avoid modifying original data
+                task_copy = task_data.copy()
+                if 'status' in task_copy:
+                    if isinstance(task_copy['status'], str):
+                        task_copy['status'] = TaskStatus(task_copy['status'])
+                tasks[task_id] = DistributedTask(**task_copy)
 
             locks = {}
             for resource_id, lock_data in state_data.get('locks', {}).items():
@@ -619,7 +628,9 @@ class DistributedCoordinator:
 
             if selected_instance:
                 await self._assign_task(task, selected_instance)
-                available_instances.remove(selected_instance)
+                # Only remove if instance has no more capacity
+                if selected_instance.available_workers <= 0:
+                    available_instances.remove(selected_instance)
 
     def _get_available_instances(self) -> List[InstanceInfo]:
         """Get instances that can accept new tasks."""
@@ -1099,9 +1110,20 @@ class DistributedCoordinator:
         try:
             state_data = asdict(self.distributed_state)
             state_data['last_updated'] = time.time()
+            
+            # Convert enums to values for JSON serialization
+            if 'tasks' in state_data:
+                for task_id, task in state_data['tasks'].items():
+                    if 'status' in task and hasattr(task['status'], 'value'):
+                        task['status'] = task['status'].value
+                        
+            if 'instances' in state_data:
+                for instance_id, instance in state_data['instances'].items():
+                    if 'role' in instance and hasattr(instance['role'], 'value'):
+                        instance['role'] = instance['role'].value
 
             async with aiofiles.open(self.state_file, 'w') as f:
-                await f.write(json.dumps(state_data, indent=2))
+                await f.write(json.dumps(state_data, indent=2, default=str))
 
             logger.debug("Saved distributed state to disk")
         except Exception as e:
@@ -1124,8 +1146,8 @@ class LoadBalancer:
             score = self._calculate_instance_score(instance, task)
             scored_instances.append((score, instance))
 
-        # Sort by score (higher is better)
-        scored_instances.sort(reverse=True)
+        # Sort by score (higher is better), use instance_id as tiebreaker
+        scored_instances.sort(key=lambda x: (x[0], x[1].instance_id), reverse=True)
 
         return scored_instances[0][1]
 

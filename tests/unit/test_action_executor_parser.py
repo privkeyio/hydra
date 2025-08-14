@@ -27,7 +27,7 @@ class TestResponseParser:
 
     def test_parse_code_blocks(self):
         """Test parsing code blocks with file paths."""
-        parser = ResponseParser()
+        parser = ResponseParser(allow_dangerous=True)
         
         response = """
         Here's the implementation:
@@ -225,7 +225,7 @@ class TestResponseParser:
 
     def test_code_block_extraction(self):
         """Test specific code block extraction method."""
-        parser = ResponseParser()
+        parser = ResponseParser(allow_dangerous=True)
         
         response = """
         ```python
@@ -257,7 +257,7 @@ class TestMultiFileParser:
 
     def test_parse_multiple_files(self):
         """Test parsing multiple files from response."""
-        parser = MultiFileParser()
+        parser = MultiFileParser(ResponseParser(allow_dangerous=True))
         
         response = """
         ```python
@@ -298,7 +298,7 @@ class TestMultiFileParser:
 
     def test_group_by_directory(self):
         """Test grouping files by directory."""
-        parser = MultiFileParser()
+        parser = MultiFileParser(ResponseParser(allow_dangerous=True))
         
         response = """
         ```python
@@ -402,7 +402,7 @@ class TestPathValidation:
 
     def test_valid_path_patterns(self):
         """Test valid path patterns are accepted."""
-        parser = ResponseParser()
+        parser = ResponseParser(allow_dangerous=True)
         
         valid_paths = [
             "src/main.py",
@@ -430,7 +430,7 @@ class TestActionTypeDetection:
 
     def test_file_operation_detection(self):
         """Test detection of file operations."""
-        parser = ResponseParser()
+        parser = ResponseParser(allow_dangerous=True)
         
         response = """
         Creating new file:
@@ -498,7 +498,7 @@ class TestEdgeCases:
 
     def test_unicode_content(self):
         """Test handling of Unicode content."""
-        parser = ResponseParser()
+        parser = ResponseParser(allow_dangerous=True)
         
         response = """
         ```python
@@ -516,7 +516,7 @@ class TestEdgeCases:
 
     def test_very_long_content(self):
         """Test handling of very long content."""
-        parser = ResponseParser()
+        parser = ResponseParser(allow_dangerous=True)
         
         # Create very long content
         long_content = "x" * 100000
@@ -533,7 +533,7 @@ class TestEdgeCases:
 
     def test_nested_code_blocks(self):
         """Test handling of nested code blocks."""
-        parser = ResponseParser()
+        parser = ResponseParser(allow_dangerous=True)
         
         response = """
         ```python

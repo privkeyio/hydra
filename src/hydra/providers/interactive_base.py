@@ -112,7 +112,7 @@ class TaskResult:
 
 class InteractiveAIProvider(ABC):
     """Abstract base class for interactive AI tool providers.
-    
+
     This interface defines generic methods for ANY interactive AI tool,
     supporting session management, task execution, and state persistence
     without tool-specific assumptions.
@@ -128,7 +128,7 @@ class InteractiveAIProvider(ABC):
     @abstractmethod
     def validate_config(self) -> None:
         """Validate provider-specific configuration.
-        
+
         Raises:
             ValueError: If configuration is invalid.
 
@@ -138,7 +138,7 @@ class InteractiveAIProvider(ABC):
     @abstractmethod
     def discover_tool(self) -> bool:
         """Automatically discover the AI tool in system PATH.
-        
+
         Returns:
             bool: True if tool was discovered and is available.
 
@@ -148,7 +148,7 @@ class InteractiveAIProvider(ABC):
     @abstractmethod
     def detect_capabilities(self) -> Set[ProviderCapability]:
         """Dynamically detect provider capabilities.
-        
+
         Returns:
             Set[ProviderCapability]: Set of capabilities this provider supports.
 
@@ -159,14 +159,14 @@ class InteractiveAIProvider(ABC):
     def start_session(self, session_id: Optional[str] = None,
                      working_directory: Optional[str] = None) -> str:
         """Start a new interactive session.
-        
+
         Args:
             session_id: Optional session ID. If None, generates a new one.
             working_directory: Optional working directory for the session.
-            
+
         Returns:
             str: The session ID.
-            
+
         Raises:
             RuntimeError: If session cannot be started.
 
@@ -176,10 +176,10 @@ class InteractiveAIProvider(ABC):
     @abstractmethod
     def stop_session(self, session_id: str) -> None:
         """Stop an interactive session.
-        
+
         Args:
             session_id: The session ID to stop.
-            
+
         Raises:
             KeyError: If session doesn't exist.
 
@@ -190,15 +190,15 @@ class InteractiveAIProvider(ABC):
     def execute_task(self, session_id: str, task_prompt: str,
                     timeout: Optional[int] = None) -> TaskResult:
         """Execute a task in the specified session.
-        
+
         Args:
             session_id: The session ID to execute in.
             task_prompt: The task prompt/command to execute.
             timeout: Optional timeout in seconds.
-            
+
         Returns:
             TaskResult: The result of task execution.
-            
+
         Raises:
             KeyError: If session doesn't exist.
             TimeoutError: If task times out.
@@ -210,15 +210,15 @@ class InteractiveAIProvider(ABC):
     def handle_prompt(self, session_id: str, prompt: str,
                      auto_respond: bool = False) -> str:
         """Handle an interactive prompt from the AI tool.
-        
+
         Args:
             session_id: The session ID.
             prompt: The prompt text received.
             auto_respond: Whether to automatically respond to the prompt.
-            
+
         Returns:
             str: The response to send back.
-            
+
         Raises:
             KeyError: If session doesn't exist.
 
@@ -228,13 +228,13 @@ class InteractiveAIProvider(ABC):
     @abstractmethod
     def get_session_state(self, session_id: str) -> Dict[str, Any]:
         """Get serializable state of a session.
-        
+
         Args:
             session_id: The session ID.
-            
+
         Returns:
             Dict[str, Any]: Serializable session state.
-            
+
         Raises:
             KeyError: If session doesn't exist.
 
@@ -244,11 +244,11 @@ class InteractiveAIProvider(ABC):
     @abstractmethod
     def restore_session_state(self, session_id: str, state: Dict[str, Any]) -> None:
         """Restore a session from serialized state.
-        
+
         Args:
             session_id: The session ID.
             state: The serialized session state.
-            
+
         Raises:
             KeyError: If session doesn't exist.
             ValueError: If state is invalid.
@@ -258,7 +258,7 @@ class InteractiveAIProvider(ABC):
 
     def get_capabilities(self) -> Set[ProviderCapability]:
         """Get provider capabilities (cached).
-        
+
         Returns:
             Set[ProviderCapability]: Set of capabilities this provider supports.
 
@@ -269,10 +269,10 @@ class InteractiveAIProvider(ABC):
 
     def has_capability(self, capability: ProviderCapability) -> bool:
         """Check if provider has a specific capability.
-        
+
         Args:
             capability: The capability to check for.
-            
+
         Returns:
             bool: True if provider has the capability.
 
@@ -281,7 +281,7 @@ class InteractiveAIProvider(ABC):
 
     def list_sessions(self) -> List[SessionInfo]:
         """List all active sessions.
-        
+
         Returns:
             List[SessionInfo]: List of session information.
 
@@ -290,13 +290,13 @@ class InteractiveAIProvider(ABC):
 
     def get_session_info(self, session_id: str) -> SessionInfo:
         """Get information about a specific session.
-        
+
         Args:
             session_id: The session ID.
-            
+
         Returns:
             SessionInfo: Session information.
-            
+
         Raises:
             KeyError: If session doesn't exist.
 
@@ -307,7 +307,7 @@ class InteractiveAIProvider(ABC):
 
     def generate_session_id(self) -> str:
         """Generate a unique session ID.
-        
+
         Returns:
             str: A unique session ID.
 
@@ -316,7 +316,7 @@ class InteractiveAIProvider(ABC):
 
     def serialize_state(self) -> Dict[str, Any]:
         """Serialize provider state for persistence.
-        
+
         Returns:
             Dict[str, Any]: Serializable provider state.
 
@@ -332,10 +332,10 @@ class InteractiveAIProvider(ABC):
 
     def deserialize_state(self, state: Dict[str, Any]) -> None:
         """Deserialize provider state from persistence.
-        
+
         Args:
             state: The serialized provider state.
-            
+
         Raises:
             ValueError: If state format is invalid.
 

@@ -1,5 +1,6 @@
 """Integration tests for Venice provider execute_ticket functionality."""
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -24,7 +25,7 @@ class TestVeniceProviderIntegration:
     def venice_config(self):
         """Create a test Venice configuration."""
         return LLMConfig(
-            provider="venice",
+            provider_type="venice",
             model="llama-3.1-8b",
             api_key="test-api-key",
             base_url="https://api.venice.ai/api/v1",
@@ -112,6 +113,8 @@ class TestVeniceProviderIntegration:
             assert result["success"] is True
             assert len(result["results"]) > 0
 
+    @pytest.mark.external
+    @pytest.mark.skipif(not os.getenv("VENICE_API_KEY"), reason="Venice API key required")
     def test_execute_ticket_with_commands(self, venice_provider, temp_dir):
         """Test executing commands through execute_ticket."""
         mock_response = """
@@ -255,6 +258,7 @@ class TestVeniceProviderIntegration:
         assert len(file_ops) >= 0
         assert len(commands) >= 0
 
+    @pytest.mark.external
     def test_execute_ticket_with_rollback(self, venice_provider, temp_dir):
         """Test rollback functionality on failure."""
         mock_response = """
@@ -348,7 +352,7 @@ class TestVeniceProviderEdgeCases:
     def venice_provider(self):
         """Create a Venice provider with minimal config."""
         config = LLMConfig(
-            provider="venice",
+            provider_type="venice",
             api_key="test-key",
         )
         with patch("hydra.providers.venice.OpenAI"), \

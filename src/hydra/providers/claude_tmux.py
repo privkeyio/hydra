@@ -132,7 +132,7 @@ class ClaudeTmuxProvider(BaseProvider):
 
         # Check if debug mode is enabled via environment variable
         debug_mode = os.environ.get('HYDRA_DEBUG', '').lower() in ['true', '1', 'yes']
-        
+
         # Set up debug logging only if enabled
         if debug_mode:
             debug_log_path = hydra_dir / "debug" / f"claude_{session_name}_{int(time.time())}.log"
@@ -140,7 +140,7 @@ class ClaudeTmuxProvider(BaseProvider):
             self._current_debug_log_path = debug_log_path
 
             def debug_log(message):
-                """Log debug messages to file and console"""
+                """Log debug messages to file and console."""
                 timestamp = time.strftime("%H:%M:%S")
                 log_msg = f"[{timestamp}] {message}"
                 print(f"🔍 DEBUG: {log_msg}")
@@ -163,17 +163,29 @@ class ClaudeTmuxProvider(BaseProvider):
 
             # Create a new tmux session with Claude
             # Check if we need to specify a model
+            # First check kwargs for model, then environment variable
+            model_from_kwargs = kwargs.get('model', '')
             model_from_env = os.environ.get('CLAUDE_MODEL', '').lower()
+
+            # Use model from kwargs if provided, otherwise from env
+            model_to_use = model_from_kwargs if model_from_kwargs else model_from_env
 
             # Map ticket models to Claude model names
             model_mapping = {
                 'smart': 'opus',      # Complex tasks need Opus
                 'coder': 'opus',      # Complex coding needs Opus
                 'balanced': 'sonnet', # Balanced tasks use Sonnet
-                'fast': 'sonnet'      # Fast tasks also use Sonnet (no Haiku)
+                'fast': 'sonnet',     # Fast tasks also use Sonnet (no Haiku)
+                # Also handle direct Claude model names
+                'claude-opus-4-1-20250805': 'opus',
+                'opus': 'opus',
+                'claude-sonnet-4-20250514': 'sonnet',
+                'sonnet': 'sonnet'
             }
 
-            claude_model = model_mapping.get(model_from_env, 'sonnet')  # Default to sonnet
+            # Default to opus for ticket creation, sonnet for everything else
+            default_model = 'opus' if kwargs.get('mode') == 'ticket_generation' else 'sonnet'
+            claude_model = model_mapping.get(model_to_use.lower(), default_model)
 
             # Build the command with model flag
             cmd = [
@@ -215,21 +227,58 @@ class ClaudeTmuxProvider(BaseProvider):
             else:
                 print("🎯 Generic task")
 
-            # Send a clear, direct prompt to Claude
-            prompt_text = (
-                f"Execute ticket {ticket_id} in tickets.md\n\n"
-                f"Requirements:\n"
-                f"1. Read the ticket carefully\n"
-                f"2. Create ALL files listed in 'Output Files' section\n"
-                f"3. Follow acceptance criteria exactly\n"
-                f"4. Be minimalistic, surgical and future proof\n"
-                f"5. Avoid using any code or comments that may be construed as AI generated\n"
-                f"6. Make sure you do a good job because other LLMs said your code sucked\n"
-                f"7. When finished, ensure acceptance criteria is met then update tickets.md\n"
-                f"8. Run lint, build, test etc before marking complete\n"
-                f"9. DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS\n"
-                f"10. This has to be production quality, take your time"
+            # Import file creation enforcer
+            from hydra.providers.file_creation_enforcer import (
+                enforce_file_creation,
+                extract_required_files,
             )
+
+            # Parse ticket if available to extract required files
+            ticket = kwargs.get('ticket', None)
+            file_creation_prompt = ""
+            if ticket:
+                file_creation_prompt = enforce_file_creation(ticket)
+                required_files = extract_required_files(ticket)
+                if required_files:
+                    print(f"📋 This ticket requires creating {len(required_files)} new files:")
+                    for f in required_files:
+                        print(f"   📄 {f}")
+
+            # Send a clear, direct prompt to Claude
+            # Check if this is called from ticket_workflow with full prompt
+            if prompt and len(prompt) > 100:  # Full prompt from ticket_workflow
+                # Prepend file creation enforcement to the prompt
+                prompt_text = file_creation_prompt + prompt if file_creation_prompt else prompt
+            else:  # Fallback simple prompt
+                # Still prepend file creation enforcement if we have ticket info
+                base_prompt = (
+                    f"Execute ticket {ticket_id} in tickets.md\n\n"
+                    f"🚨 CRITICAL: CREATE ALL NEW FILES MENTIONED IN ACCEPTANCE CRITERIA 🚨\n\n"
+                    f"Requirements:\n"
+                    f"1. Read the acceptance criteria EXTREMELY CAREFULLY\n"
+                    f"2. CREATE EVERY FILE that is mentioned, for example:\n"
+                    f"   - 'Create hardware-detector.ts' → CREATE src/hardware-detector.ts or src/core/hardware-detector.ts\n"
+                    f"   - 'Create exponential-backoff.ts utility' → CREATE src/utils/exponential-backoff.ts\n"
+                    f"   - 'Create progress-emitter.ts' → CREATE src/progress-emitter.ts or src/core/progress-emitter.ts\n"
+                    f"   - 'Document in test-results/30min-video-report.md' → CREATE test-results/30min-video-report.md\n"
+                    f"   - 'Save to test-results/performance-metrics.json' → CREATE test-results/performance-metrics.json\n"
+                    f"3. DO NOT just modify existing files - CREATE NEW FILES when acceptance criteria says to\n"
+                    f"4. Look for file creation keywords: 'Create', 'Add', 'Implement', 'Document in', 'Save to', 'Write to'\n"
+                    f"5. Follow acceptance criteria exactly - they are REQUIREMENTS not suggestions\n"
+                    f"6. Be minimalistic, surgical and future proof\n"
+                    f"7. NEVER use placeholder comments like 'In a real implementation', 'For now', 'TODO'\n"
+                    f"8. NEVER return empty arrays/objects when real data should be computed\n"
+                    f"9. NEVER write stub functions - implement the ACTUAL functionality\n"
+                    f"10. If a criterion says 'Save changes using WriteSettings', actually call WriteSettings with real data\n"
+                    f"11. If a criterion says 'Track changes', implement actual change tracking, not placeholders\n"
+                    f"12. When finished, ensure ALL acceptance criteria are FULLY implemented\n"
+                    f"13. Update tickets.md marking ticket as complete ONLY if fully implemented\n"
+                    f"14. Run lint, build, test before marking complete\n"
+                    f"15. NO SHORTCUTS, WORKAROUNDS, MOCKS, or PLACEHOLDERS - production quality only\n\n"
+                    f"REMINDER: You MUST create ALL files mentioned in the acceptance criteria!"
+                )
+                # Prepend file creation enforcement if available
+                prompt_text = file_creation_prompt + base_prompt if file_creation_prompt else base_prompt
 
             debug_log("=" * 60)
             debug_log("SENDING PROMPT TO CLAUDE:")
@@ -458,6 +507,36 @@ class ClaudeTmuxProvider(BaseProvider):
             self._send_to_session(session_name, "/exit")
             time.sleep(2)
 
+            # Validate required files were created if we have ticket info
+            if 'required_files' in locals() and required_files:
+                print("\n🔍 Validating required files were created...")
+                missing_files = []
+                for req_file in required_files:
+                    # Check common locations
+                    found = False
+                    possible_paths = [
+                        Path(project_dir) / req_file,
+                        Path(project_dir) / f"src/{req_file}",
+                        Path(project_dir) / f"src/utils/{req_file}",
+                        Path(project_dir) / f"src/core/{req_file}",
+                        Path(project_dir) / f"src/events/{req_file}",
+                        Path(project_dir) / f"docs/{req_file}",
+                    ]
+
+                    for path in possible_paths:
+                        if path.exists():
+                            print(f"   ✅ Found: {path.relative_to(project_dir)}")
+                            found = True
+                            break
+
+                    if not found:
+                        missing_files.append(req_file)
+                        print(f"   ❌ MISSING: {req_file}")
+
+                if missing_files:
+                    print(f"\n⚠️  WARNING: Claude did not create {len(missing_files)} required files!")
+                    print("   This will cause the ticket to fail validation.")
+
             # Check final results
             git_status = subprocess.run(
                 ["git", "status", "--short"],
@@ -682,15 +761,21 @@ class ClaudeTmuxProvider(BaseProvider):
         # Kill any existing session with the same name
         self._kill_session(session_name)
 
-        # Create new tmux session
-        subprocess.run(
-            [
-                "tmux", "new-session", "-d", "-s", session_name,
-                "-c", project_dir,
-                self.claude_path
-            ],
-            check=True
-        )
+        # Create new tmux session with resource handling
+        try:
+            subprocess.run(
+                [
+                    "tmux", "new-session", "-d", "-s", session_name,
+                    "-c", project_dir,
+                    self.claude_path
+                ],
+                check=True,
+                timeout=30
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            if isinstance(e, OSError) and e.errno == 11:  # Resource temporarily unavailable
+                raise ValueError(f"Unable to create tmux session - system resources exhausted: {e}")
+            raise ValueError(f"Failed to create tmux session '{session_name}': {e}")
 
         # Create and store session object
         session = Session(

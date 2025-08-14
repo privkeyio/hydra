@@ -62,6 +62,7 @@ def auto_register_providers():
         'anthropic': 'AnthropicProvider',
         'openai': 'OpenAIProvider',
         'mock': 'MockProvider',
+        'mock_provider': 'MockProvider',  # Alias for compatibility
         'claude_session': 'ClaudeSessionProvider',
         'claude_tmux': 'ClaudeTmuxProvider'
     }
@@ -82,7 +83,6 @@ def auto_register_providers():
                         for provider_name, class_name in provider_map.items():
                             if attr.__name__ == class_name:
                                 ProviderRegistry.register(provider_name, attr)
-                                break
             except Exception as e:
                 # Only show warning for import errors, not instantiation errors
                 if "requires api_key" not in str(e):
@@ -180,7 +180,7 @@ class LLMProviderFactory:
 
 def create_claude_provider_factory():
     """Create a factory function for Claude providers suitable for WarmSessionPool.
-    
+
     Returns:
         Callable that creates InteractiveAIProvider instances
 

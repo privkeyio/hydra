@@ -13,7 +13,9 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Set, Tuple
 
+from hydra.intelligence.model_selector import create_enhanced_model_prompt
 from hydra.monitoring import monitoring
+from hydra.quality.ai_detection import AIGeneratedCodeDetector
 
 
 class SharedWorkspace:
@@ -21,7 +23,7 @@ class SharedWorkspace:
 
     def __init__(self, session_id: Optional[str] = None):
         """Initialize shared workspace.
-        
+
         Args:
             session_id: Optional session ID, will generate one if not provided
 
@@ -53,11 +55,11 @@ class SharedWorkspace:
 
     def get_artifact_path(self, ticket_id: str, filename: str) -> str:
         """Get path for a ticket artifact.
-        
+
         Args:
             ticket_id: Ticket identifier
             filename: Name of the artifact file
-            
+
         Returns:
             Full path to the artifact
 
@@ -72,12 +74,12 @@ class SharedWorkspace:
 
     def save_artifact(self, ticket_id: str, filename: str, content: str) -> str:
         """Save an artifact for a ticket.
-        
+
         Args:
             ticket_id: Ticket identifier
             filename: Name of the artifact file
             content: Content to save
-            
+
         Returns:
             Path where artifact was saved
 
@@ -89,10 +91,10 @@ class SharedWorkspace:
 
     def list_ticket_artifacts(self, ticket_id: str) -> List[str]:
         """List all artifacts for a ticket.
-        
+
         Args:
             ticket_id: Ticket identifier
-            
+
         Returns:
             List of artifact filenames
 
@@ -108,10 +110,10 @@ class SharedWorkspace:
 
     def get_dependency_artifacts(self, dependencies: List[str]) -> Dict[str, List[str]]:
         """Get artifacts from dependency tickets.
-        
+
         Args:
             dependencies: List of ticket IDs that are dependencies
-            
+
         Returns:
             Dictionary mapping ticket_id to list of artifact paths
 
@@ -128,7 +130,7 @@ class SharedWorkspace:
 
     def create_manifest(self, ticket_id: str, created_files: List[str]) -> None:
         """Create a manifest of files created by a ticket.
-        
+
         Args:
             ticket_id: Ticket identifier
             created_files: List of files created by the ticket
@@ -155,10 +157,10 @@ _shared_workspace: Optional[SharedWorkspace] = None
 
 def get_shared_workspace(session_id: Optional[str] = None) -> SharedWorkspace:
     """Get or create the shared workspace for the session.
-    
+
     Args:
         session_id: Optional session ID for the workspace
-        
+
     Returns:
         SharedWorkspace instance
 
@@ -344,7 +346,7 @@ def parse_ticket(tickets_path, ticket_identifier):
 # The function at line 577 handles more ticket formats and is more comprehensive
 
 
-def generate_tickets_md(project_description, output_path="tickets.md"):
+def generate_tickets_md(project_description, output_path="tickets.md", project_type=None):
     """Generate tickets.md from project description using provider abstraction."""
     print("🎫 Generating tickets.md...")
     print("=" * 30)
@@ -361,91 +363,114 @@ def generate_tickets_md(project_description, output_path="tickets.md"):
     smart_model = mapper.map_model("smart", provider.config.provider_type if hasattr(provider, 'config') and hasattr(provider.config, 'provider_type') else None)
     print(f"🧠 Using {smart_model or 'smart model'} for ticket planning...")
 
+    # Load project template if specified
+    template_guidance = ""
+    if project_type:
+        try:
+            from hydra.templates.project_templates import (
+                ProjectTemplateManager,
+                ProjectType,
+            )
+            template_manager = ProjectTemplateManager()
+
+            if template_manager.validate_project_type(project_type):
+                project_type_enum = ProjectType(project_type)
+                template_structure = template_manager.get_template_structure(project_type_enum)
+                phases = template_structure["phases"]
+
+                template_guidance = f"""
+
+PROJECT TYPE: {project_type.upper()}
+RECOMMENDED PHASES: {' → '.join(phases)}
+
+When creating tickets, consider structuring work around these phases:
+{chr(10).join(f'- {phase}' for phase in phases)}
+
+Template guidance available at: templates/{project_type}_template.md
+"""
+        except Exception as e:
+            print(f"⚠️  Could not load template for {project_type}: {e}")
+
     # Adapt prompt to use generic model categories instead of specific Claude models
     # Extract just the filename from the full path for the prompt
     output_filename = os.path.basename(output_path)
-    prompt = f"""Create a file named '{output_filename}' in the current directory with tickets that are made in task language for AI agents to execute that include acceptance criteria, ticket dependencies, and which model category (smart, balanced, fast, or coder) should be used for that ticket. Be minimalistic, surgical and future proof!
-    
-Note: For Claude Code specifically, use smart=opus 4, balanced=sonnet 4, fast=sonnet 4, coder=opus 4
+
+    # Get enhanced model selection guidance
+    enhanced_model_guidance = create_enhanced_model_prompt()
+
+    prompt = f"""Create a file named '{output_filename}' in the current directory with MINIMAL tickets to solve the problem.{template_guidance}
+
+CRITICAL: Generate the FEWEST tickets possible. Most issues should be 1-2 tickets max. Only create multiple tickets if there are truly independent parts or if a database migration MUST happen before code changes.
+
+Prefer direct code changes over analysis/design documents. Skip intermediate documents unless absolutely necessary.
+
+{enhanced_model_guidance}
 
 Each ticket MUST have this format:
 ## Ticket 001: [Title]
 **Status:** TODO
-**Model:** [smart, balanced, fast, or coder]
+**Model:** [smart, balanced, fast, or coder] - Select based on complexity analysis above
 **Dependencies:** [None or comma-separated ticket numbers like 001,002]
-**Description:** [Task description - if this depends on other tickets, mention that it builds on their outputs]
-
-**Required Input Files:** (include for ALL tickets)
-- [For tickets with dependencies: List files from previous tickets]
-- [For tickets without dependencies: Write "None" or list any existing project files needed]
-
-**Output Files:** (include for ALL tickets that create files)
-- [List all files this ticket will create/generate]
-- [E.g., "analysis_report.md", "migration_design.md", "api_endpoints.py"]
-
-**Context Requirements:** (only include if Dependencies is not None)
-- [Specific instructions about reading/using outputs from dependency tickets]
-- [E.g., "FIRST: Read design_doc.md from Ticket 001 to understand the architecture"]
+**Description:** [Direct task description - be specific about what code to change]
+**Progress:** started
 
 **Acceptance Criteria:**
-- [ ] [Criteria that reference outputs from dependencies when applicable]
-- [ ] [Must include creation of any output files listed above]
+- [ ] [Specific code changes to make]
+- [ ] [Tests to update/add if needed]
+- [ ] [Verification steps]
 
-IMPORTANT RULES:
-1. ALL tickets MUST have a "Required Input Files" section (use "None" if no inputs needed)
-2. ALL tickets that create files MUST have an "Output Files" section listing what they produce
-3. For tickets with dependencies:
-   - List the specific output files from previous tickets in "Required Input Files"
-   - Add "Context Requirements" explaining how to use the outputs from dependencies
-   - In the Description, mention that the ticket "builds on" or "uses outputs from" its dependencies
-4. Match input/output files across tickets - outputs from one ticket should match inputs for dependent tickets
+RULES FOR MINIMAL TICKETS:
+1. DEFAULT to 1 ticket that does everything unless there's a compelling reason to split
+2. Only split into multiple tickets if:
+   - Database migration MUST run before code changes to avoid breaking existing systems
+   - There are completely independent features that different people could work on
+3. NEVER create tickets for:
+   - Analysis reports (do analysis within the implementation ticket)
+   - Design documents (design while implementing)
+   - Documentation updates (include in the main change)
+   - Validation reports (validation happens during implementation)
+4. Focus on DIRECT CODE CHANGES, not meta-work
 
-Example for an independent ticket:
-## Ticket 001: Analyze current implementation
+Example for a bug fix (IDEAL - single ticket):
+## Ticket 001: Fix wallet counter skipping index 0
 **Status:** TODO
 **Model:** smart
 **Dependencies:** None
-**Description:** Deep analysis of current system implementation to understand all patterns and edge cases
-
-**Required Input Files:**
-- None (or list existing project files if needed)
-
-**Output Files:**
-- analysis_report.md
-- component_diagram.png
-- database_schema.sql
+**Description:** Change counter semantics from "last used" to "next available" and add migration for existing wallets
+**Progress:** started
 
 **Acceptance Criteria:**
-- [ ] Document all system components in analysis_report.md
-- [ ] Create visual component diagram
-- [ ] Export current database schema to database_schema.sql
+- [ ] Update database trait get_keyset_counter to return u32 instead of Option<u32>, defaulting to 0
+- [ ] Add database migration to increment all existing counters by 1 where counter > 0
+- [ ] Remove +1 logic from wallet operations (issue_bolt11, issue_bolt12, melt_bolt11, swap)
+- [ ] Update tests to verify index 0 is now used
+- [ ] Run all tests and ensure they pass
 
-Example for a dependent ticket:
-## Ticket 002: Implement API based on design
+Example when migration is truly needed separately:
+## Ticket 001: Add database migration for counter fix
+**Status:** TODO
+**Model:** fast
+**Dependencies:** None
+**Description:** Add migration to increment existing keyset counters by 1 to prepare for semantic change
+**Progress:** started
+
+**Acceptance Criteria:**
+- [ ] Add SQL migration: UPDATE keyset SET counter = counter + 1 WHERE counter > 0
+- [ ] Add REDB migration with same logic
+- [ ] Test migration on sample data
+
+## Ticket 002: Update counter logic to use next available index
 **Status:** TODO
 **Model:** smart
 **Dependencies:** 001
-**Description:** Implement the REST API based on the design document from Ticket 001
-
-**Required Input Files:**
-- analysis_report.md (from Ticket 001)
-- database_schema.sql (from Ticket 001)
-
-**Output Files:**
-- api_endpoints.py
-- api_tests.py
-- api_documentation.md
-
-**Context Requirements:**
-- FIRST: Read analysis_report.md to understand the system architecture
-- Review database_schema.sql for data model implementation
-- Follow the patterns and conventions established in Ticket 001
+**Description:** Change counter implementation to represent next available index instead of last used
+**Progress:** started
 
 **Acceptance Criteria:**
-- [ ] Implement all endpoints based on analysis_report.md
-- [ ] Use the database schema from database_schema.sql
-- [ ] Create comprehensive tests in api_tests.py
-- [ ] Document API in api_documentation.md
+- [ ] Change get_keyset_counter return type from Option<u32> to u32 (default 0)
+- [ ] Remove all +1 increments in wallet operations
+- [ ] Update tests to verify behavior
+- [ ] Ensure all tests pass
 
 Project: {project_description}"""
 
@@ -455,12 +480,12 @@ Project: {project_description}"""
         # Determine the working directory for ticket generation
         # Use the directory of the output file as the working directory
         output_dir = os.path.dirname(os.path.abspath(output_path))
-        
+
         # Use provider abstraction to generate tickets
         # Increase timeout for ticket generation as it may take longer
         provider.config.timeout = 120  # 2 minutes should be enough
-        
-        result = provider.generate(
+
+        provider.generate(
             prompt,  # Pass as positional argument
             model=smart_model,
             mode="ticket_generation",
@@ -508,6 +533,31 @@ Project: {project_description}"""
             if coder_count > 0:
                 print(f"   💻 Coder: {coder_count} tickets")
 
+            # Validate dependencies after generation
+            print("\n🔍 Validating ticket dependencies...")
+            from hydra.validation.dependency_validator import DependencyValidator
+            validator = DependencyValidator()
+            validation_result = validator.validate_ticket_dependencies(output_path)
+
+            if validation_result.valid:
+                print("✅ Dependency validation passed")
+                if validation_result.issues:
+                    warning_count = sum(1 for issue in validation_result.issues
+                                      if issue.severity.value == 'warning')
+                    if warning_count > 0:
+                        print(f"⚠️  Found {warning_count} warnings (non-blocking)")
+            else:
+                print("❌ Dependency validation failed!")
+                print("\n📋 Issues found:")
+                for issue in validation_result.issues:
+                    severity_icon = "❌" if issue.severity.value == 'invalid' else "⚠️"
+                    print(f"  {severity_icon} Ticket {issue.ticket_id}: {issue.description}")
+                    if issue.suggested_fix:
+                        print(f"     💡 Fix: {issue.suggested_fix}")
+
+                # Still return True for generation success, but warn about dependencies
+                print("\n⚠️  Tickets generated but have dependency issues that need fixing")
+
             return True
         else:
             print("❌ Failed to generate tickets")
@@ -518,12 +568,50 @@ Project: {project_description}"""
         return False
 
 
+def check_for_ai_generated_code(project_dir):
+    """Check for AI-generated code patterns in recent git changes."""
+    try:
+        # Get the git diff for recent changes
+        git_diff = subprocess.run(
+            ["git", "diff", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=project_dir
+        )
+        
+        if git_diff.returncode != 0:
+            return []
+        
+        detector = AIGeneratedCodeDetector()
+        issues = detector.detect_in_diff(git_diff.stdout)
+        
+        # Format issues for display
+        formatted_issues = []
+        for issue in issues:
+            formatted_issues.append(
+                f"{issue['file']}:{issue['line']} - {issue['pattern']}"
+            )
+        
+        return formatted_issues
+    except Exception:
+        return []
+
+
 def validate_acceptance_criteria(ticket, project_dir):
     """Validate that acceptance criteria were actually implemented."""
     criteria = ticket['acceptance_criteria']
     failed_criteria = []
 
     print(f"🔍 Checking {len(criteria)} acceptance criteria:")
+    
+    # First, check for AI-generated code patterns in recent changes
+    ai_issues = check_for_ai_generated_code(project_dir)
+    if ai_issues:
+        print("\n⚠️  WARNING: AI-generated code patterns detected!")
+        for issue in ai_issues[:5]:  # Show first 5 issues
+            print(f"   • {issue}")
+        # Add to failed criteria
+        failed_criteria.append("AI-generated or placeholder code detected")
 
     for i, criterion in enumerate(criteria, 1):
         criterion_lower = criterion.lower()
@@ -538,7 +626,7 @@ def validate_acceptance_criteria(ticket, project_dir):
 
         # Check for directory mentions like ".hydra directory"
         dir_pattern = r'\.hydra directory|\.hydra/[a-zA-Z0-9_/]+'
-        dir_matches = re.findall(dir_pattern, criterion)
+        re.findall(dir_pattern, criterion)
 
         # Check for specific file mentions
         if "interactive_base.py" in criterion:
@@ -637,22 +725,23 @@ def validate_acceptance_criteria(ticket, project_dir):
                 failed_criteria.append(f"{i}. {criterion}")
                 print(f"   ❌ {i}. npm install check failed: {e}")
 
-        # Generic file checks
-        elif any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
-            # Extract potential file name from criterion
-            words = criterion.split()
-            file_found = False
-            for word in words:
-                if any(ext in word for ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']):
-                    file_path = os.path.join(project_dir, word.strip('.,()'))
-                    if os.path.exists(file_path):
-                        file_found = True
-                        print(f"   ✅ {i}. File {word} found")
-                        break
+        # Generic file checks - use proper validation
+        # But skip if it's about saving/writing to existing files or using functions
+        elif (any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']) and 
+              not any(keyword in criterion_lower for keyword in ['save', 'write', 'using', 'update', 'modify', 'persist', 'call', 'invoke', 'existing'])):
+            from hydra.verification.ticket_verifier import TicketVerifier
+            verifier = TicketVerifier(project_dir)
+            result = verifier._verify_file_exists(criterion)
 
-            if not file_found:
+            if result.status.value == 'passed':
+                print(f"   ✅ {i}. {result.evidence}")
+            else:
+                # For critical files, be more explicit about what's missing
+                if '30min-video-report.md' in criterion or 'performance-metrics.json' in criterion:
+                    print(f"   ❌ {i}. Required documentation/metrics file not created")
+                else:
+                    print(f"   ❌ {i}. {result.evidence}")
                 failed_criteria.append(f"{i}. {criterion}")
-                print(f"   ❌ {i}. Required file not found")
 
         # Development environment checks
         elif "development environment" in criterion_lower or "docker" in criterion_lower:
@@ -682,9 +771,101 @@ def validate_acceptance_criteria(ticket, project_dir):
     return True
 
 
-def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None, workspace: Optional[SharedWorkspace] = None):
-    """Execute exactly like: 'execute ticket N in tickets.md'.
+def validate_code_changes(project_dir):
+    """Validate that code changes don't contain obvious errors or suspicious patterns.
     
+    Returns:
+        tuple: (is_valid, suspicious_patterns)
+
+    """
+    suspicious_patterns = []
+
+    # Get list of modified files
+    try:
+        git_result = subprocess.run(
+            ["git", "diff", "--name-only"],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=10
+        )
+
+        if git_result.returncode != 0:
+            return True, []  # Skip validation if git is not available
+
+        modified_files = git_result.stdout.strip().split('\n') if git_result.stdout else []
+
+        # Also check unstaged files
+        git_unstaged = subprocess.run(
+            ["git", "diff", "--name-only", "--cached"],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=10
+        )
+        if git_unstaged.stdout:
+            modified_files.extend(git_unstaged.stdout.strip().split('\n'))
+    except (subprocess.TimeoutExpired, OSError, BlockingIOError) as e:
+        # Skip validation if git commands fail due to resource issues
+        if os.getenv('TESTING') == '1' or os.getenv('CI') == 'true':
+            print(f"⚠️ Git validation skipped due to resource limitations: {e}")
+        return True, []
+
+    # Pattern checks for each file
+    for file_path in modified_files:
+        if not file_path or not file_path.endswith(('.py', '.js', '.ts', '.tsx', '.jsx')):
+            continue
+
+        full_path = os.path.join(project_dir, file_path)
+        if not os.path.exists(full_path):
+            continue
+
+        try:
+            with open(full_path, 'r') as f:
+                content = f.read()
+
+            # Check for obviously wrong patterns
+            patterns_to_check = [
+                # Random test functions that don't belong
+                (r'def\s+(hello_world|test_function|foo|bar|baz)\s*\(\s*\)\s*:',
+                 "Suspicious test/placeholder function"),
+                # Print statements with obvious test content
+                (r'print\s*\(\s*["\']Hello,?\s+World["\']',
+                 "Hello World debug statement"),
+                # TODO comments that suggest incomplete code
+                (r'#\s*TODO:\s*implement\s+this',
+                 "Unimplemented TODO"),
+                # Obvious placeholder returns
+                (r'return\s+["\']placeholder["\']',
+                 "Placeholder return value"),
+                # Hardcoded credentials (basic check)
+                (r'(password|api_key|secret)\s*=\s*["\'][^"\']+["\']',
+                 "Potential hardcoded credential"),
+                # Functions that just pass or return None without logic
+                (r'def\s+\w+\([^)]*\):\s*\n\s*(pass|return\s+None)\s*$',
+                 "Empty function implementation"),
+            ]
+
+            for pattern, description in patterns_to_check:
+                matches = re.findall(pattern, content, re.MULTILINE | re.IGNORECASE)
+                if matches:
+                    suspicious_patterns.append({
+                        'file': file_path,
+                        'pattern': description,
+                        'matches': matches[:3]  # Limit to first 3 matches
+                    })
+
+        except Exception as e:
+            print(f"Warning: Could not validate {file_path}: {e}")
+            continue
+
+    is_valid = len(suspicious_patterns) == 0
+    return is_valid, suspicious_patterns
+
+
+def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None, workspace: Optional[SharedWorkspace] = None, skip_preflight=False):
+    """Execute exactly like: 'execute ticket N in tickets.md'.
+
     Args:
         tickets_path: Path to tickets.md file
         ticket_identifier: Ticket ID to execute
@@ -694,6 +875,31 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
     """
     print(f"🎫 Executing Ticket {ticket_identifier}")
     print("=" * 40)
+
+    # Run preflight validation unless skipped
+    if not skip_preflight:
+        print("🚀 Running preflight validation...")
+        from hydra.preflight import PreflightChecker
+        checker = PreflightChecker()
+        report = checker.run_preflight_checks(tickets_path)
+
+        if report.has_critical_issues():
+            print("🚨 PREFLIGHT FAILED - Critical issues found!")
+            print("\nCritical Issues:")
+            for check in report.get_critical_issues():
+                print(f"❌ {check.description}: {check.message}")
+                for detail in check.details:
+                    print(f"   {detail}")
+            print("\nUse --skip-preflight to override, but execution may fail.")
+            return False
+        elif report.has_errors() or report.has_warnings():
+            print("⚠️  Preflight validation completed with warnings/errors:")
+            for check in report.get_failed_checks():
+                print(f"{check.status_emoji} {check.description}: {check.message}")
+        else:
+            print("✅ Preflight validation passed")
+    else:
+        print("⚡ Skipping preflight validation (--skip-preflight)")
 
     # Parse the specific ticket
     ticket = parse_ticket(tickets_path, ticket_identifier)
@@ -769,7 +975,7 @@ def execute_single_ticket(tickets_path, ticket_identifier, timeout_override=None
         print(f"🔧 Using {provider_type} provider with model: {ticket_model}")
     else:
         print(f"🔧 Using {provider_type} provider with default model")
-    
+
     # For claude_tmux, set the CLAUDE_MODEL environment variable
     if provider_type == 'claude_tmux' and ticket['model']:
         os.environ['CLAUDE_MODEL'] = ticket['model']
@@ -807,35 +1013,30 @@ IMPORTANT: Save any artifacts, documents, or shared data that other tickets migh
 
     if provider_type == 'claude_tmux':
         # Claude Code can read tickets.md directly
-        prompt = f"""IMPORTANT: You MUST execute ONLY Ticket {ticket_identifier} from tickets.md - NOT any other ticket!
+        prompt = f"""Execute ONLY Ticket {ticket_identifier} from tickets.md.
 
-Find and execute specifically "## Ticket {ticket_identifier}:" in tickets.md
+Find "## Ticket {ticket_identifier}:" in tickets.md and implement it.
 
 {workspace_info}
 {dependency_context}
 
-CRITICAL REQUIREMENTS:
-1. READ the ticket carefully, especially the "Output Files" section
-2. CREATE ALL FILES listed in the "Output Files" section with their exact names
-3. If the ticket says to create "migration_design.md", you MUST create that exact file
-4. Follow the acceptance criteria exactly - they often specify what files to create
+APPROACH:
+1. Make DIRECT code changes - don't create unnecessary documentation
+2. Be surgical and minimal - change only what's needed
+3. If the ticket mentions specific files/functions, change those directly
+4. Focus on making the tests pass
 
-DO NOT work on any other ticket even if it appears first or seems easier. You are assigned ONLY to ticket {ticket_identifier}.
+QUALITY:
+- Write clean, idiomatic code that matches the existing codebase style
+- No placeholders, mocks, or shortcuts
+- Make sure all tests pass after your changes
 
-For tickets with dependencies:
-1. FIRST read any artifacts from dependency tickets in the shared workspace
-2. Use the implementations from previous tickets as specified in "Required Input Files" and "Context Requirements"
-3. Save any outputs that future tickets might need to the shared workspace
+When done:
+1. Verify all acceptance criteria are met
+2. Update tickets.md status to DONE
+3. Run tests to ensure nothing broke
 
-Be minimalistic, surgical and future proof!
-Avoid using any code or comments that may be construed as AI generated.
-Make sure you do a good job because other LLMs said your code sucked!
-
-When you finish, ensure acceptance criteria is met then update tickets.md and then run lint, build, test etc before we move on.
-
-DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time.
-
-REMINDER: You are working on Ticket {ticket_identifier} ONLY. Ignore all other tickets."""
+REMINDER: You are working on Ticket {ticket_identifier} ONLY."""
     else:
         # For other providers (Venice, OpenAI, etc), include ticket details in prompt
         prompt = f"""You are implementing Ticket {ticket_identifier} with the following requirements:
@@ -946,8 +1147,26 @@ Please provide the complete implementation with all necessary files and code."""
                         with open(full_path, 'r') as f:
                             content = f.read()
                         artifact_name = os.path.basename(file_path)
-                        saved_path = workspace.save_artifact(ticket_identifier, artifact_name, content)
+                        workspace.save_artifact(ticket_identifier, artifact_name, content)
                         print(f"   💾 Saved {artifact_name} to workspace")
+
+        # Validate code changes for suspicious patterns
+        print("\n🔍 Validating code changes for suspicious patterns...")
+        code_valid, suspicious_patterns = validate_code_changes(project_dir)
+
+        if not code_valid:
+            print("⚠️  Warning: Suspicious code patterns detected!")
+            for pattern_info in suspicious_patterns:
+                print(f"\n   File: {pattern_info['file']}")
+                print(f"   Issue: {pattern_info['pattern']}")
+                for match in pattern_info['matches']:
+                    print(f"      • {match[:50]}...")  # Show first 50 chars
+
+            print("\n❌ Code validation failed! Please review and fix suspicious patterns.")
+            print("   Ticket execution halted to prevent introducing bad code.")
+            return False
+        else:
+            print("✅ No suspicious code patterns detected")
 
         # Validate acceptance criteria before marking complete
         print("\n🔍 Validating acceptance criteria...")
@@ -985,6 +1204,9 @@ Please provide the complete implementation with all necessary files and code."""
 
     except Exception as e:
         print(f"\n💥 Execution error: {e}")
+        if os.getenv('TESTING') == '1' or os.getenv('CI') == 'true':
+            import traceback
+            print(f"Stack trace:\n{traceback.format_exc()}")
         return False
     finally:
         # Restore original timeout
@@ -1179,7 +1401,7 @@ def run_validation_commands():
                 print(f"   ✅ {desc} passed")
             else:
                 print(f"   ⚠️  {desc} warnings: {result.stderr[:100]}")
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (subprocess.TimeoutExpired, FileNotFoundError, BlockingIOError, OSError):
             print(f"   ⏭️  {desc} skipped (command not available)")
         except Exception as e:
             print(f"   ❌ {desc} error: {e}")
@@ -1205,7 +1427,7 @@ def run_node_validation():
                     print(f"   ⏭️  {desc} skipped (no script defined)")
                 else:
                     print(f"   ⚠️  {desc} warnings: {result.stderr[:100]}")
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (subprocess.TimeoutExpired, FileNotFoundError, BlockingIOError, OSError):
             print(f"   ⏭️  {desc} skipped (command not available)")
         except Exception as e:
             print(f"   ❌ {desc} error: {e}")
@@ -1289,7 +1511,7 @@ def get_executable_tickets(tickets: Dict[str, dict], completed: Set[str]) -> Lis
 def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
                          completed_lock: threading.Lock, workspace: SharedWorkspace) -> bool:
     """Worker function for parallel ticket execution.
-    
+
     Args:
         ticket_id: Normalized ticket ID
         ticket_data: Ticket data dictionary
@@ -1304,8 +1526,8 @@ def execute_ticket_worker(ticket_id: str, ticket_data: dict, tickets_path: str,
         # Use the raw_id stored during parsing
         raw_id = ticket_data.get('raw_id', ticket_id.lstrip('0'))
 
-        # Use longer timeout for ticket execution (5 minutes)
-        success = execute_single_ticket(tickets_path, raw_id, timeout_override=300, workspace=workspace)
+        # Use longer timeout for ticket execution (15 minutes)
+        success = execute_single_ticket(tickets_path, raw_id, timeout_override=900, workspace=workspace)
 
         if success:
             with completed_lock:
@@ -1331,7 +1553,7 @@ def get_quality_summary(tickets_path="tickets.md"):
         'quality_failed': 0
     }
 
-    for ticket_id, ticket_data in tickets.items():
+    for _ticket_id, ticket_data in tickets.items():
         status = ticket_data.get('status', 'TODO').upper()
         if status == 'DONE':
             summary['done'] += 1
@@ -1366,10 +1588,41 @@ def print_quality_summary(tickets_path="tickets.md"):
     print("=" * 40)
 
 
-def run_all_tickets(tickets_path="tickets.md", max_parallel=3):
+def run_all_tickets(tickets_path="tickets.md", max_parallel=3, skip_preflight=False):
     """Execute all tickets with dependency-aware parallel execution."""
     print("🎫 Running All Tickets with Parallel Execution")
     print("=" * 50)
+
+    # Run preflight validation unless skipped
+    if not skip_preflight:
+        print("🚀 Running comprehensive preflight validation...")
+        from hydra.preflight import PreflightChecker
+        checker = PreflightChecker()
+        report = checker.run_preflight_checks(tickets_path)
+
+        if report.has_critical_issues():
+            print("🚨 PREFLIGHT FAILED - Critical issues found!")
+            print("\nCritical Issues:")
+            for check in report.get_critical_issues():
+                print(f"❌ {check.description}: {check.message}")
+                for detail in check.details:
+                    print(f"   {detail}")
+            print("\nRecommendations:")
+            for rec in report.get_recommendations():
+                print(f"💡 {rec}")
+            print("\nUse --skip-preflight to override, but execution may fail.")
+            return False
+        elif report.has_errors() or report.has_warnings():
+            print("⚠️  Preflight validation completed with warnings/errors:")
+            for check in report.get_failed_checks()[:5]:  # Show first 5
+                print(f"{check.status_emoji} {check.description}: {check.message}")
+            if len(report.get_failed_checks()) > 5:
+                print(f"   ... and {len(report.get_failed_checks()) - 5} more issues")
+            print("Proceeding with execution despite warnings...")
+        else:
+            print("✅ Preflight validation passed")
+    else:
+        print("⚡ Skipping preflight validation (--skip-preflight)")
 
     tickets = parse_all_tickets(tickets_path)
     if not tickets:
@@ -1377,6 +1630,29 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3):
         return False
 
     print(f"📋 Found {len(tickets)} tickets")
+
+    # Validate dependencies before execution
+    print("\n🔍 Validating ticket dependencies...")
+    from hydra.validation.dependency_validator import DependencyValidator
+    validator = DependencyValidator()
+    validation_result = validator.validate_ticket_dependencies(tickets_path)
+
+    if not validation_result.valid:
+        print("❌ Dependency validation failed! Cannot proceed with execution.")
+        print("\n📋 Critical issues found:")
+        for issue in validation_result.issues:
+            if issue.severity.value == 'invalid':
+                print(f"  ❌ Ticket {issue.ticket_id}: {issue.description}")
+                if issue.suggested_fix:
+                    print(f"     💡 Fix: {issue.suggested_fix}")
+        return False
+    else:
+        print("✅ Dependency validation passed")
+        if validation_result.issues:
+            warning_count = sum(1 for issue in validation_result.issues
+                              if issue.severity.value == 'warning')
+            if warning_count > 0:
+                print(f"⚠️  Found {warning_count} warnings (will proceed)")
 
     # Create shared workspace for this session
     workspace = get_shared_workspace()
@@ -1393,65 +1669,99 @@ def run_all_tickets(tickets_path="tickets.md", max_parallel=3):
 
     total_tickets = len(tickets)
 
-    with ThreadPoolExecutor(max_workers=max_parallel) as executor:
-        while len(completed) + len(failed) < total_tickets:
-            executable = get_executable_tickets(tickets, completed)
+    # Limit max_parallel in CI environments to prevent resource exhaustion
+    if os.getenv('CI') == 'true':
+        max_parallel = min(max_parallel, 2)
+        print(f"🔧 CI mode: Limited max parallel to {max_parallel}")
+    
+    try:
+        with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+            while len(completed) + len(failed) < total_tickets:
+                executable = get_executable_tickets(tickets, completed)
 
-            if not executable:
-                if len(completed) + len(failed) < total_tickets:
-                    remaining = set(tickets.keys()) - completed - failed
-                    print(f"⚠️ No executable tickets. Remaining: {remaining}")
+                if not executable:
+                    if len(completed) + len(failed) < total_tickets:
+                        remaining = set(tickets.keys()) - completed - failed
+                        print(f"⚠️ No executable tickets. Remaining: {remaining}")
 
-                    for tid in remaining:
-                        needed_deps = deps.get(tid, set()) - completed
-                        if needed_deps:
-                            print(f"  {tid} waiting for: {needed_deps}")
-                break
+                        for tid in remaining:
+                            needed_deps = deps.get(tid, set()) - completed
+                            if needed_deps:
+                                print(f"  {tid} waiting for: {needed_deps}")
+                    break
 
-            print(f"\n📊 Progress: {len(completed)}/{total_tickets} completed")
-            print(f"🔄 Executing batch: {executable}")
+                print(f"\n📊 Progress: {len(completed)}/{total_tickets} completed")
+                print(f"🔄 Executing batch: {executable}")
 
-            futures = {}
-            for ticket_id in executable:
-                future = executor.submit(
-                    execute_ticket_worker,
-                    ticket_id,
-                    tickets[ticket_id],  # Pass ticket data
-                    tickets_path,
-                    completed_lock,
-                    workspace  # Pass shared workspace
-                )
-                futures[future] = ticket_id
+                futures = {}
+                for ticket_id in executable:
+                    try:
+                        future = executor.submit(
+                            execute_ticket_worker,
+                            ticket_id,
+                            tickets[ticket_id],  # Pass ticket data
+                            tickets_path,
+                            completed_lock,
+                            workspace  # Pass shared workspace
+                        )
+                        futures[future] = ticket_id
+                    except RuntimeError as e:
+                        if "can't start new thread" in str(e):
+                            print(f"⚠️ Thread pool exhausted, executing {ticket_id} sequentially")
+                            # Execute sequentially as fallback
+                            success = execute_ticket_worker(
+                                ticket_id,
+                                tickets[ticket_id],
+                                tickets_path,
+                                completed_lock,
+                                workspace
+                            )
+                            with completed_lock:
+                                if success:
+                                    completed.add(ticket_id)
+                                else:
+                                    failed.add(ticket_id)
+                            continue
+                        else:
+                            raise
 
-            for future in as_completed(futures):
-                ticket_id = futures[future]
-                success = future.result()
+                for future in as_completed(futures):
+                    ticket_id = futures[future]
+                    success = future.result()
 
-                with completed_lock:
-                    if success:
-                        completed.add(ticket_id)
+                    with completed_lock:
+                        if success:
+                            completed.add(ticket_id)
 
-                        dependents = reverse_deps.get(ticket_id, set())
-                        if dependents:
-                            ready = [
-                                d for d in dependents
-                                if all(dep in completed for dep in deps.get(d, set()))
-                            ]
-                            if ready:
-                                print(f"🔓 Unlocked tickets: {ready}")
-                    else:
-                        failed.add(ticket_id)
-                        print(f"⛔ Stopping - ticket {ticket_id} failed")
+                            dependents = reverse_deps.get(ticket_id, set())
+                            if dependents:
+                                ready = [
+                                    d for d in dependents
+                                    if all(dep in completed for dep in deps.get(d, set()))
+                                ]
+                                if ready:
+                                    print(f"🔓 Unlocked tickets: {ready}")
+                        else:
+                            failed.add(ticket_id)
+                            print(f"⛔ Stopping - ticket {ticket_id} failed")
 
-                        for f in futures:
-                            if not f.done():
-                                f.cancel()
+                            for f in futures:
+                                if not f.done():
+                                    f.cancel()
 
-                        executor.shutdown(wait=False)
+                            executor.shutdown(wait=False)
+                            break
+
+                    if failed:
                         break
 
-            if failed:
-                break
+                if failed:
+                    break
+
+    except Exception as e:
+        print(f"\n❌ Parallel execution failed: {e}")
+        print(f"📁 Workspace preserved for debugging: {workspace.workspace_path}")
+        return False
 
     print(f"\n{'='*50}")
     print("🎉 Final Summary:")

@@ -31,6 +31,7 @@ dependencies = [
     "celery>=5.3.0",
     "redis>=5.0.0",
     "aiohttp>=3.8.0",
+    "aiofiles>=23.0.0",
     "websockets>=11.0.0",
     "bcrypt>=4.0.0",
     "pyjwt>=2.8.0",
@@ -102,6 +103,13 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
 addopts = "-v --cov=hydra --cov-report=html --cov-report=term --timeout=300"
+markers = [
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests", 
+    "slow: marks tests as slow running tests",
+    "stress: marks tests as stress/load tests that may fail in resource-constrained environments",
+    "external: marks tests that require external services (APIs, credentials, etc.)"
+]
 
 [tool.coverage.run]
 source = ["src/hydra"]

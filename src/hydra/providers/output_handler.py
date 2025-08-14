@@ -100,7 +100,7 @@ class OutputHandler(ABC):
 
     def __init__(self, provider_name: str):
         """Initialize output handler.
-        
+
         Args:
             provider_name: Name of the provider
 
@@ -111,10 +111,10 @@ class OutputHandler(ABC):
     @abstractmethod
     def parse(self, response: str) -> ParsedResponse:
         """Parse provider response into structured format.
-        
+
         Args:
             response: Raw response from provider
-            
+
         Returns:
             Parsed response with metadata
 
@@ -124,10 +124,10 @@ class OutputHandler(ABC):
     @abstractmethod
     def extract_content(self, response: str) -> ExtractedContent:
         """Extract all content types from response.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             Extracted content container
 
@@ -136,10 +136,10 @@ class OutputHandler(ABC):
 
     def extract_code_blocks(self, text: str) -> List[CodeBlock]:
         """Extract code blocks from text.
-        
+
         Args:
             text: Text containing code blocks
-            
+
         Returns:
             List of extracted code blocks
 
@@ -171,10 +171,10 @@ class OutputHandler(ABC):
 
     def _extract_inline_code(self, text: str) -> List[CodeBlock]:
         """Extract inline code patterns.
-        
+
         Args:
             text: Text to search
-            
+
         Returns:
             List of code blocks
 
@@ -213,10 +213,10 @@ class OutputHandler(ABC):
 
     def _is_executable_language(self, language: str) -> bool:
         """Check if a language is executable.
-        
+
         Args:
             language: Language identifier
-            
+
         Returns:
             True if language is executable
 
@@ -239,11 +239,11 @@ class OutputHandler(ABC):
 
     def _extract_filename(self, content: str, language: str) -> Optional[str]:
         """Try to extract filename from code content or comments.
-        
+
         Args:
             content: Code content
             language: Programming language
-            
+
         Returns:
             Filename if found
 
@@ -278,10 +278,10 @@ class OutputHandler(ABC):
 
     def extract_commands(self, text: str) -> List[str]:
         """Extract shell commands from text.
-        
+
         Args:
             text: Text containing commands
-            
+
         Returns:
             List of commands
 
@@ -317,12 +317,12 @@ class OutputHandler(ABC):
         filename: Optional[str] = None
     ) -> str:
         """Format code into a markdown code block.
-        
+
         Args:
             code: Code content
             language: Programming language
             filename: Optional filename
-            
+
         Returns:
             Formatted markdown code block
 
@@ -335,10 +335,10 @@ class OutputHandler(ABC):
 
     def handle_streaming_chunk(self, chunk: str) -> Optional[ParsedResponse]:
         """Handle a streaming response chunk.
-        
+
         Args:
             chunk: Streaming chunk
-            
+
         Returns:
             Parsed response if a complete unit is available
 
@@ -358,7 +358,7 @@ class OutputHandler(ABC):
 
     def finalize_streaming(self) -> ParsedResponse:
         """Finalize streaming and return complete response.
-        
+
         Returns:
             Final parsed response
 
@@ -382,10 +382,10 @@ class ClaudeOutputHandler(OutputHandler):
 
     def parse(self, response: str) -> ParsedResponse:
         """Parse Claude Code response.
-        
+
         Args:
             response: Raw response from Claude
-            
+
         Returns:
             Parsed response
 
@@ -403,10 +403,10 @@ class ClaudeOutputHandler(OutputHandler):
 
     def extract_content(self, response: str) -> ExtractedContent:
         """Extract all content from Claude response.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             Extracted content
 
@@ -426,10 +426,10 @@ class ClaudeOutputHandler(OutputHandler):
 
     def _extract_claude_metadata(self, response: str) -> Dict[str, Any]:
         """Extract Claude-specific metadata.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             Metadata dictionary
 
@@ -472,10 +472,10 @@ class ClaudeOutputHandler(OutputHandler):
 
     def _extract_file_operations(self, response: str) -> Dict[str, str]:
         """Extract file operations from Claude response.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             Dictionary of filename -> content
 
@@ -488,7 +488,7 @@ class ClaudeOutputHandler(OutputHandler):
         in_code_block = False
         code_content = []
 
-        for i, line in enumerate(lines):
+        for _i, line in enumerate(lines):
             # Check for file operation indicators
             if not in_code_block:
                 file_match = re.match(
@@ -522,10 +522,10 @@ class ClaudeOutputHandler(OutputHandler):
 
     def _extract_text_sections(self, response: str) -> List[str]:
         """Extract non-code text sections.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             List of text sections
 
@@ -554,10 +554,10 @@ class VeniceOutputHandler(OutputHandler):
 
     def parse(self, response: str) -> ParsedResponse:
         """Parse Venice response.
-        
+
         Args:
             response: Raw response from Venice
-            
+
         Returns:
             Parsed response
 
@@ -576,10 +576,10 @@ class VeniceOutputHandler(OutputHandler):
 
     def extract_content(self, response: str) -> ExtractedContent:
         """Extract all content from Venice response.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             Extracted content
 
@@ -599,10 +599,10 @@ class VeniceOutputHandler(OutputHandler):
 
     def _extract_venice_code(self, response: str) -> List[CodeBlock]:
         """Extract code from Venice response with enhanced detection.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             List of code blocks
 
@@ -617,10 +617,10 @@ class VeniceOutputHandler(OutputHandler):
 
     def _detect_implicit_code(self, text: str) -> List[CodeBlock]:
         """Detect code that isn't in explicit blocks.
-        
+
         Args:
             text: Text to analyze
-            
+
         Returns:
             List of detected code blocks
 
@@ -674,10 +674,10 @@ class VeniceOutputHandler(OutputHandler):
 
     def _is_code_line(self, line: str) -> bool:
         """Check if a line looks like code.
-        
+
         Args:
             line: Line to check
-            
+
         Returns:
             True if line appears to be code
 
@@ -701,10 +701,10 @@ class VeniceOutputHandler(OutputHandler):
 
     def _is_continuation(self, line: str) -> bool:
         """Check if line is continuation of code.
-        
+
         Args:
             line: Line to check
-            
+
         Returns:
             True if line continues code
 
@@ -721,10 +721,10 @@ class VeniceOutputHandler(OutputHandler):
 
     def _detect_language(self, line: str) -> str:
         """Detect programming language from line.
-        
+
         Args:
             line: Code line
-            
+
         Returns:
             Detected language
 
@@ -750,11 +750,11 @@ class VeniceOutputHandler(OutputHandler):
         code_blocks: List[CodeBlock]
     ) -> Dict[str, str]:
         """Extract implied file contents from response.
-        
+
         Args:
             response: Response text
             code_blocks: Extracted code blocks
-            
+
         Returns:
             Dictionary of filename -> content
 
@@ -785,10 +785,10 @@ class VeniceOutputHandler(OutputHandler):
 
     def _extract_explanations(self, response: str) -> List[str]:
         """Extract explanation text from response.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             List of explanation sections
 
@@ -834,13 +834,13 @@ class OutputHandlerFactory:
     @classmethod
     def create(cls, provider_name: str) -> OutputHandler:
         """Create output handler for provider.
-        
+
         Args:
             provider_name: Name of the provider
-            
+
         Returns:
             Output handler instance
-            
+
         Raises:
             ValueError: If provider not supported
 
@@ -871,12 +871,17 @@ class OutputHandlerFactory:
 
             return DefaultHandler()
 
-        return handler_class()
+        # Try to create with provider_name, fall back to no args
+        try:
+            return handler_class(provider_name)
+        except TypeError:
+            # Handler doesn't accept provider_name argument
+            return handler_class()
 
     @classmethod
     def register(cls, provider_name: str, handler_class: type) -> None:
         """Register a new handler class.
-        
+
         Args:
             provider_name: Provider name
             handler_class: Handler class
@@ -888,11 +893,11 @@ class OutputHandlerFactory:
 # Utility functions for common operations
 def extract_executable_code(response: str, provider: str = "unknown") -> List[str]:
     """Extract only executable code from response.
-    
+
     Args:
         response: Response text
         provider: Provider name
-        
+
     Returns:
         List of executable code strings
 
@@ -914,12 +919,12 @@ def format_code_for_execution(
     add_main: bool = True
 ) -> str:
     """Format code for execution.
-    
+
     Args:
         code: Code to format
         language: Programming language
         add_main: Whether to add main block if missing
-        
+
     Returns:
         Formatted executable code
 
@@ -929,10 +934,8 @@ def format_code_for_execution(
             # Add main block
             lines = code.split('\n')
             # Find where to add main
-            import_end = 0
-            for i, line in enumerate(lines):
+            for _i, line in enumerate(lines):
                 if line.strip() and not line.startswith(('import', 'from', '#')):
-                    import_end = i
                     break
 
             # Check if we have function definitions
@@ -953,10 +956,10 @@ def format_code_for_execution(
 
 def merge_streaming_responses(chunks: List[str]) -> ParsedResponse:
     """Merge streaming chunks into final response.
-    
+
     Args:
         chunks: List of streaming chunks
-        
+
     Returns:
         Merged parsed response
 

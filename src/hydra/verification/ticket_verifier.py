@@ -4,12 +4,11 @@ Automatically verifies that acceptance criteria are met after ticket execution.
 """
 
 import re
+import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
-
-from hydra.ticket_workflow import parse_ticket
 
 
 class CriterionStatus(Enum):
@@ -93,9 +92,26 @@ class TicketVerifier:
         self, tickets_path: str, ticket_id: str
     ) -> TicketVerificationReport:
         """Verify all acceptance criteria for a ticket."""
+        # Late import to avoid circular dependency
+        from hydra.ticket_workflow import parse_ticket
+        
         ticket = parse_ticket(tickets_path, ticket_id)
         if not ticket:
             raise ValueError(f"Ticket {ticket_id} not found")
+
+        # First check for suspicious code patterns in recent changes
+        suspicious_code = self.check_suspicious_patterns_in_diff()
+        if suspicious_code:
+            print("\n⚠️  WARNING: Suspicious code patterns detected in recent changes!")
+            for issue in suspicious_code:
+                print(f"   • {issue}")
+            # Add to recommendations but don't fail verification entirely
+            recommendations = [
+                "Review and fix suspicious code patterns detected:",
+                *suspicious_code[:5]  # Limit to top 5 issues
+            ]
+        else:
+            recommendations = []
 
         results = []
         for criterion in ticket['acceptance_criteria']:
@@ -118,7 +134,8 @@ class TicketVerifier:
         partial = sum(1 for r in results if r.status == CriterionStatus.PARTIAL)
 
         # Generate recommendations
-        recommendations = self._generate_recommendations(results)
+        additional_recommendations = self._generate_recommendations(results)
+        recommendations.extend(additional_recommendations)
 
         return TicketVerificationReport(
             ticket_id=ticket_id,
@@ -136,10 +153,14 @@ class TicketVerifier:
         """Verify a single acceptance criterion."""
         criterion_lower = criterion.lower()
 
-        # Check for file creation
+        # Skip file existence checks for save/write operations
+        save_keywords = ['save', 'write', 'persist', 'update', 'modify']
+        is_save_operation = any(keyword in criterion_lower for keyword in save_keywords)
+        
+        # Check for file creation (but not for save/write operations)
         file_keywords = ['create', 'add', 'generate']
         has_file_keyword = any(keyword in criterion_lower for keyword in file_keywords)
-        if has_file_keyword and 'file' in criterion_lower:
+        if has_file_keyword and 'file' in criterion_lower and not is_save_operation:
             return self._verify_file_exists(criterion)
 
         # Check for directory creation
@@ -165,9 +186,9 @@ class TicketVerifier:
         if 'test' in criterion_lower:
             return self._verify_test_exists(criterion)
 
-        # Check for configuration
+        # Check for configuration (but skip for save/write operations that mention settings)
         config_keywords = ['configure', 'configuration', 'setting']
-        if any(keyword in criterion_lower for keyword in config_keywords):
+        if any(keyword in criterion_lower for keyword in config_keywords) and not is_save_operation:
             return self._verify_configuration_exists(criterion)
 
         # Default: unable to automatically verify
@@ -183,21 +204,40 @@ class TicketVerifier:
         # Extract potential file paths from criterion
         patterns = [
             r'[\'"`]([^\'"`]+\.\w+)[\'"`]',  # Quoted filenames
-            r'(\w+/\w+\.\w+)',  # Path-like patterns
-            r'(\w+\.\w+)',  # Simple filenames
+            r'([\w\-]+/[\w\-]+\.[\w]+)',  # Path-like patterns with hyphens
+            r'([\w\-]+\.[\w]+)',  # Simple filenames with hyphens
+            r'(\S+\.ts)',  # Any .ts file
+            r'(\S+\.js)',  # Any .js file
+            r'(\S+\.md)',  # Any .md file
+            r'(\S+\.json)',  # Any .json file
         ]
 
         for pattern in patterns:
             matches = re.findall(pattern, criterion)
             for match in matches:
-                file_path = self.project_root / match
-                if file_path.exists():
-                    return VerificationResult(
-                        criterion=criterion,
-                        status=CriterionStatus.PASSED,
-                        evidence=f"File {match} exists",
-                        confidence=0.9
-                    )
+                # Skip common words that aren't filenames
+                if match in ['create', 'add', 'implement', 'with', 'for', 'to', 'in']:
+                    continue
+
+                # Check multiple possible locations
+                possible_paths = [
+                    self.project_root / match,
+                    self.project_root / 'src' / match,
+                    self.project_root / 'src/utils' / match,
+                    self.project_root / 'src/core' / match,
+                    self.project_root / 'src/events' / match,
+                    self.project_root / 'docs' / match,
+                    self.project_root / 'test-results' / match,
+                ]
+
+                for file_path in possible_paths:
+                    if file_path.exists():
+                        return VerificationResult(
+                            criterion=criterion,
+                            status=CriterionStatus.PASSED,
+                            evidence=f"File {match} exists at {file_path.relative_to(self.project_root)}",
+                            confidence=0.9
+                        )
 
         return VerificationResult(
             criterion=criterion,
@@ -503,6 +543,74 @@ class TicketVerifier:
                     continue
 
         return None
+
+    def check_suspicious_patterns_in_diff(self) -> List[str]:
+        """Check git diff for suspicious code patterns.
+        
+        Returns:
+            List of suspicious patterns found
+
+        """
+        suspicious_issues = []
+
+        try:
+            # Get the diff of staged and unstaged changes
+            git_diff = subprocess.run(
+                ["git", "diff", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root
+            )
+
+            if git_diff.returncode != 0:
+                return []
+
+            diff_content = git_diff.stdout
+
+            # Patterns to check in the diff
+            suspicious_patterns = [
+                (r'\+.*def\s+(hello_world|test_function|foo|bar|baz)\s*\(\s*\)\s*:',
+                 "Suspicious test/placeholder function added"),
+                (r'\+.*print\s*\(\s*["\']Hello,?\s+World["\']',
+                 "Hello World debug statement added"),
+                (r'\+.*#\s*TODO:\s*implement\s+this',
+                 "Unimplemented TODO added"),
+                (r'\+.*return\s+["\']placeholder["\']',
+                 "Placeholder return value added"),
+                (r'\+.*(password|api_key|secret)\s*=\s*["\'][^"\']+["\']',
+                 "Potential hardcoded credential added"),
+                (r'\+.*def\s+\w+\([^)]*\):\s*\n\s*\+\s*(pass|return\s+None)\s*$',
+                 "Empty function implementation added"),
+                (r'\+.*console\.log\s*\(\s*["\']test["\']',
+                 "Test console.log added"),
+                (r'\+.*debugger;',
+                 "Debugger statement added"),
+            ]
+
+            # Check each pattern
+            for pattern, description in suspicious_patterns:
+                matches = re.findall(pattern, diff_content, re.MULTILINE | re.IGNORECASE)
+                if matches:
+                    # Extract context around the match
+                    for match in matches[:3]:  # Limit to first 3
+                        suspicious_issues.append(f"{description}: {match[:50]}...")
+
+            # Check for large blocks of commented code being added
+            commented_lines = re.findall(r'\+\s*#.*', diff_content)
+            if len(commented_lines) > 20:
+                suspicious_issues.append(f"Large amount of commented code added ({len(commented_lines)} lines)")
+
+            # Check for files that shouldn't normally be modified
+            protected_files = ['package-lock.json', 'yarn.lock', '.gitignore']
+            for protected_file in protected_files:
+                if f'diff --git a/{protected_file}' in diff_content or f'b/{protected_file}' in diff_content:
+                    suspicious_issues.append(f"Protected file modified: {protected_file}")
+
+        except Exception:
+            # Silently fail if git is not available
+            pass
+
+        return suspicious_issues
 
     def _generate_recommendations(self, results: List[VerificationResult]) -> List[str]:
         """Generate recommendations based on verification results."""

@@ -212,10 +212,13 @@ def execute_workflow(
 
     try:
         final_state = workflow.invoke(initial_state)
-        return final_state
+        # Ensure the state is a proper dict (not TypedDict instance)
+        return dict(final_state)
     except Exception as e:
         logger.error(f"Workflow execution failed: {e}")
         return {
             "error": str(e),
+            "task": task,
+            "agents": [agent_name],
             "initial_state": initial_state
         }

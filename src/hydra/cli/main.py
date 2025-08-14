@@ -216,6 +216,14 @@ def handle_run_command(args) -> int:
             print(f"\nExecution failed: {results['error']}", file=sys.stderr)
             return 1
 
+        # Ensure the results are printed cleanly after the dashes
+        if args.json:
+            # Add task to results if not present (for backwards compatibility)
+            if "task" not in results:
+                results["task"] = task
+            if "agents" not in results and "agent" in results:
+                results["agents"] = [results["agent"]]
+        
         print_results(results, args.json)
         return 0
 

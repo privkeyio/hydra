@@ -203,6 +203,7 @@ def handle_run_command(args) -> int:
         print("Error: No task provided", file=sys.stderr)
         return 1
 
+    # Print header (even in JSON mode for backwards compatibility)
     print(f"Executing task: {task}")
     print(f"Agent: {args.agent_name}, Starting depth: {args.depth}")
     print("-" * 60)

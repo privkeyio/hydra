@@ -70,3 +70,12 @@ jobs:
         TESTING: "1"
       run: |
         timeout 5m python -m pytest tests/test_ticket_creation.py tests/test_parallel_execution.py tests/test_verify_parallel.py tests/test_ci_integration.py -v --tb=short --timeout=60
+    
+    - name: Run ticket workflow E2E tests
+      env:
+        LLM_PROVIDER: mock
+        REDIS_URL: redis://localhost:6379/0
+        DATABASE_URL: sqlite:///test.db
+        TESTING: "1"
+      run: |
+        timeout 5m python -m pytest tests/integration/test_ticket_workflow_e2e.py tests/integration/test_cli_commands_e2e.py -v --tb=short --timeout=60

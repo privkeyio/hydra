@@ -4,6 +4,7 @@ import threading
 import time
 import unittest
 from unittest.mock import Mock, patch
+import pytest
 
 from hydra.parallel.work_stealing_scheduler import (
     StealingPolicy,

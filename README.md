@@ -26,13 +26,43 @@ Hydra orchestrates multiple AI agents to build production software in parallel. 
 
 ### Installation
 
+**Requirements:** Python 3.11+, tmux, Redis (for distributed features)
+
+#### Option 1: pipx (Recommended)
+```bash
+# Install pipx if not already installed
+# Ubuntu/Debian: sudo apt install pipx
+# macOS: brew install pipx
+# Or: python3 -m pip install --user pipx
+
+# Ensure pipx is in PATH
+pipx ensurepath
+# Restart terminal or: source ~/.bashrc
+
+# Install Hydra
+git clone https://github.com/username/hydra.git
+cd hydra
+pipx install .
+
+# For development
+pipx install -e .
+```
+
+#### Option 2: Virtual Environment
+```bash
+git clone https://github.com/username/hydra.git
+cd hydra
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -e .
+```
+
+#### Option 3: Direct pip install
 ```bash
 git clone https://github.com/username/hydra.git
 cd hydra
 pip install -e .
 ```
-
-**Requirements:** Python 3.11+, tmux, Redis (for distributed features)
 
 ### Basic Setup
 
@@ -49,34 +79,19 @@ export ANTHROPIC_API_KEY=your_key
 export VENICE_API_KEY=your_key  # Get from https://venice.ai
 ```
 
-#### Venice AI Setup (Recommended)
-
-Venice provides access to powerful open-source models like Qwen, Llama, and DeepSeek:
-
-1. **Get API Key**: Sign up at [venice.ai](https://venice.ai) for free API access
-2. **Configure Environment**:
-   ```bash
-   # .env file
-   LLM_PROVIDER=venice
-   VENICE_API_KEY=your_venice_api_key
-   ```
-3. **Available Models**:
-   - `qwen-2.5-coder-32b` - Best for coding tasks
-   - `llama-3.3-70b` - Balanced performance
-   - `deepseek-coder-v2-lite` - Fast code generation
-   - Run `hydra venice list-models` to see all options
-
 ### Your First Project
 
 ```bash
 # 1. Generate tickets from your idea
 hydra ticket create "Build a REST API with authentication, database, and tests"
 
-# 2. Execute with parallel agents
-hydra ticket parallel --workers 4
+# 2. Start the dashboard (auto-detects project)
+hydra dashboard start
 
-# 3. Monitor progress
-open http://localhost:8080
+# 3. Execute tickets (dashboard auto-updates)
+hydra ticket execute tickets.md 001
+
+# 4. View real-time progress at http://localhost:8080
 ```
 
 ## Core Commands
@@ -91,11 +106,14 @@ hydra claude execute "Create a FastAPI service with JWT auth"
 # Generate tickets
 hydra ticket create "project description"
 
-# Execute in parallel
-hydra ticket parallel --workers 4
+# Execute single ticket
+hydra ticket execute tickets.md 001
 
-# Verify and fix incomplete work
-hydra ticket verify-parallel --workers 4
+# Execute all tickets in parallel
+hydra parallel tickets.md --workers 4
+
+# Verify parallel execution results
+hydra verify-parallel <execution_id>
 ```
 
 ### Session Management
@@ -127,10 +145,48 @@ hydra claude attach dev
 - [ ] Setup error handling
 ```
 
+## Key Features
+
+### 🚀 Performance Optimizations
+- **uvloop** integration for 2-5x async performance boost
+- **Connection pooling** with singleton patterns for Redis/HTTP
+- **Smart batching** for parallel LLM requests
+- **Response caching** with configurable TTL
+
+### 🛡️ Safety & Quality
+- **AI detection** to flag generated code patterns
+- **Quality gates** with automatic linting and testing
+- **Safety guards** blocking dangerous operations
+- **Graceful shutdown** with proper cleanup sequence
+
+### 📊 Dashboard & Monitoring
+
+**Quick Start:**
+```bash
+hydra dashboard start  # Auto-detects project, runs at http://localhost:8080
+hydra dashboard stop   # Stop the dashboard
+```
+
+**Features:**
+- **Auto-detects project** - Uses project database when run from project directory
+- **Real-time updates** - Status changes reflected within 5 seconds
+- **Persistent** - Runs independently, survives hydra restarts
+- **Token tracking** - Budget management and cost warnings
+- **Cost reporting** with detailed breakdowns
+- **Database backend** for persistence and queries
+
+### 🔧 Enhanced Workflow
+- **Smart ticket creation** with codebase analysis
+- **Context sharing** between dependent tickets
+- **.hydra directory** for organized project data
+- **Modular CLI** with improved help and documentation
+
 ## Provider Support
 
 - **Claude** (claude_tmux) - Interactive Claude Code CLI via tmux
-- **Venice AI** (venice) - API-based Venice.ai integration
+- **Venice AI** (venice) - Production-ready with retry logic and streaming
+- **Anthropic** (anthropic) - Direct API integration
+- **OpenAI** (openai) - GPT-4 and GPT-3.5 support
 - **Mock** (mock) - Testing and development provider
 
 ## Documentation
@@ -147,13 +203,19 @@ Try these to see Hydra in action:
 ```bash
 # Build a complete web app
 hydra ticket create "Build a todo app with React frontend and FastAPI backend"
-hydra ticket parallel --workers 4
+hydra parallel tickets.md --workers 4
+
+# Run quality checks on implementation
+hydra quality 001 --strict
 
 # Verify all work is complete
-hydra ticket verify-parallel --workers 4
+hydra verify tickets.md 001
+
+# Check the dashboard
+open http://localhost:8080
 
 # Check the results
-ls -la
+ls -la .hydra/reports/
 cat tickets.md
 ```
 

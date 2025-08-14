@@ -1,10 +1,12 @@
 """OpenAI provider implementation."""
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import orjson
 from openai import OpenAI
 
 from hydra.caching import lru_cache_with_bypass
+from hydra.prompts import get_system_prompt, optimize_prompt
+from hydra.token_tracker import get_token_tracker
 
 from .base import LLMConfig, LLMProvider
 from .session_manager import get_session_manager
@@ -35,6 +37,11 @@ class OpenAIProvider(LLMProvider):
             http_client=http_client
         )
 
+        # Initialize token tracker
+        self.token_tracker = get_token_tracker()
+        self.ticket_id: Optional[int] = None
+        self.session_id: Optional[int] = None
+
     @property
     def name(self) -> str:
         return "openai"
@@ -42,20 +49,25 @@ class OpenAIProvider(LLMProvider):
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response from OpenAI."""
         try:
+            # Check budget before making request
+            estimated_tokens = self.token_tracker.count_tokens(prompt, "openai") + 1000
+            budget_ok, message = self.token_tracker.check_budget_available(
+                estimated_tokens, self.config.model
+            )
+            if not budget_ok:
+                raise ValueError(f"Token budget exceeded: {message}")
+
             # Merge kwargs with config
             temperature = kwargs.get('temperature', self.config.temperature)
             max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
 
-            # Add system message for better code generation
+            # Add concise system message
             messages = [
                 {
                     "role": "system",
-                    "content": (
-                        "You are an expert Python programmer. "
-                        "Always respond with clean, well-structured code."
-                    )
+                    "content": get_system_prompt("code")
                 },
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": optimize_prompt(prompt, "code_gen")}
             ]
 
             response = self.client.chat.completions.create(
@@ -66,7 +78,36 @@ class OpenAIProvider(LLMProvider):
                 **self.config.extra_params
             )
 
-            return response.choices[0].message.content
+            response_text = response.choices[0].message.content
+
+            # Track token usage (OpenAI provides usage in response)
+            usage_data = response.usage if hasattr(response, 'usage') else None
+            if usage_data:
+                # Use actual token counts from OpenAI
+                input_tokens = usage_data.prompt_tokens
+                output_tokens = usage_data.completion_tokens
+            else:
+                # Estimate if not provided
+                input_tokens = self.token_tracker.count_tokens(str(messages), "openai")
+                output_tokens = self.token_tracker.count_tokens(response_text, "openai")
+
+            # Track usage with actual or estimated counts
+            self.token_tracker.track_usage(
+                provider="openai",
+                model=self.config.model,
+                prompt=prompt,
+                response=response_text,
+                ticket_id=self.ticket_id,
+                session_id=self.session_id,
+                metadata={
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "actual_input_tokens": input_tokens,
+                    "actual_output_tokens": output_tokens
+                }
+            )
+
+            return response_text
 
         except Exception as e:
             raise Exception(f"OpenAI API error: {str(e)}") from e
@@ -80,9 +121,9 @@ class OpenAIProvider(LLMProvider):
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful assistant that responds in JSON."
+                        "content": get_system_prompt("json")
                     },
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": optimize_prompt(prompt, "json_gen")}
                 ],
                 response_format={"type": "json_object"},
                 max_tokens=kwargs.get('max_tokens', self.config.max_tokens),
@@ -94,7 +135,7 @@ class OpenAIProvider(LLMProvider):
 
         except Exception:
             # Fallback to regular generation
-            json_prompt = f"{prompt}\n\nRespond with ONLY valid JSON."
+            json_prompt = optimize_prompt(f"{prompt}\nJSON only.", "json_gen")
             response = self.generate(json_prompt, **kwargs)
 
             try:
@@ -122,6 +163,18 @@ class OpenAIProvider(LLMProvider):
                 "o1-preview",
                 "o1-mini"
             ]
+
+    def set_tracking_context(self, ticket_id: Optional[int] = None,
+                            session_id: Optional[int] = None) -> None:
+        """Set context for token tracking.
+        
+        Args:
+            ticket_id: Optional ticket ID for tracking
+            session_id: Optional session ID for tracking
+
+        """
+        self.ticket_id = ticket_id
+        self.session_id = session_id
 
     def cleanup(self) -> None:
         """Clean up provider resources."""

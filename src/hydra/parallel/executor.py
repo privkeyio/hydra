@@ -18,6 +18,7 @@ from hydra.context import ArtifactTracker, TicketUpdater
 from hydra.orchestrator.claude_code_orchestrator import ClaudeCodeOrchestrator
 from hydra.quality import QualityGateRunner
 from hydra.safety.file_lock import get_file_lock_manager
+from hydra.shutdown_manager import get_shutdown_manager
 from hydra.ticket_workflow import (
     mark_ticket_completed,
     mark_ticket_in_progress,
@@ -91,6 +92,24 @@ class ParallelExecutor:
         # Initialize artifact tracker for context passing
         self.artifact_tracker = ArtifactTracker(project_root)
         self.ticket_updater = TicketUpdater(project_root)
+
+        # Register with shutdown manager for graceful shutdown
+        self.shutdown_manager = get_shutdown_manager()
+        self.shutdown_manager.register_shutdown_handler(self._cleanup_resources)
+
+        # Register background threads
+        if hasattr(self.agent_pool, '_cleanup_thread') and self.agent_pool._cleanup_thread:
+            self.shutdown_manager.register_background_thread(self.agent_pool._cleanup_thread)
+        if hasattr(self.smart_lock_manager, '_deadlock_monitor_thread'):
+            deadlock_thread = getattr(self.smart_lock_manager, '_deadlock_monitor_thread', None)
+            if deadlock_thread:
+                self.shutdown_manager.register_background_thread(deadlock_thread)
+
+        # Register state saving
+        if hasattr(self, 'dashboard_state') and self.dashboard_state:
+            self.shutdown_manager.register_state_saver(
+                lambda: getattr(self.dashboard_state, 'save_state', lambda: None)()
+            )
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from tickets.md."""
@@ -344,6 +363,9 @@ class ParallelExecutor:
             node.status = ExecutionStatus.RUNNING
             node.start_time = time.time()
 
+            # Register task with shutdown manager
+            self.shutdown_manager.register_task(ticket_id)
+
             # Update dashboard
             if self.dashboard_state:
                 from hydra.dashboard.state import TicketStatus
@@ -558,6 +580,9 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                         self.quality_failed_tickets.add(ticket_id)  # Track for reporting
                     self.running_tickets.remove(ticket_id)
 
+                    # Unregister task from shutdown manager
+                    self.shutdown_manager.unregister_task(ticket_id)
+
                     # Update dashboard
                     if self.dashboard_state:
                         from hydra.dashboard.state import TicketStatus
@@ -585,6 +610,9 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 node.error = str(e)
                 self.failed_tickets.add(ticket_id)
                 self.running_tickets.remove(ticket_id)
+
+                # Unregister task from shutdown manager
+                self.shutdown_manager.unregister_task(ticket_id)
 
                 # Update dashboard
                 if self.dashboard_state:
@@ -1019,9 +1047,34 @@ Check your project directory for all the generated calculator files.
 
         return str(log_file)
 
-    def shutdown(self):
-        """Shutdown the executor and clean up resources."""
+    def _cleanup_resources(self):
+        """Clean up resources when called by shutdown manager."""
         # Stop the agent pool
         if hasattr(self, 'agent_pool'):
             self.agent_pool.stop()
-            print("🛑 Agent pool shutdown complete")
+
+        # Stop smart lock manager deadlock monitoring
+        if hasattr(self, 'smart_lock_manager'):
+            try:
+                if hasattr(self.smart_lock_manager, 'stop_deadlock_monitoring'):
+                    self.smart_lock_manager.stop_deadlock_monitoring()
+            except Exception as e:
+                print(f"⚠️  Warning: Error stopping deadlock monitoring: {e}")
+
+        # Close any open file handles
+        if hasattr(self, 'file_lock_manager'):
+            try:
+                # Release any remaining locks
+                for agent_id in list(self.running_tickets):
+                    self.file_lock_manager.release_all_locks(agent_id)
+            except Exception as e:
+                print(f"⚠️  Warning: Error releasing file locks: {e}")
+
+    def shutdown(self):
+        """Shutdown the executor and clean up resources."""
+        # Use the shutdown manager for coordinated shutdown
+        if hasattr(self, 'shutdown_manager'):
+            self.shutdown_manager.shutdown()
+        else:
+            # Fallback to direct cleanup
+            self._cleanup_resources()

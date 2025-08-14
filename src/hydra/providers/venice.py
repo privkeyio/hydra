@@ -1,6 +1,7 @@
-"""Venice AI provider implementation."""
+"""Venice AI provider implementation with production features."""
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -10,7 +11,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import orjson
-from openai import AsyncOpenAI, OpenAI
+from openai import APIConnectionError, APIError, AsyncOpenAI, OpenAI, RateLimitError
+from openai import Timeout as OpenAITimeout
 
 from hydra.action_executor import (
     Action,
@@ -19,6 +21,7 @@ from hydra.action_executor import (
     FileOperationsExecutor,
     ResponseParser,
 )
+from hydra.prompts import get_system_prompt, optimize_prompt
 from hydra.providers.base import LLMConfig
 from hydra.providers.base_provider import (
     BaseProvider,
@@ -29,6 +32,8 @@ from hydra.providers.base_provider import (
     Session,
     SessionState,
 )
+from hydra.providers.session_manager import get_session_manager
+from hydra.token_tracker import get_token_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +135,6 @@ class VeniceProvider(BaseProvider):
         # Claude compatibility mappings
         "opus": "qwen-2.5-coder-32b",
         "sonnet": "llama-3.3-70b",
-        "haiku": "llama-3.1-8b",
     }
 
     def validate_config(self):
@@ -156,17 +160,54 @@ class VeniceProvider(BaseProvider):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
 
-        # Note: OpenAI client doesn't support requests.Session, it uses httpx internally
-        # We'll let it manage its own connection pooling
+        # Get session manager for connection pooling
+        self.session_manager = get_session_manager()
+
+        # Initialize token tracker
+        self.token_tracker = get_token_tracker()
+        self.ticket_id: Optional[int] = None
+        self.session_id: Optional[int] = None
+
+        # Configure retry settings with exponential backoff
+        self.max_retries = config.extra_params.get('max_retries', 3)
+        self.base_delay = config.extra_params.get('base_delay', 1.0)
+        self.max_delay = config.extra_params.get('max_delay', 60.0)
+        self.backoff_factor = config.extra_params.get('backoff_factor', 2.0)
+
+        # Request/response logging settings
+        self.log_requests = config.extra_params.get('log_requests', True)
+        self.log_responses = config.extra_params.get('log_responses', False)
+        self.log_dir = Path(config.extra_params.get('log_dir', '.hydra/logs'))
+        if self.log_requests or self.log_responses:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        # Timeout settings
+        self.request_timeout = config.extra_params.get('request_timeout', 120)
+        self.stream_timeout = config.extra_params.get('stream_timeout', 300)
+
+        # OpenAI clients with timeout configuration
         self.client = OpenAI(
             api_key=self.config.api_key,
-            base_url=self.config.base_url
+            base_url=self.config.base_url,
+            timeout=self.request_timeout,
+            max_retries=0  # We handle retries ourselves
         )
-        # Note: AsyncOpenAI will use its own async client internally
         self.async_client = AsyncOpenAI(
             api_key=self.config.api_key,
-            base_url=self.config.base_url
+            base_url=self.config.base_url,
+            timeout=self.request_timeout,
+            max_retries=0  # We handle retries ourselves
         )
+
+        # Statistics tracking
+        self.stats = {
+            'total_requests': 0,
+            'successful_requests': 0,
+            'failed_requests': 0,
+            'retries': 0,
+            'total_tokens': 0
+        }
+
         logger.info(f"Venice provider initialized with model: {self.config.model}")
 
     def _resolve_model_name(self) -> None:
@@ -183,49 +224,227 @@ class VeniceProvider(BaseProvider):
         return "venice"
 
     def generate(self, prompt: str, **kwargs) -> str:
-        """Generate a response from Venice AI."""
-        try:
-            # Merge kwargs with config
-            temperature = kwargs.get('temperature', self.config.temperature)
-            max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+        """Generate a response from Venice AI with retry logic and error handling."""
+        self.stats['total_requests'] += 1
 
-            # Add system message for better code generation
-            messages = [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert Python programmer. "
-                        "Always respond with clean, well-structured code."
-                    )
-                },
-                {"role": "user", "content": prompt}
-            ]
+        # Check budget before making request
+        estimated_tokens = self.token_tracker.count_tokens(prompt, "venice") + 1000
+        budget_ok, message = self.token_tracker.check_budget_available(
+            estimated_tokens, self.config.model
+        )
+        if not budget_ok:
+            raise ValueError(f"Token budget exceeded: {message}")
 
-            # Filter out conflicting parameters from extra_params
-            filtered_extra_params = {
-                k: v for k, v in self.config.extra_params.items()
-                if k not in ['temperature', 'max_tokens', 'model', 'messages']
-            }
+        # Merge kwargs with config
+        temperature = kwargs.get('temperature', self.config.temperature)
+        max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
 
-            response = self.client.chat.completions.create(
+        # Add concise system message
+        messages = [
+            {
+                "role": "system",
+                "content": get_system_prompt("code")
+            },
+            {"role": "user", "content": optimize_prompt(prompt, "code_gen")}
+        ]
+
+        # Log request if enabled
+        if self.log_requests:
+            self._log_request(messages, temperature, max_tokens)
+
+        # Filter out conflicting parameters from extra_params
+        filtered_extra_params = {
+            k: v for k, v in self.config.extra_params.items()
+            if k not in ['temperature', 'max_tokens', 'model', 'messages',
+                         'max_retries', 'base_delay', 'max_delay', 'backoff_factor',
+                         'log_requests', 'log_responses', 'log_dir',
+                         'request_timeout', 'stream_timeout']
+        }
+
+        # Execute with retry logic
+        response_content = self._execute_with_retry(
+            lambda: self.client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 **filtered_extra_params
-            )
+            ),
+            operation_name="generate"
+        )
 
-            return response.choices[0].message.content
+        # Extract content from response
+        if hasattr(response_content, 'choices'):
+            content = response_content.choices[0].message.content
+            # Get usage data if available
+            usage_data = response_content.usage if hasattr(response_content, 'usage') else None
+        else:
+            content = response_content
+            usage_data = None
+
+        # Track token usage
+        if usage_data:
+            # Use actual token counts from Venice/OpenAI API
+            input_tokens = usage_data.prompt_tokens
+            output_tokens = usage_data.completion_tokens
+        else:
+            # Estimate if not provided
+            input_tokens = self.token_tracker.count_tokens(str(messages), "venice")
+            output_tokens = self.token_tracker.count_tokens(content, "venice")
+
+        # Track usage
+        self.token_tracker.track_usage(
+            provider="venice",
+            model=self.config.model,
+            prompt=prompt,
+            response=content,
+            ticket_id=self.ticket_id,
+            session_id=self.session_id,
+            metadata={
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "actual_input_tokens": input_tokens if usage_data else None,
+                "actual_output_tokens": output_tokens if usage_data else None
+            }
+        )
+
+        # Log response if enabled
+        if self.log_responses:
+            self._log_response(content)
+
+        self.stats['successful_requests'] += 1
+        return content
+
+    def _execute_with_retry(self, operation, operation_name: str = "operation"):
+        """Execute an operation with exponential backoff retry logic.
+
+        Args:
+            operation: Callable to execute
+            operation_name: Name for logging
+
+        Returns:
+            Operation result
+
+        Raises:
+            Exception: After all retries exhausted
+
+        """
+        last_exception = None
+        delay = self.base_delay
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                if attempt > 0:
+                    logger.info(
+                        f"Retry {attempt}/{self.max_retries} for {operation_name}"
+                    )
+                    self.stats['retries'] += 1
+
+                return operation()
+
+            except RateLimitError as e:
+                last_exception = e
+                if attempt < self.max_retries:
+                    # Use retry-after header if available
+                    retry_after = getattr(e, 'retry_after', None)
+                    if retry_after:
+                        wait_time = min(float(retry_after), self.max_delay)
+                    else:
+                        wait_time = min(delay, self.max_delay)
+
+                    logger.warning(
+                        f"Rate limit hit for {operation_name}, waiting {wait_time:.1f}s"
+                    )
+                    time.sleep(wait_time)
+                    delay *= self.backoff_factor
+
+            except (APIConnectionError, OpenAITimeout) as e:
+                last_exception = e
+                if attempt < self.max_retries:
+                    wait_time = min(delay, self.max_delay)
+                    logger.warning(
+                        f"Connection error for {operation_name}: {e}, "
+                        f"waiting {wait_time:.1f}s"
+                    )
+                    time.sleep(wait_time)
+                    delay *= self.backoff_factor
+
+            except APIError as e:
+                last_exception = e
+                # Check if it's a retryable error (5xx status codes)
+                if hasattr(e, 'status_code') and e.status_code >= 500:
+                    if attempt < self.max_retries:
+                        wait_time = min(delay, self.max_delay)
+                        logger.warning(
+                            f"Server error {e.status_code} for {operation_name}, "
+                            f"waiting {wait_time:.1f}s"
+                        )
+                        time.sleep(wait_time)
+                        delay *= self.backoff_factor
+                        continue
+
+                # Non-retryable API error
+                logger.error(f"Non-retryable API error for {operation_name}: {e}")
+                self.stats['failed_requests'] += 1
+                raise
+
+            except Exception as e:
+                # Unexpected error, don't retry
+                logger.error(f"Unexpected error for {operation_name}: {e}")
+                self.stats['failed_requests'] += 1
+                raise
+
+        # All retries exhausted
+        self.stats['failed_requests'] += 1
+        error_msg = f"All retries exhausted for {operation_name}: {last_exception}"
+        logger.error(error_msg)
+        raise Exception(error_msg) from last_exception
+
+    def _log_request(self, messages: List[Dict], temperature: float, max_tokens: int):
+        """Log request details for debugging and monitoring."""
+        try:
+            timestamp = datetime.now().isoformat()
+            log_entry = {
+                'timestamp': timestamp,
+                'model': self.config.model,
+                'messages': messages,
+                'temperature': temperature,
+                'max_tokens': max_tokens
+            }
+
+            log_file = (
+                self.log_dir / f"requests_{datetime.now().strftime('%Y%m%d')}.jsonl"
+            )
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(log_entry) + '\n')
 
         except Exception as e:
-            raise Exception(f"Venice API error: {str(e)}") from e
+            logger.debug(f"Failed to log request: {e}")
+
+    def _log_response(self, content: str):
+        """Log response details for debugging and monitoring."""
+        try:
+            timestamp = datetime.now().isoformat()
+            log_entry = {
+                'timestamp': timestamp,
+                'model': self.config.model,
+                'content': content[:1000] if content else None,  # Truncate
+                'content_length': len(content) if content else 0
+            }
+
+            log_file = (
+                self.log_dir / f"responses_{datetime.now().strftime('%Y%m%d')}.jsonl"
+            )
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(log_entry) + '\n')
+
+        except Exception as e:
+            logger.debug(f"Failed to log response: {e}")
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from Venice AI."""
         # Add JSON instruction to prompt
-        json_prompt = (
-            f"{prompt}\n\nIMPORTANT: Respond with ONLY valid JSON, no other text."
-        )
+        json_prompt = optimize_prompt(f"{prompt}\nJSON only.", "json_gen")
 
         response = self.generate(json_prompt, **kwargs)
 
@@ -288,7 +507,7 @@ class VeniceProvider(BaseProvider):
     def generate_streaming(
         self, prompt: str, **kwargs
     ) -> Iterator[str]:
-        """Generate streaming response from Venice.
+        """Generate streaming response from Venice with proper error handling.
 
         Args:
             prompt: Input prompt
@@ -298,24 +517,56 @@ class VeniceProvider(BaseProvider):
             Chunks of generated text
 
         """
-        try:
-            messages = self._prepare_messages(prompt, **kwargs)
+        self.stats['total_requests'] += 1
+        messages = self._prepare_messages(prompt, **kwargs)
 
-            stream = self.client.chat.completions.create(
-                model=self.config.model,
-                messages=messages,
-                max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
-                temperature=kwargs.get("temperature", self.config.temperature),
-                stream=True,
+        # Log request if enabled
+        if self.log_requests:
+            self._log_request(
+                messages,
+                kwargs.get("temperature", self.config.temperature),
+                kwargs.get("max_tokens", self.config.max_tokens)
+            )
+
+        # Create stream with timeout
+        stream = None
+        buffer = []
+
+        try:
+            # Use longer timeout for streaming
+            self.client.timeout = self.stream_timeout
+
+            stream = self._execute_with_retry(
+                lambda: self.client.chat.completions.create(
+                    model=self.config.model,
+                    messages=messages,
+                    max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
+                    temperature=kwargs.get("temperature", self.config.temperature),
+                    stream=True,
+                ),
+                operation_name="streaming_generate"
             )
 
             for chunk in stream:
                 if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                    content = chunk.choices[0].delta.content
+                    buffer.append(content)
+                    yield content
+
+            # Log complete response if enabled
+            if self.log_responses and buffer:
+                self._log_response(''.join(buffer))
+
+            self.stats['successful_requests'] += 1
 
         except Exception as e:
+            self.stats['failed_requests'] += 1
             logger.error(f"Venice streaming error: {e}")
             raise
+        finally:
+            # Restore original timeout
+            if hasattr(self, 'client'):
+                self.client.timeout = self.request_timeout
 
     def _prepare_messages(
         self, prompt: str, **kwargs
@@ -354,12 +605,7 @@ class VeniceProvider(BaseProvider):
 
     def _get_default_system_prompt(self) -> str:
         """Get default system prompt for Venice."""
-        return (
-            "You are an expert software engineer and coding assistant. "
-            "Write clean, efficient, and well-documented code. "
-            "Follow best practices and modern design patterns. "
-            "When generating code, focus on clarity, maintainability, and performance."
-        )
+        return get_system_prompt("code")
 
     def _build_code_prompt(
         self, prompt: str, context: Dict[str, Any]
@@ -398,7 +644,7 @@ class VeniceProvider(BaseProvider):
         parts.append("# Task:")
         parts.append(prompt)
         parts.append("")
-        parts.append("Please provide clean, working code that accomplishes this task.")
+        parts.append("Working code.")
 
         return "\n".join(parts)
 
@@ -490,10 +736,7 @@ class VeniceProvider(BaseProvider):
             Formatted prompt for code generation
 
         """
-        return (
-            f"Please write clean, well-documented code for: {prompt}. "
-            "Include the code in a code block."
-        )
+        return f"Code for: {prompt}\nUse code blocks."
 
     def extract_code_blocks(self, response: str) -> List[CodeBlock]:
         """Extract code blocks from response.
@@ -685,11 +928,7 @@ class VeniceProvider(BaseProvider):
 
         if any(keyword in prompt.lower() for keyword in code_keywords):
             # Add code generation instruction
-            prompt = (
-                f"{prompt}\n\n"
-                "Please provide complete, working code with proper error handling. "
-                "Include comments for complex logic."
-            )
+            prompt = f"{prompt}\nWorking code. Comment complex parts."
 
         return prompt
 
@@ -742,40 +981,135 @@ class VeniceProvider(BaseProvider):
         return None
 
     async def generate_async(self, prompt: str, **kwargs) -> str:
-        """Generate a response asynchronously."""
-        try:
-            temperature = kwargs.get('temperature', self.config.temperature)
-            max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+        """Generate a response asynchronously with retry logic."""
+        self.stats['total_requests'] += 1
 
-            messages = [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert Python programmer. "
-                        "Always respond with clean, well-structured code."
-                    )
-                },
-                {"role": "user", "content": prompt}
-            ]
+        temperature = kwargs.get('temperature', self.config.temperature)
+        max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
 
-            # Filter out conflicting parameters from extra_params
-            filtered_extra_params = {
-                k: v for k, v in self.config.extra_params.items()
-                if k not in ['temperature', 'max_tokens', 'model', 'messages']
-            }
+        messages = [
+            {
+                "role": "system",
+                "content": get_system_prompt("code")
+            },
+            {"role": "user", "content": optimize_prompt(prompt, "code_gen")}
+        ]
 
-            response = await self.async_client.chat.completions.create(
+        # Log request if enabled
+        if self.log_requests:
+            self._log_request(messages, temperature, max_tokens)
+
+        # Filter out conflicting parameters from extra_params
+        filtered_extra_params = {
+            k: v for k, v in self.config.extra_params.items()
+            if k not in ['temperature', 'max_tokens', 'model', 'messages',
+                         'max_retries', 'base_delay', 'max_delay', 'backoff_factor',
+                         'log_requests', 'log_responses', 'log_dir',
+                         'request_timeout', 'stream_timeout']
+        }
+
+        # Execute with async retry logic
+        response = await self._execute_async_with_retry(
+            lambda: self.async_client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 **filtered_extra_params
-            )
+            ),
+            operation_name="async_generate"
+        )
 
-            return response.choices[0].message.content
+        content = response.choices[0].message.content
 
-        except Exception as e:
-            raise Exception(f"Venice async API error: {str(e)}") from e
+        # Log response if enabled
+        if self.log_responses:
+            self._log_response(content)
+
+        self.stats['successful_requests'] += 1
+        return content
+
+    async def _execute_async_with_retry(
+        self, operation, operation_name: str = "operation"
+    ):
+        """Execute an async operation with exponential backoff retry logic.
+
+        Args:
+            operation: Async callable to execute
+            operation_name: Name for logging
+
+        Returns:
+            Operation result
+
+        Raises:
+            Exception: After all retries exhausted
+
+        """
+        last_exception = None
+        delay = self.base_delay
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                if attempt > 0:
+                    logger.info(
+                        f"Retry {attempt}/{self.max_retries} for {operation_name}"
+                    )
+                    self.stats['retries'] += 1
+
+                return await operation()
+
+            except RateLimitError as e:
+                last_exception = e
+                if attempt < self.max_retries:
+                    retry_after = getattr(e, 'retry_after', None)
+                    if retry_after:
+                        wait_time = min(float(retry_after), self.max_delay)
+                    else:
+                        wait_time = min(delay, self.max_delay)
+
+                    logger.warning(
+                        f"Rate limit hit for {operation_name}, waiting {wait_time:.1f}s"
+                    )
+                    await asyncio.sleep(wait_time)
+                    delay *= self.backoff_factor
+
+            except (APIConnectionError, OpenAITimeout) as e:
+                last_exception = e
+                if attempt < self.max_retries:
+                    wait_time = min(delay, self.max_delay)
+                    logger.warning(
+                        f"Connection error for {operation_name}: {e}, "
+                        f"waiting {wait_time:.1f}s"
+                    )
+                    await asyncio.sleep(wait_time)
+                    delay *= self.backoff_factor
+
+            except APIError as e:
+                last_exception = e
+                if hasattr(e, 'status_code') and e.status_code >= 500:
+                    if attempt < self.max_retries:
+                        wait_time = min(delay, self.max_delay)
+                        logger.warning(
+                            f"Server error {e.status_code} for {operation_name}, "
+                            f"waiting {wait_time:.1f}s"
+                        )
+                        await asyncio.sleep(wait_time)
+                        delay *= self.backoff_factor
+                        continue
+
+                logger.error(f"Non-retryable API error for {operation_name}: {e}")
+                self.stats['failed_requests'] += 1
+                raise
+
+            except Exception as e:
+                logger.error(f"Unexpected error for {operation_name}: {e}")
+                self.stats['failed_requests'] += 1
+                raise
+
+        self.stats['failed_requests'] += 1
+        error_msg = f"All retries exhausted for {operation_name}: {last_exception}"
+        logger.error(error_msg)
+        raise Exception(error_msg) from last_exception
 
     async def generate_batch_async(self, prompts: List[str], **kwargs) -> List[str]:
         """Generate responses for multiple prompts in batch."""
@@ -950,19 +1284,13 @@ class VeniceProvider(BaseProvider):
 
         """
         prompt_parts = [
-            "You are a software engineer tasked with implementing the "
-            "following ticket:",
-            "",
+            "Implement:",
             ticket_content,
             "",
-            "Please provide a complete implementation with:",
-            "1. All necessary code files (use markdown code blocks with file paths)",
-            "2. Any required shell commands (use bash code blocks)",
-            "3. Clear file paths for each code block (e.g., ```python:src/main.py)",
-            "4. Complete, working code with proper error handling",
-            "",
-            "Format your response with clear code blocks and file paths.",
-            "Each file should be in its own code block with the path specified.",
+            "Provide:",
+            "1. Code files (```lang:path format)",
+            "2. Commands (bash blocks)",
+            "3. Working code",
         ]
 
         return "\n".join(prompt_parts)
@@ -1164,9 +1492,51 @@ class VeniceProvider(BaseProvider):
 
         return file_operations, commands
 
+    def set_tracking_context(self, ticket_id: Optional[int] = None,
+                            session_id: Optional[int] = None) -> None:
+        """Set context for token tracking.
+        
+        Args:
+            ticket_id: Optional ticket ID for tracking
+            session_id: Optional session ID for tracking
+
+        """
+        self.ticket_id = ticket_id
+        self.session_id = session_id
+
     def cleanup(self) -> None:
         """Clean up provider resources."""
         super().cleanup()
+
+        # Log final statistics
+        logger.info(
+            f"Venice provider stats: requests={self.stats['total_requests']}, "
+            f"successful={self.stats['successful_requests']}, "
+            f"failed={self.stats['failed_requests']}, "
+            f"retries={self.stats['retries']}"
+        )
+
         # Close HTTP session for this provider
-        session_manager = get_session_manager()
-        session_manager.close_session("venice")
+        try:
+            self.session_manager.close_session("venice")
+        except Exception as e:
+            logger.debug(f"Failed to close session: {e}")
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get provider statistics.
+
+        Returns:
+            Dictionary of statistics
+
+        """
+        return self.stats.copy()
+
+    def reset_stats(self) -> None:
+        """Reset provider statistics."""
+        self.stats = {
+            'total_requests': 0,
+            'successful_requests': 0,
+            'failed_requests': 0,
+            'retries': 0,
+            'total_tokens': 0
+        }

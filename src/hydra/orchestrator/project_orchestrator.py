@@ -50,7 +50,6 @@ class ModelType(Enum):
     AUTO = "auto"
     SONNET = "sonnet"
     OPUS = "opus"
-    HAIKU = "haiku"
 
 
 @dataclass
@@ -230,7 +229,6 @@ class ProjectOrchestrator:
                 ModelType.SMART: "smart",
                 ModelType.OPUS: "smart",  # OPUS maps to smart category
                 ModelType.SONNET: "balanced",  # SONNET maps to balanced category
-                ModelType.HAIKU: "fast"  # HAIKU maps to fast category
             }
             category = model_category_map.get(task.model)
             if category:

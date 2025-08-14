@@ -86,13 +86,6 @@ class ProviderConfigManager:
                     "max_output_tokens": 8192,
                     "cost_per_million_tokens": 3.0
                 },
-                "haiku": {
-                    "provider_identifier": "claude-3-haiku-20240307",
-                    "category": "fast",
-                    "context_window": 200000,
-                    "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 0.25
-                }
             },
             "features": {
                 "interactive": True,
@@ -167,10 +160,10 @@ class ProviderConfigManager:
             "enabled": True,
             "api_key": "${ANTHROPIC_API_KEY}",
             "base_url": "https://api.anthropic.com",
-            "default_model": "claude-3-opus-20240229",
+            "default_model": "claude-opus-4-1-20250805",
             "models": {
                 "opus": {
-                    "provider_identifier": "claude-3-opus-20240229",
+                    "provider_identifier": "claude-opus-4-1-20250805",
                     "category": "smart",
                     "context_window": 200000,
                     "max_output_tokens": 4096,
@@ -183,13 +176,6 @@ class ProviderConfigManager:
                     "max_output_tokens": 4096,
                     "cost_per_million_tokens": 3.0
                 },
-                "haiku": {
-                    "provider_identifier": "claude-3-haiku-20240307",
-                    "category": "fast",
-                    "context_window": 200000,
-                    "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 0.25
-                }
             },
             "features": {
                 "interactive": False,
@@ -275,6 +261,9 @@ class ProviderConfigManager:
         # Apply environment overrides
         self._apply_environment_overrides()
 
+        # Validate credentials after all configs are loaded
+        self._validate_all_credentials()
+
     def _parse_provider_config(
         self, name: str, config_dict: Dict[str, Any]
     ) -> ProviderConfig:
@@ -334,8 +323,10 @@ class ProviderConfigManager:
             fallback_providers=config_dict.get('fallback_providers', [])
         )
 
-        # Validate configuration
-        self._validate_provider_config(config)
+        # Validate configuration (defer credential validation)
+        self._validate_required_fields(config)
+        self._validate_models(config)
+        self._validate_model_configurations(config)
 
         return config
 
@@ -378,38 +369,49 @@ class ProviderConfigManager:
                         f"models for provider {config.name}"
                     )
 
-    def _validate_provider_credentials(self, config: ProviderConfig) -> None:
-        """Validate provider-specific credentials."""
+    def _validate_all_credentials(self) -> None:
+        """Validate credentials for all providers after configuration is complete."""
         # Only warn about missing API keys if this provider might be used
-        # (i.e., if it's explicitly selected via LLM_PROVIDER or if it's the only enabled provider)
         provider_name = os.getenv('LLM_PROVIDER')
-        is_selected = (provider_name == config.name)
 
         # Count enabled providers
-        enabled_count = sum(1 for c in self._configs.values() if c.enabled)
-        is_only_provider = (config.enabled and enabled_count == 1)
+        enabled_configs = [c for c in self._configs.values() if c.enabled]
+        enabled_count = len(enabled_configs)
 
-        # Validate API providers have required credentials
-        if config.type in ['venice_api', 'anthropic_api', 'openai_api']:
-            if not config.api_key and config.enabled and (is_selected or is_only_provider):
-                import warnings
-                warnings.warn(
-                    f"API key not configured for {config.name} provider. "
-                    f"Set {config.name.upper()}_API_KEY environment variable.",
-                    stacklevel=3
-                )
+        for config in self._configs.values():
+            is_selected = (provider_name == config.name)
+            is_only_provider = (config.enabled and enabled_count == 1)
 
-        # Validate CLI providers have CLI path
-        if config.type in ['claude_tmux', 'claude_cli']:
-            if config.cli_path and not config.cli_path.startswith('$'):
-                cli_path = Path(config.cli_path)
-                if not cli_path.exists() and config.enabled:
+            # Only validate if provider is explicitly selected or is the only option
+            if not (is_selected or is_only_provider):
+                continue
+
+            # Validate API providers have required credentials
+            if config.type in ['venice_api', 'anthropic_api', 'openai_api']:
+                if not config.api_key and config.enabled:
                     import warnings
                     warnings.warn(
-                        f"CLI path '{config.cli_path}' not found for "
-                        f"{config.name} provider",
-                        stacklevel=3
+                        f"API key not configured for {config.name} provider. "
+                        f"Set {config.name.upper()}_API_KEY environment variable.",
+                        stacklevel=4
                     )
+
+            # Validate CLI providers have CLI path
+            if config.type in ['claude_tmux', 'claude_cli']:
+                if config.cli_path and not config.cli_path.startswith('$'):
+                    cli_path = Path(config.cli_path)
+                    if not cli_path.exists() and config.enabled:
+                        import warnings
+                        warnings.warn(
+                            f"CLI path '{config.cli_path}' not found for "
+                            f"{config.name} provider",
+                            stacklevel=4
+                        )
+
+    def _validate_provider_credentials(self, config: ProviderConfig) -> None:
+        """Validate provider-specific credentials (legacy method - now unused)."""
+        # This method is now handled by _validate_all_credentials
+        pass
 
     def _validate_model_configurations(self, config: ProviderConfig) -> None:
         """Validate individual model configurations."""

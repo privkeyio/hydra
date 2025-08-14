@@ -135,7 +135,8 @@ class ClaudeTmuxProvider(BaseProvider):
 
         # Set up debug logging only if enabled
         if debug_mode:
-            debug_log_path = hydra_dir / "debug" / f"claude_{session_name}_{int(time.time())}.log"
+            timestamp = int(time.time())
+            debug_log_path = hydra_dir / "debug" / f"claude_{session_name}_{timestamp}.log"
             debug_log_path.parent.mkdir(exist_ok=True)
             self._current_debug_log_path = debug_log_path
 
@@ -184,7 +185,8 @@ class ClaudeTmuxProvider(BaseProvider):
             }
 
             # Default to opus for ticket creation, sonnet for everything else
-            default_model = 'opus' if kwargs.get('mode') == 'ticket_generation' else 'sonnet'
+            is_ticket_gen = kwargs.get('mode') == 'ticket_generation'
+            default_model = 'opus' if is_ticket_gen else 'sonnet'
             claude_model = model_mapping.get(model_to_use.lower(), default_model)
 
             # Build the command with model flag
@@ -686,17 +688,6 @@ class ClaudeTmuxProvider(BaseProvider):
                 metadata={"version": "4", "release_date": "2025-05-14"}
             ),
             ModelInfo(
-                identifier="claude-3-opus-20240229",
-                display_name="Claude 3 Opus",
-                category="smart",
-                context_window=200000,
-                max_output_tokens=4096,
-                supports_streaming=True,
-                supports_interactive=True,
-                cost_per_token=0.00015,
-                metadata={"version": "3", "release_date": "2024-02-29"}
-            ),
-            ModelInfo(
                 identifier="claude-3-sonnet-20240229",
                 display_name="Claude 3 Sonnet",
                 category="balanced",
@@ -732,7 +723,6 @@ class ClaudeTmuxProvider(BaseProvider):
         return {
             "opus": "claude-opus-4-1-20250805",
             "sonnet": "claude-sonnet-4-20250514",
-            "opus-3": "claude-3-opus-20240229",
             "sonnet-3": "claude-3-sonnet-20240229",
             "smart": "claude-opus-4-1-20250805",
             "balanced": "claude-sonnet-4-20250514",

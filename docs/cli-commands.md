@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Hydra CLI provides comprehensive commands for code generation, ticket management, and provider interaction. All commands now support the provider abstraction layer, allowing you to use any configured LLM provider.
+The Hydra CLI provides comprehensive commands for multi-agent code generation, ticket management, and provider interaction. The CLI has been refactored into modular commands for better organization and maintainability.
 
 ## Global Options
 
@@ -24,46 +24,106 @@ hydra [global-options] <command> [command-options]
 | `--no-cache` | Disable response caching | false |
 | `--json` | Output in JSON format | false |
 
+## Available Commands
+
+- `ticket` - Ticket workflow operations (create, execute, run-all, auto)
+- `parallel` - Execute tickets in parallel with dependency resolution
+- `batch` - Execute tickets in optimized batches
+- `verify` - Verify ticket completion and acceptance criteria
+- `quality` - Run quality gates on ticket implementation
+- `verify-parallel` - Verify results from parallel execution
+- `claude` - Claude-specific session management
+- `context` - Manage shared context between tickets
+- `template` - Project template operations
+- `run` - Direct execution commands
+
 ## Core Commands
 
-### `hydra generate`
+### `hydra ticket`
 
-Generate code using the configured provider.
+Manage tickets for multi-agent execution.
 
 ```bash
-hydra generate [options] <prompt>
+hydra ticket <subcommand> [options]
 ```
 
-#### Options
+#### Subcommands
 
-- `--lang <language>` - Target programming language
-- `--style <style>` - Code style (clean, documented, minimal)
-- `--context <path>` - Include file context
-- `--output <file>` - Save to file
-- `--stream` - Enable streaming output
+- `create` - Generate tickets from project description
+- `execute` - Execute a single ticket
+- `run-all` - Execute all tickets with dependency resolution
+- `auto` - Automated workflow with parallel execution
 
 #### Examples
 
 ```bash
-# Generate Python code with default provider
-hydra generate "Create a REST API server with FastAPI"
+# Create tickets from description
+hydra ticket create "Build a REST API with authentication"
 
-# Use Venice provider with specific model
-hydra generate --provider venice --model llama-3.1-70b \
-  "Write a sorting algorithm in Rust"
+# Execute single ticket
+hydra ticket execute tickets.md 001
 
-# Generate with context
-hydra generate --context ./src --lang python \
-  "Add error handling to the existing database module"
+# Run all tickets
+hydra ticket run-all tickets.md --max-parallel 4
 
-# Stream output to file
-hydra generate --stream --output server.py \
-  "Create an Express.js server with authentication"
+# Auto workflow
+hydra ticket auto tickets.md --workers 4
 ```
 
-### `hydra refactor`
+### `hydra parallel`
 
-Refactor existing code using AI assistance.
+Execute tickets in parallel with smart dependency resolution.
+
+```bash
+hydra parallel [options] <tickets_file>
+```
+
+#### Options
+
+- `--workers <n>` - Number of parallel workers (default: 3)
+- `--save-log` - Save execution log
+- `--skip-preflight` - Skip preflight checks
+- `--async` - Use async execution mode
+
+#### Examples
+
+```bash
+# Execute with 4 workers
+hydra parallel tickets.md --workers 4
+
+# Async mode with logging
+hydra parallel tickets.md --async --save-log
+```
+
+### `hydra verify`
+
+Verify ticket completion and acceptance criteria.
+
+```bash
+hydra verify <tickets_file> <ticket_id> [options]
+```
+
+#### Options
+
+- `--report` - Generate detailed report
+- `--save` - Save verification report
+
+### `hydra quality`
+
+Run quality gates on ticket implementation.
+
+```bash
+hydra quality <ticket_id> [options]
+```
+
+#### Options
+
+- `--strict` - Fail on warnings
+- `--save` - Save quality report
+
+### `hydra verify-parallel`
+
+Verify results from parallel execution.
 
 ```bash
 hydra refactor [options] <file> <instructions>

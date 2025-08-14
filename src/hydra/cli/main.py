@@ -264,7 +264,11 @@ def main() -> int:
         print("🚫 Cache disabled")
 
     # Handle different commands
-    if args.command == "template":
+    if not args.command:
+        # No command specified
+        parser.print_help()
+        return 1
+    elif args.command == "template":
         return handle_template_command(args)
     elif args.command == "ticket":
         return handle_ticket_command(args)
@@ -281,7 +285,7 @@ def main() -> int:
     elif args.command == "run":
         return handle_run_command(args)
     else:
-        # No command specified
+        # Unknown command
         parser.print_help()
         return 1
 

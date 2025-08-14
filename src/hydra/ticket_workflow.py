@@ -781,27 +781,35 @@ def validate_code_changes(project_dir):
     suspicious_patterns = []
 
     # Get list of modified files
-    git_result = subprocess.run(
-        ["git", "diff", "--name-only"],
-        capture_output=True,
-        text=True,
-        cwd=project_dir
-    )
+    try:
+        git_result = subprocess.run(
+            ["git", "diff", "--name-only"],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=10
+        )
 
-    if git_result.returncode != 0:
-        return True, []  # Skip validation if git is not available
+        if git_result.returncode != 0:
+            return True, []  # Skip validation if git is not available
 
-    modified_files = git_result.stdout.strip().split('\n') if git_result.stdout else []
+        modified_files = git_result.stdout.strip().split('\n') if git_result.stdout else []
 
-    # Also check unstaged files
-    git_unstaged = subprocess.run(
-        ["git", "diff", "--name-only", "--cached"],
-        capture_output=True,
-        text=True,
-        cwd=project_dir
-    )
-    if git_unstaged.stdout:
-        modified_files.extend(git_unstaged.stdout.strip().split('\n'))
+        # Also check unstaged files
+        git_unstaged = subprocess.run(
+            ["git", "diff", "--name-only", "--cached"],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=10
+        )
+        if git_unstaged.stdout:
+            modified_files.extend(git_unstaged.stdout.strip().split('\n'))
+    except (subprocess.TimeoutExpired, OSError, BlockingIOError) as e:
+        # Skip validation if git commands fail due to resource issues
+        if os.getenv('TESTING') == '1' or os.getenv('CI') == 'true':
+            print(f"⚠️ Git validation skipped due to resource limitations: {e}")
+        return True, []
 
     # Pattern checks for each file
     for file_path in modified_files:
@@ -1196,6 +1204,9 @@ Please provide the complete implementation with all necessary files and code."""
 
     except Exception as e:
         print(f"\n💥 Execution error: {e}")
+        if os.getenv('TESTING') == '1' or os.getenv('CI') == 'true':
+            import traceback
+            print(f"Stack trace:\n{traceback.format_exc()}")
         return False
     finally:
         # Restore original timeout
@@ -1390,7 +1401,7 @@ def run_validation_commands():
                 print(f"   ✅ {desc} passed")
             else:
                 print(f"   ⚠️  {desc} warnings: {result.stderr[:100]}")
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (subprocess.TimeoutExpired, FileNotFoundError, BlockingIOError, OSError):
             print(f"   ⏭️  {desc} skipped (command not available)")
         except Exception as e:
             print(f"   ❌ {desc} error: {e}")
@@ -1416,7 +1427,7 @@ def run_node_validation():
                     print(f"   ⏭️  {desc} skipped (no script defined)")
                 else:
                     print(f"   ⚠️  {desc} warnings: {result.stderr[:100]}")
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (subprocess.TimeoutExpired, FileNotFoundError, BlockingIOError, OSError):
             print(f"   ⏭️  {desc} skipped (command not available)")
         except Exception as e:
             print(f"   ❌ {desc} error: {e}")

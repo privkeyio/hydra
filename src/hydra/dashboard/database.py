@@ -254,7 +254,10 @@ class DatabaseManager:
             else:
                 # Ensure directory exists for file-based SQLite
                 db_path = self.database_url.replace("sqlite:///", "")
-                os.makedirs(os.path.dirname(db_path), exist_ok=True)
+                if db_path:
+                    db_dir = os.path.dirname(db_path)
+                    if db_dir:
+                        os.makedirs(db_dir, exist_ok=True)
                 self.engine = create_engine(
                     self.database_url, connect_args={"check_same_thread": False}
                 )

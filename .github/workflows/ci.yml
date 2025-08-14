@@ -48,34 +48,40 @@ jobs:
         echo "Full lint check for review (non-blocking):"
         ruff check src/ --exclude="src/hydra/templates/templates" --exit-zero
     
-    - name: Run core tests
+    - name: Run unit tests
       env:
         LLM_PROVIDER: mock
         REDIS_URL: redis://localhost:6379/0
         DATABASE_URL: sqlite:///test.db
         TESTING: "1"
-        PYTEST_XDIST_WORKER_COUNT: "2"  # Limit concurrent workers
       run: |
-        # Run tests with reduced concurrency for CI stability
-        timeout 18m python -m pytest tests/ -v --tb=short --timeout=300 \
+        # Run deterministic unit tests (skip stress tests in CI)
+        timeout 10m python -m pytest tests/unit/ -v --tb=short --timeout=60 \
+          -m "not stress" \
           --maxfail=10 \
-          -m "not stress and not external" \
           --disable-warnings
     
-    - name: Run CI integration tests
+    - name: Run integration tests
       env:
         LLM_PROVIDER: mock
         REDIS_URL: redis://localhost:6379/0
         DATABASE_URL: sqlite:///test.db
         TESTING: "1"
       run: |
-        timeout 5m python -m pytest tests/test_ticket_creation.py tests/test_parallel_execution.py tests/test_verify_parallel.py tests/test_ci_integration.py -v --tb=short --timeout=60
+        # Run integration tests (skip tests requiring API keys)
+        timeout 10m python -m pytest tests/integration/ -v --tb=short --timeout=120 \
+          -m "not requires_api_key" \
+          --maxfail=10 \
+          --disable-warnings
     
-    - name: Run ticket workflow E2E tests
+    - name: Run core workflow tests
       env:
         LLM_PROVIDER: mock
         REDIS_URL: redis://localhost:6379/0
         DATABASE_URL: sqlite:///test.db
         TESTING: "1"
       run: |
-        timeout 5m python -m pytest tests/integration/test_ticket_workflow_e2e.py tests/integration/test_cli_commands_e2e.py -v --tb=short --timeout=60
+        # Run critical workflow tests for create/execute/verify
+        timeout 5m python -m pytest tests/integration/test_workflow_functions.py tests/integration/test_core_commands.py \
+          -v --tb=short --timeout=60 \
+          --disable-warnings

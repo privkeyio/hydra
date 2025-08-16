@@ -221,7 +221,9 @@ class TicketGenerator:
         else:
             project_type = None
         
-        for ticket in data.get('tickets', []):
+        tickets = data.get('tickets', [])
+        
+        for ticket in tickets:
             # Validate the ticket
             is_valid, issues = self.validator.validate_ticket(ticket)
             

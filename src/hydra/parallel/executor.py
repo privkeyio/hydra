@@ -407,19 +407,25 @@ CRITICAL REQUIREMENTS:
 - Avoid ANY code or comments that could be construed as AI-generated  
 - This MUST be production quality - NO shortcuts, workarounds, or mocks
 - Take your time to ensure excellence - other LLMs said your code quality was poor, prove them wrong!
-- Create ACTUAL files (HTML, CSS, JS, etc.) as required by the ticket - DO NOT modify Hydra system files
+
+FILE SCOPE RULES - EXTREMELY IMPORTANT:
+❌ NEVER modify files in src/hydra/ directory - those are Hydra system files
+❌ NEVER modify files in tests/ directory - those are Hydra test files  
+✅ ONLY create/modify files in the current project directory (where tickets.yaml is)
+✅ Create the ACTUAL project files (HTML, CSS, JS, Python, etc.) as specified in acceptance criteria
+✅ If the ticket says "Create script.js" then CREATE script.js in the current directory
 
 {dependency_context}
 
 EXECUTION STEPS:
 1. Use 'cat tickets.yaml' or Read tool to understand ticket {ticket_id} requirements
-2. Create the ACTUAL files needed (e.g., index.html for a web calculator, NOT hydra system files)
-3. Ensure ALL acceptance criteria are fully met with production-quality code
+2. Create the ACTUAL files needed IN THE CURRENT DIRECTORY (e.g., index.html, script.js, styles.css)
+3. Ensure ALL acceptance criteria are fully met - if it says "Create X" then X must exist
 4. Update tickets.yaml to change ticket {ticket_id} status from "TODO" to "DONE"
 5. Run quality checks if available (lint, prettier, etc.)
 
 IMPORTANT: You are implementing the actual project described in the ticket (e.g., a calculator), 
-NOT modifying the Hydra ticket system itself. Create NEW files as needed for the project.
+NOT modifying the Hydra ticket system itself. Work in the project directory ONLY.
 
 PYTHON CODE QUALITY REQUIREMENTS:
 - Add module docstrings to all Python files

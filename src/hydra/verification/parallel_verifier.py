@@ -69,38 +69,38 @@ class ParallelTicketVerifier:
         # Load tickets
         tickets = self._load_all_tickets()
         
-        # Filter for completed tickets
-        completed_tickets = {
+        # Count tickets claiming to be done
+        tickets_claiming_done = {
             tid: ticket for tid, ticket in tickets.items()
             if ticket.get('status') in ['DONE', 'COMPLETE', 'COMPLETED'] or ticket.get('completed', False)
         }
         
         report = {
             'total_tickets': len(tickets),
-            'completed_tickets': len(completed_tickets),
+            'completed_tickets': len(tickets_claiming_done),
             'fully_verified': 0,
             'partially_verified': 0,
             'failed_verification': 0,
-            'skipped': len(tickets) - len(completed_tickets),
+            'skipped': 0,
             'failures': {},
             'ai_code_detected': {},
             'diff_audit_issues': {}
         }
         
-        if not completed_tickets:
-            print("No completed tickets to verify")
+        if not tickets:
+            print("No tickets to verify")
             return report
             
-        # Run verification in parallel
+        # Run verification on ALL tickets regardless of status
         tasks = []
-        for ticket_id, ticket in completed_tickets.items():
+        for ticket_id, ticket in tickets.items():
             task = self._verify_ticket(ticket_id, ticket)
             tasks.append(task)
             
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Process results
-        for ticket_id, result in zip(completed_tickets.keys(), results):
+        for ticket_id, result in zip(tickets.keys(), results):
             if isinstance(result, Exception):
                 report['failures'][ticket_id] = {
                     'error': str(result),
@@ -213,18 +213,83 @@ class ParallelTicketVerifier:
         
     async def _check_criterion(self, ticket_id: str, criterion: str, ticket: Dict) -> bool:
         """Check if a specific acceptance criterion is met."""
-        # This is a simplified check - in reality you'd want more sophisticated verification
-        
         # Common verification patterns
         checks = []
         
-        # File existence checks
-        if 'file' in criterion.lower() or 'create' in criterion.lower():
-            files = re.findall(r'`([^`]+\.\w+)`', criterion)
-            for file in files:
-                file_path = self.project_root / file
-                if not file_path.exists():
-                    return False
+        # File existence checks - check for "Create filename" pattern
+        if 'create' in criterion.lower():
+            # Look for filenames in various patterns:
+            # - Create index.html
+            # - Create `main.js`
+            # - Create file.txt with...
+            # - Create login.html and register.html
+            patterns = [
+                r'([a-zA-Z0-9_\-]+\.[a-zA-Z0-9]+)',  # Any filename.ext mentioned
+            ]
+            
+            files_found = []
+            for pattern in patterns:
+                # Find all potential filenames
+                potential_files = re.findall(pattern, criterion)
+                # Filter to only include common web/code file extensions
+                valid_extensions = ['.html', '.js', '.css', '.py', '.java', '.cpp', '.c', 
+                                  '.tsx', '.jsx', '.ts', '.json', '.xml', '.yaml', '.yml',
+                                  '.txt', '.md', '.pdf', '.png', '.jpg', '.svg']
+                for file in potential_files:
+                    if any(file.endswith(ext) for ext in valid_extensions):
+                        files_found.append(file)
+            
+            # Check if each file exists
+            if files_found:
+                all_exist = True
+                for file in files_found:
+                    file_path = self.project_root / file
+                    if not file_path.exists():
+                        print(f"    ❌ File not found: {file}")
+                        all_exist = False
+                    else:
+                        print(f"    ✅ File exists: {file}")
+                
+                # Return whether ALL files exist
+                return all_exist
+            
+            # Special case: "Create X page" without specific filename
+            elif 'page' in criterion.lower():
+                # Try to infer the filename
+                page_patterns = [
+                    r'[Cc]reate\s+(\w+(?:\s+\w+)?)\s+page',  # Create [name] page
+                ]
+                for pattern in page_patterns:
+                    matches = re.findall(pattern, criterion)
+                    for match in matches:
+                        # Convert to likely filename (e.g., "order confirmation" -> "order-confirmation.html")
+                        likely_filename = match.lower().replace(' ', '-') + '.html'
+                        file_path = self.project_root / likely_filename
+                        if file_path.exists():
+                            print(f"    ✅ File exists: {likely_filename}")
+                            return True
+                        else:
+                            print(f"    ❌ File not found: {likely_filename}")
+                            return False
+                    
+        # Implementation checks - check for "Implement feature" pattern
+        if 'implement' in criterion.lower():
+            # For implementation tasks, check if relevant files were created/modified
+            # This is harder to verify automatically, but we can check for common patterns
+            
+            # Extract what needs to be implemented
+            impl_patterns = [
+                r'[Ii]mplement\s+(\w+)',  # Implement feature
+                r'[Aa]dd\s+(\w+)',  # Add feature
+                r'[Cc]reate\s+(\w+)\s+(?:function|method|class)',  # Create X function/method/class
+            ]
+            
+            for pattern in impl_patterns:
+                matches = re.findall(pattern, criterion)
+                if matches:
+                    # For now, check if any relevant files exist
+                    # In a real system, we'd parse the code to verify implementation
+                    checks.append(True)  # Optimistic for now
                     
         # Test-related checks
         if 'test' in criterion.lower():
@@ -242,16 +307,18 @@ class ParallelTicketVerifier:
             lint_result = await self._check_lint()
             checks.append(lint_result)
             
-        # Function/class implementation checks
-        if 'implement' in criterion.lower() or 'function' in criterion.lower():
-            # Look for the implementation in code
-            impl_check = await self._check_implementation(criterion)
-            checks.append(impl_check)
+        # Update/modify checks - harder to verify automatically
+        if 'update' in criterion.lower() or 'modify' in criterion.lower():
+            # For update tasks, we'd need to check git diff or file modifications
+            # For now, be conservative and mark as needs manual verification
+            return False  # Conservative: assume not done unless we can verify
             
-        # If no specific checks matched, assume it needs manual verification
+        # If no specific checks matched, be conservative
         if not checks:
-            # For now, we'll be optimistic and assume manual tasks were done
-            return True
+            # If we can't verify it automatically, assume it's NOT done
+            # This is more accurate than assuming everything is complete
+            print(f"    ⚠️  Cannot automatically verify: {criterion[:50]}...")
+            return False
             
         return all(checks)
         

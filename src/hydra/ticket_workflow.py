@@ -855,6 +855,34 @@ def validate_acceptance_criteria(ticket, project_dir):
     failed_criteria = []
 
     print(f"🔍 Checking {len(criteria)} acceptance criteria:")
+    
+    # Check for system file modifications first
+    import subprocess
+    git_status = subprocess.run(
+        ["git", "status", "--short"],
+        capture_output=True,
+        text=True,
+        cwd=project_dir
+    )
+    
+    if git_status.stdout:
+        modified_files = [
+            line.split()[-1] for line in git_status.stdout.strip().split('\n')
+            if line
+        ]
+        
+        system_files_modified = []
+        for file_path in modified_files:
+            if file_path.startswith('src/hydra/') or file_path.startswith('tests/'):
+                system_files_modified.append(file_path)
+        
+        if system_files_modified:
+            print("\n❌ VALIDATION FAILURE: Agent modified Hydra system files:")
+            for file in system_files_modified:
+                print(f"   ❌ {file}")
+            failed_criteria.append("Modified Hydra system files instead of project files")
+            # This is a critical failure - don't continue validation
+            return False
 
     # First, check for AI-generated code patterns in recent changes
     # Use enhanced AI detection with ticket context

@@ -413,10 +413,20 @@ Report what you found and what you completed."""
                 result = orchestrator.execute_task(task)
                 
                 if result.status.value == "completed":
-                    print(f"✅ Ticket {ticket_id} verified and completed")
-                    return True
+                    # Now actually validate the acceptance criteria
+                    from hydra.ticket_workflow import validate_acceptance_criteria
+                    
+                    print(f"\n🔍 Validating ticket {ticket_id} after verification...")
+                    validation_passed = validate_acceptance_criteria(ticket_data, str(project_root))
+                    
+                    if validation_passed:
+                        print(f"✅ Ticket {ticket_id} verified and all criteria met")
+                        return True
+                    else:
+                        print(f"❌ Ticket {ticket_id} - agent ran but criteria still not met")
+                        return False
                 else:
-                    print(f"❌ Ticket {ticket_id} verification failed")
+                    print(f"❌ Ticket {ticket_id} verification task failed")
                     return False
                     
             except Exception as e:

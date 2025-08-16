@@ -1097,7 +1097,7 @@ def validate_acceptance_criteria(ticket, project_dir):
 
         # Generic file checks - use proper validation
         # But skip if it's about saving/writing to existing files or using functions
-        elif (any(file_ext in criterion_lower for file_ext in ['.js', '.ts', '.json', '.md', '.yml', '.yaml']) and
+        elif (any(file_ext in criterion_lower for file_ext in ['.html', '.css', '.js', '.ts', '.json', '.md', '.yml', '.yaml', '.txt', '.py']) and
               not any(keyword in criterion_lower for keyword in ['save', 'write', 'using', 'update', 'modify', 'persist', 'call', 'invoke', 'existing'])):
             from hydra.verification.ticket_verifier import TicketVerifier
             verifier = TicketVerifier(project_dir)

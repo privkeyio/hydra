@@ -112,7 +112,8 @@ markers = [
     "unit: marks tests as unit tests", 
     "slow: marks tests as slow running tests",
     "stress: marks tests as stress/load tests that may fail in resource-constrained environments",
-    "external: marks tests that require external services (APIs, credentials, etc.)"
+    "external: marks tests that require external services (APIs, credentials, etc.)",
+    "resource_intensive: marks tests that spawn many subprocesses and may fail in CI"
 ]
 
 [tool.coverage.run]

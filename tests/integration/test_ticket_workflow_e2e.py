@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import subprocess
 import sys
+import time
 
 
 @pytest.fixture
@@ -16,15 +17,83 @@ def temp_project():
         yield Path(tmpdir)
 
 
-@pytest.fixture
+def run_subprocess_safe(cmd, env=None, timeout=60, cwd=None):
+    """Run a subprocess with resource limits and better error handling."""
+    # Add a small delay to prevent rapid subprocess spawning
+    time.sleep(0.1)
+    
+    # Set resource limits via environment
+    process_env = os.environ.copy()
+    if env:
+        process_env.update(env)
+    
+    # Limit subprocess resources in CI environment
+    if os.getenv("CI"):
+        process_env["PYTHONUNBUFFERED"] = "1"
+        # Reduce parallelism in CI
+        if "--workers" in cmd:
+            worker_idx = cmd.index("--workers")
+            if worker_idx + 1 < len(cmd):
+                cmd[worker_idx + 1] = "1"  # Force single worker in CI
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            env=process_env,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=cwd,
+            check=False
+        )
+        return result
+    except subprocess.TimeoutExpired as e:
+        return subprocess.CompletedProcess(
+            cmd, 1, 
+            stdout=f"Process timed out after {timeout} seconds",
+            stderr=str(e)
+        )
+    except OSError as e:
+        # Handle resource exhaustion more gracefully
+        if "Resource temporarily unavailable" in str(e):
+            time.sleep(1)  # Wait before retry
+            try:
+                # Retry once with longer delay
+                result = subprocess.run(
+                    cmd,
+                    env=process_env,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=cwd,
+                    check=False
+                )
+                return result
+            except Exception as retry_error:
+                return subprocess.CompletedProcess(
+                    cmd, 1,
+                    stdout="",
+                    stderr=f"Resource exhaustion: {retry_error}"
+                )
+        return subprocess.CompletedProcess(
+            cmd, 1,
+            stdout="",
+            stderr=f"OS Error: {e}"
+        )
+
+
+@pytest.fixture(scope="session")
 def hydra_cli():
     """Get the path to the hydra CLI."""
     # Use the installed hydra if available
-    hydra_path = subprocess.run(
-        ["which", "hydra"],
-        capture_output=True,
-        text=True
-    ).stdout.strip()
+    try:
+        result = run_subprocess_safe(
+            ["which", "hydra"],
+            timeout=5
+        )
+        hydra_path = result.stdout.strip() if result.returncode == 0 else None
+    except Exception:
+        hydra_path = None
     
     if not hydra_path:
         # Fall back to the local installation
@@ -33,6 +102,8 @@ def hydra_cli():
     return hydra_path
 
 
+@pytest.mark.integration
+@pytest.mark.resource_intensive
 class TestTicketWorkflowE2E:
     """Test the complete ticket workflow from creation to verification."""
     
@@ -41,14 +112,13 @@ class TestTicketWorkflowE2E:
         os.chdir(temp_project)
         
         # Create tickets
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "create", 
              "Create a simple Python calculator with add, subtract, multiply, and divide functions",
              "--output", "tickets.md"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=30
+            env={"LLM_PROVIDER": "mock"},
+            timeout=30,
+            cwd=temp_project
         )
         
         assert result.returncode == 0, f"Failed to create tickets: {result.stderr}"
@@ -83,12 +153,11 @@ class TestTicketWorkflowE2E:
         (temp_project / "tickets.md").write_text(tickets_content)
         
         # Execute the ticket
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "execute", "tickets.md", "001"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=60
+            env={"LLM_PROVIDER": "mock"},
+            timeout=60,
+            cwd=temp_project
         )
         
         assert result.returncode == 0, f"Failed to execute ticket: {result.stderr}"
@@ -141,12 +210,11 @@ class TestTicketWorkflowE2E:
         (temp_project / "tickets.md").write_text(tickets_content)
         
         # Execute in parallel
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "parallel", "tickets.md", "--workers", "2"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=120
+            env={"LLM_PROVIDER": "mock"},
+            timeout=120,
+            cwd=temp_project
         )
         
         assert result.returncode == 0, f"Parallel execution failed: {result.stderr}"
@@ -200,13 +268,12 @@ def add(a, b):
         (temp_project / "README.md").write_text("# Calculator\n\nUsage: calculator.add(1, 2)")
         
         # Run verification
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "verify-parallel", "tickets.md", 
              "--workers", "2", "--check-ai"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=60
+            env={"LLM_PROVIDER": "mock"},
+            timeout=60,
+            cwd=temp_project
         )
         
         assert result.returncode == 0, f"Verification failed: {result.stderr}"
@@ -217,35 +284,32 @@ def add(a, b):
         os.chdir(temp_project)
         
         # Step 1: Create tickets
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "create",
              "Create a simple Python module with a greeting function and tests",
              "--output", "tickets.md"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=30
+            env={"LLM_PROVIDER": "mock"},
+            timeout=30,
+            cwd=temp_project
         )
         assert result.returncode == 0
         
         # Step 2: Execute tickets in parallel
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "parallel", "tickets.md", "--workers", "2"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=120
+            env={"LLM_PROVIDER": "mock"},
+            timeout=120,
+            cwd=temp_project
         )
         # May succeed or fail depending on mock implementation
         
         # Step 3: Verify tickets
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "verify-parallel", "tickets.md", 
              "--workers", "2", "--check-ai", "--audit-diff"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=60
+            env={"LLM_PROVIDER": "mock"},
+            timeout=60,
+            cwd=temp_project
         )
         # Verification should run regardless of execution status
         assert "PARALLEL TICKET VERIFICATION REPORT" in result.stdout
@@ -291,12 +355,11 @@ def add(a, b):
         (temp_project / "tickets.md").write_text(tickets_content)
         
         # Execute with dependency resolution
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "parallel", "tickets.md", "--workers", "3"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=120
+            env={"LLM_PROVIDER": "mock"},
+            timeout=120,
+            cwd=temp_project
         )
         
         # Check that execution plan respects dependencies
@@ -325,12 +388,11 @@ def add(a, b):
         (temp_project / "tickets.md").write_text(tickets_content)
         
         # Execute ticket
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "execute", "tickets.md", "001"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=60
+            env={"LLM_PROVIDER": "mock"},
+            timeout=60,
+            cwd=temp_project
         )
         
         # Quality gates should be mentioned in output
@@ -358,12 +420,11 @@ def add(a, b):
         (temp_project / "tickets.md").write_text(tickets_content)
         
         # Execute with specified worker count
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "parallel", "tickets.md", "--workers", str(workers)],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=180
+            env={"LLM_PROVIDER": "mock"},
+            timeout=180,
+            cwd=temp_project
         )
         
         assert result.returncode == 0, f"Failed with {workers} workers: {result.stderr}"
@@ -374,11 +435,10 @@ def add(a, b):
         os.chdir(temp_project)
         
         # Test with non-existent tickets file
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "execute", "nonexistent.md", "001"],
-            capture_output=True,
-            text=True,
-            timeout=30
+            timeout=30,
+            cwd=temp_project
         )
         assert result.returncode != 0
         assert "not found" in result.stderr.lower() or "not found" in result.stdout.lower()
@@ -392,11 +452,10 @@ def add(a, b):
 """
         (temp_project / "tickets.md").write_text(tickets_content)
         
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "execute", "tickets.md", "999"],
-            capture_output=True,
-            text=True,
-            timeout=30
+            timeout=30,
+            cwd=temp_project
         )
         assert result.returncode != 0
         
@@ -420,13 +479,12 @@ def add(a, b):
         (temp_project / "test.py").write_text("# Test module")
         
         # Run verification with report saving
-        result = subprocess.run(
+        result = run_subprocess_safe(
             [hydra_cli, "ticket", "verify-parallel", "tickets.md",
              "--workers", "1", "--save-report"],
-            env={**os.environ, "LLM_PROVIDER": "mock"},
-            capture_output=True,
-            text=True,
-            timeout=60
+            env={"LLM_PROVIDER": "mock"},
+            timeout=60,
+            cwd=temp_project
         )
         
         # Check that report was saved

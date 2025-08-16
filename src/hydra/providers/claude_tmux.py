@@ -200,9 +200,10 @@ class ClaudeTmuxProvider(BaseProvider):
             claude_model = model_mapping.get(model_to_use.lower(), default_model)
 
             # Build the command with model flag
+            # IMPORTANT: Start Claude in the project directory to prevent it from modifying Hydra source
             cmd = [
                 "tmux", "new-session", "-d", "-s", session_name,
-                "-c", project_dir,
+                "-c", project_dir,  # Set working directory
                 self.claude_path, "--model", claude_model
             ]
 
@@ -300,6 +301,14 @@ class ClaudeTmuxProvider(BaseProvider):
                 base_prompt = (
                     f"Execute ticket {ticket_id} in tickets.md\n\n"
                     f"🚨 CRITICAL: CREATE ALL NEW FILES MENTIONED IN ACCEPTANCE CRITERIA 🚨\n\n"
+                    f"⚠️ IMPORTANT WORKING DIRECTORY RULES:\n"
+                    f"1. You are working in: {project_dir}\n"
+                    f"2. DO NOT use paths like '../' or absolute paths outside this directory\n"
+                    f"3. DO NOT modify ANY files in /home/kyle/Documents/GitHub/hydra/src/\n"
+                    f"4. DO NOT modify ANY files in src/hydra/ or tests/\n"
+                    f"5. ONLY create and modify files in the current directory: {project_dir}\n"
+                    f"6. When creating files, use simple names like 'styles.css', 'script.js', 'README.md'\n"
+                    f"7. Do NOT create files in subdirectories unless explicitly required\n\n"
                     f"Requirements:\n"
                     f"1. Read the acceptance criteria EXTREMELY CAREFULLY\n"
                     f"2. CREATE EVERY FILE that is mentioned, for example:\n"
@@ -417,14 +426,15 @@ class ClaudeTmuxProvider(BaseProvider):
                             debug_log(f"  > {line[:100]}")
 
                     # Check if Claude has returned to prompt (indicates completion)
-                    last_lines = current_output.strip().split('\n')[-5:]
+                    last_lines = current_output.strip().split('\n')[-10:]
                     prompt_indicators = ['│ >                                                                            │',
                                        '│ > ',
-                                       '╰──────────────────────────────────────────────────────────────────────────────╯']
+                                       '╰──────────────────────────────────────────────────────────────────────────────╯',
+                                       '? for shortcuts']
 
                     # Don't check for prompt completion too early - Claude needs time to work
                     # Only check after significant idle time
-                    if no_change_count > 120:  # After 2 minutes of no activity
+                    if no_change_count > 30:  # After 30 seconds of no activity
                         # Check if we see the prompt
                         completion_detected = False
                         for line in last_lines:
@@ -458,7 +468,11 @@ class ClaudeTmuxProvider(BaseProvider):
                         print("🔨 Claude is working on files...")
 
                     # Check if Claude needs permission for file operations
-                    if "don't ask again" in current_output.lower():
+                    if "do you want to create" in current_output.lower():
+                        print("⚠️  Claude Code asking for file creation permission - auto-approving")
+                        self._send_to_session(session_name, "1")  # Select "Yes"
+                        time.sleep(1)
+                    elif "don't ask again" in current_output.lower():
                         print("⚠️  Claude Code asking for permission - auto-approving file operations")
                         self._send_to_session(session_name, "2")  # Select "Yes, don't ask again"
                         time.sleep(1)

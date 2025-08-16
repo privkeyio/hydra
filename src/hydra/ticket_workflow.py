@@ -1432,6 +1432,15 @@ IMPORTANT: Save any artifacts, documents, or shared data that other tickets migh
 
 {ticket_search} and implement it.
 
+⚠️ IMPORTANT WORKING DIRECTORY RULES:
+1. You are working in: {project_dir}
+2. DO NOT use paths like '../' or absolute paths outside this directory
+3. DO NOT modify ANY files in /home/kyle/Documents/GitHub/hydra/src/
+4. DO NOT modify ANY files in src/hydra/ or tests/
+5. ONLY create and modify files in the current directory: {project_dir}
+6. When creating files, use simple names like 'styles.css', 'script.js', 'README.md'
+7. Do NOT create files in subdirectories unless explicitly required
+
 {workspace_info}
 {dependency_context}
 

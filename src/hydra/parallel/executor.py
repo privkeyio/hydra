@@ -599,8 +599,14 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 self.agent_pool.release_agent(agent_id)
                 self.file_lock_manager.release_all_locks(agent_id)
                 return True
+            elif result.status.value == "timeout":
+                raise Exception(f"Task timed out after {task.timeout} seconds")
+            elif result.status.value == "failed":
+                error_msg = result.error if result.error else "Task execution failed"
+                raise Exception(error_msg)
             else:
-                raise Exception(f"Task failed: {result.error}")
+                # Unexpected status
+                raise Exception(f"Unexpected task status: {result.status.value}")
 
         except Exception as e:
             with self.lock:

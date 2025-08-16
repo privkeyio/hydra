@@ -448,12 +448,17 @@ class PreflightChecker:
         )
 
         if not result.topological_order:
-            check.passed = False
-            check.message = "Cannot determine execution order"
-            if result.issues:
+            # Check if there are any actual dependency issues
+            if result.issues and any(issue.severity.value == 'invalid' for issue in result.issues):
+                check.passed = False
+                check.message = "Cannot determine execution order"
                 check.details.append(
                     "Fix dependency issues first before execution"
                 )
+            else:
+                # No critical issues, just no dependencies to order
+                check.passed = True
+                check.message = "No dependencies to validate - tickets can execute independently"
         else:
             check.passed = True
             check.message = "Valid execution order determined"

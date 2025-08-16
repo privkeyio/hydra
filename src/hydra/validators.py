@@ -221,8 +221,8 @@ class InputSanitizer:
     def sanitize_model_name(model: str) -> str:
         """Sanitize model name."""
         allowed_models = {
-            'sonnet', 'opus', 'haiku', 'claude-3-5-sonnet-20241022',
-            'claude-3-opus-20240229', 'claude-3-haiku-20240307',
+            'sonnet', 'opus', 'claude-3-5-sonnet-20241022',
+            'claude-opus-4-1-20250805', 'claude-sonnet-4-20250514',
             'gpt-4', 'gpt-3.5-turbo', 'qwen-2.5-coder-32b'
         }
 

@@ -206,10 +206,16 @@ class TicketVerifier:
             r'[\'"`]([^\'"`]+\.\w+)[\'"`]',  # Quoted filenames
             r'([\w\-]+/[\w\-]+\.[\w]+)',  # Path-like patterns with hyphens
             r'([\w\-]+\.[\w]+)',  # Simple filenames with hyphens
+            r'(\S+\.html)',  # Any .html file
+            r'(\S+\.css)',  # Any .css file
             r'(\S+\.ts)',  # Any .ts file
             r'(\S+\.js)',  # Any .js file
             r'(\S+\.md)',  # Any .md file
             r'(\S+\.json)',  # Any .json file
+            r'(\S+\.txt)',  # Any .txt file
+            r'(\S+\.py)',  # Any .py file
+            r'(\S+\.yaml)',  # Any .yaml file
+            r'(\S+\.yml)',  # Any .yml file
         ]
 
         for pattern in patterns:

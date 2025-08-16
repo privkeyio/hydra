@@ -46,11 +46,6 @@ PROVIDER_PRICING: Dict[str, ModelPricing] = {
         output_cost_per_1k=Decimal("0.015"),
         provider="anthropic"
     ),
-    "claude-3-haiku": ModelPricing(
-        input_cost_per_1k=Decimal("0.00025"),
-        output_cost_per_1k=Decimal("0.00125"),
-        provider="anthropic"
-    ),
 }
 
 

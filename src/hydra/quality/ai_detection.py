@@ -4,9 +4,35 @@ This module detects patterns commonly found in AI-generated code to ensure
 all implementations are production-ready and not placeholders.
 """
 
+import json
 import re
+import subprocess
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
+
+
+class StrictnessLevel(Enum):
+    """Strictness levels for AI detection."""
+
+    LENIENT = "lenient"  # Only critical issues (NotImplementedError, etc.)
+    MODERATE = "moderate"  # Critical + suspicious patterns (default)
+    STRICT = "strict"  # All patterns including style issues
+
+
+@dataclass
+class DiffAnalysisReport:
+    """Detailed report of changes in a diff."""
+
+    files_modified: int
+    lines_added: int
+    lines_removed: int
+    ai_patterns_found: int
+    critical_issues: List[Dict]
+    warnings: List[Dict]
+    unrelated_changes: List[str]
+    ticket_scope_violations: List[str]
 
 
 class AIGeneratedCodeDetector:
@@ -15,15 +41,18 @@ class AIGeneratedCodeDetector:
     # Problematic comment patterns that indicate AI-generated or incomplete code
     PROBLEMATIC_COMMENT_PATTERNS = [
         # Overly verbose explanations of simple concepts
-        (r'(?i)(this function|this method|this class|this code|the following)\s+(is used to|is responsible for|handles|manages)\s+\w+ing',
+        (r'(?i)(this function|this method|this class|this code|the following)'
+         r'\s+(is used to|is responsible for|handles|manages)\s+\w+ing',
          "Overly verbose explanation of simple concepts"),
 
         # Hedging language - expanded patterns
-        (r'(?i)\b(for now|this is a simplified|in production you.d|perhaps|maybe|temporarily|presumably|potentially|possibly)\b',
+        (r'(?i)\b(for now|this is a simplified|in production you.d|perhaps|maybe|'
+         r'temporarily|presumably|potentially|possibly)\b',
          "Hedging language suggesting incomplete or uncertain implementation"),
 
         # Meta-commentary about limitations
-        (r'(?i)\b(in a real implementation|would be better|should be|could be|ideally|normally|typically would)\b',
+        (r'(?i)\b(in a real implementation|would be better|should be|could be|'
+         r'ideally|normally|typically would)\b',
          "Meta-commentary explaining what code should do rather than what it does"),
 
         # Apologetic tone and explanatory justifications
@@ -31,11 +60,13 @@ class AIGeneratedCodeDetector:
          "Apologetic tone explaining limitations"),
 
         # Since/Because patterns explaining why code can't do something better
-        (r'(?i)(since we can.t|because we can.t|since this|because this)\s+.*\s+(we.ll|we will|we.re|we are)',
+        (r'(?i)(since we can.t|because we can.t|since this|because this)'
+         r'\s+.*\s+(we.ll|we will|we.re|we are)',
          "Explanatory justification for suboptimal implementation"),
 
         # Repetitive phrasing patterns
-        (r'(?i)(note that|notice that|remember that|keep in mind|be aware that|it.s worth noting)',
+        (r'(?i)(note that|notice that|remember that|keep in mind|'
+         r'be aware that|it.s worth noting)',
          "Repetitive explanatory phrasing common in AI-generated content"),
 
         # Template-like formulaic patterns
@@ -43,19 +74,23 @@ class AIGeneratedCodeDetector:
          "Template-like step-by-step commentary"),
 
         # Unnecessary context that belongs in documentation
-        (r'(?i)(this is part of|this belongs to|this relates to|in the context of|as part of the)',
+        (r'(?i)(this is part of|this belongs to|this relates to|'
+         r'in the context of|as part of the)',
          "Unnecessary context that should be in documentation"),
 
         # Placeholder indicators (keeping the important ones)
-        (r'(?i)\b(todo|fixme|hack|stub|placeholder|mock implementation|dummy|fake|sample|example code)\b',
+        (r'(?i)\b(todo|fixme|hack|stub|placeholder|mock implementation|dummy|'
+         r'fake|sample|example code)\b',
          "Placeholder or incomplete implementation marker"),
 
         # Implementation excuses
-        (r'(?i)\b(not implemented|not yet implemented|simplified version|basic implementation|minimal implementation)\b',
+        (r'(?i)\b(not implemented|not yet implemented|simplified version|'
+         r'basic implementation|minimal implementation)\b',
          "Explicitly states implementation is incomplete"),
 
         # Future tense suggesting work not done
-        (r'(?i)\b(will be implemented|to be implemented|needs implementation|pending implementation)\b',
+        (r'(?i)\b(will be implemented|to be implemented|needs implementation|'
+         r'pending implementation)\b',
          "Future tense indicating work not completed"),
     ]
 
@@ -82,8 +117,9 @@ class AIGeneratedCodeDetector:
          "Redundant or template-like variable names"),
 
         # Verbose function/variable names that are unnecessarily descriptive
-        (r'\b[a-z_]{30,}\b',
-         "Excessively verbose variable or function names"),
+        # Only flag names over 40 chars that contain redundant words
+        (r'\b(?:get_|set_|check_|validate_|process_|handle_)?[a-z_]*(?:_data|_value|_result|_object|_instance|_method|_function|_parameter|_variable){2,}[a-z_]*\b',
+         "Excessively verbose variable or function names with redundant suffixes"),
 
         # Console debugging left in (expanded)
         (r'console\.(log|debug|warn|error)|print\s*\(["\'](?:test|debug|here|check)',
@@ -94,9 +130,50 @@ class AIGeneratedCodeDetector:
          "Template-like numbered variable names"),
     ]
 
-    def __init__(self):
-        """Initialize the AI code detector."""
+    def __init__(self, strictness: StrictnessLevel = StrictnessLevel.MODERATE):
+        """Initialize the AI code detector.
+        
+        Args:
+            strictness: Level of strictness for detection
+
+        """
+        self.strictness = strictness
         self.issues_found = []
+        self.config = self._load_config()
+
+    def _load_config(self) -> Dict:
+        """Load AI detection configuration."""
+        config_file = Path(".hydra") / "ai_detection.json"
+
+        if config_file.exists():
+            with open(config_file, 'r') as f:
+                return json.load(f)
+
+        # Default configuration
+        return {
+            "strictness": self.strictness.value,
+            "blocking_on_critical": True,
+            "max_warnings_before_block": 50,
+            "ignore_paths": [
+                "venv", ".venv", "node_modules", "build", "dist",
+                "__pycache__", ".git", ".pytest_cache"
+            ],
+            "custom_patterns": [],
+            "check_unrelated_changes": True,
+            "scope_analysis": True
+        }
+
+    def _should_check_pattern(self, pattern_type: str) -> bool:
+        """Determine if a pattern should be checked based on strictness."""
+        if self.strictness == StrictnessLevel.LENIENT:
+            # Only check critical patterns
+            return pattern_type in ['NotImplementedError', 'Empty', 'stub']
+        elif self.strictness == StrictnessLevel.MODERATE:
+            # Check critical and suspicious patterns
+            return pattern_type not in ['verbose', 'style']
+        else:  # STRICT
+            # Check all patterns
+            return True
 
     def detect_in_file(self, file_path: Path) -> List[Dict[str, any]]:
         """Detect AI-generated patterns in a single file.
@@ -385,31 +462,324 @@ class AIGeneratedCodeDetector:
         return "\n".join(report)
 
 
-def check_file_for_ai_patterns(file_path: str) -> Tuple[bool, List[Dict[str, any]]]:
+    def analyze_diff_comprehensively(self, ticket_id: str, ticket_description: str = "") -> DiffAnalysisReport:
+        """Perform comprehensive analysis of git diff for a ticket.
+        
+        Args:
+            ticket_id: ID of the ticket being verified
+            ticket_description: Description of what the ticket should do
+            
+        Returns:
+            Detailed analysis report
+
+        """
+        try:
+            # Get git diff
+            git_diff = subprocess.run(
+                ["git", "diff", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+
+            if git_diff.returncode != 0:
+                return DiffAnalysisReport(
+                    files_modified=0,
+                    lines_added=0,
+                    lines_removed=0,
+                    ai_patterns_found=0,
+                    critical_issues=[],
+                    warnings=[],
+                    unrelated_changes=[],
+                    ticket_scope_violations=[]
+                )
+
+            diff_text = git_diff.stdout
+
+            # Parse diff statistics
+            files_modified = len(re.findall(r'^diff --git', diff_text, re.MULTILINE))
+            lines_added = len(re.findall(r'^\+[^+]', diff_text, re.MULTILINE))
+            lines_removed = len(re.findall(r'^-[^-]', diff_text, re.MULTILINE))
+
+            # Detect AI patterns
+            issues = self.detect_in_diff(diff_text)
+            critical_issues = [i for i in issues if i.get('severity') == 'error']
+            warnings = [i for i in issues if i.get('severity', 'warning') == 'warning']
+
+            # Check for unrelated changes
+            unrelated_changes = []
+            ticket_scope_violations = []
+
+            if self.config.get('check_unrelated_changes'):
+                unrelated_changes = self._detect_unrelated_changes(
+                    diff_text, ticket_id, ticket_description
+                )
+
+            if self.config.get('scope_analysis'):
+                ticket_scope_violations = self._detect_scope_violations(
+                    diff_text, ticket_description
+                )
+
+            return DiffAnalysisReport(
+                files_modified=files_modified,
+                lines_added=lines_added,
+                lines_removed=lines_removed,
+                ai_patterns_found=len(issues),
+                critical_issues=critical_issues,
+                warnings=warnings,
+                unrelated_changes=unrelated_changes,
+                ticket_scope_violations=ticket_scope_violations
+            )
+
+        except Exception:
+            # Return empty report on error
+            return DiffAnalysisReport(
+                files_modified=0,
+                lines_added=0,
+                lines_removed=0,
+                ai_patterns_found=0,
+                critical_issues=[],
+                warnings=[],
+                unrelated_changes=[],
+                ticket_scope_violations=[]
+            )
+
+    def _detect_unrelated_changes(self, diff_text: str, ticket_id: str,
+                                  ticket_description: str) -> List[str]:
+        """Detect changes that seem unrelated to the ticket.
+        
+        Args:
+            diff_text: Git diff output
+            ticket_id: Ticket identifier
+            ticket_description: What the ticket should do
+            
+        Returns:
+            List of potentially unrelated changes
+
+        """
+        unrelated = []
+
+        # Parse files from diff
+        modified_files = re.findall(r'^\+\+\+ b/(.+)$', diff_text, re.MULTILINE)
+
+        # Check for changes in unrelated directories
+        ticket_keywords = self._extract_keywords(ticket_description.lower())
+
+        for file_path in modified_files:
+            file_lower = file_path.lower()
+
+            # Check if file seems unrelated to ticket keywords
+            seems_related = any(keyword in file_lower for keyword in ticket_keywords)
+
+            # Special cases that are often unrelated
+            if not seems_related:
+                if any(unrelated_pattern in file_lower for unrelated_pattern in [
+                    'test', 'spec', 'readme', 'doc', 'config', 'package-lock',
+                    'yarn.lock', '.gitignore', 'changelog'
+                ]):
+                    # These might be related, check more carefully
+                    if 'test' in ticket_keywords or 'doc' in ticket_keywords:
+                        seems_related = True
+
+            if not seems_related and file_path not in ['.hydra', 'tickets.md']:
+                unrelated.append(f"File {file_path} seems unrelated to ticket scope")
+
+        # Check for large number of changes
+        lines_changed = len(re.findall(r'^[+-][^+-]', diff_text, re.MULTILINE))
+        if lines_changed > 500:
+            unrelated.append(
+                f"Large number of changes ({lines_changed} lines) - "
+                "verify all are necessary"
+            )
+
+        # Check for changes to critical files
+        critical_files = ['setup.py', 'pyproject.toml', 'requirements.txt',
+                         'package.json', 'Cargo.toml', 'go.mod']
+        for critical_file in critical_files:
+            if critical_file in modified_files:
+                if critical_file.split('.')[0] not in ticket_description.lower():
+                    unrelated.append(
+                        f"Critical file {critical_file} modified - "
+                        "ensure this is intentional"
+                    )
+
+        return unrelated
+
+    def _detect_scope_violations(self, diff_text: str, ticket_description: str) -> List[str]:
+        """Detect changes that violate the ticket's scope.
+        
+        Args:
+            diff_text: Git diff output
+            ticket_description: What the ticket should do
+            
+        Returns:
+            List of scope violations
+
+        """
+        violations = []
+
+        # Extract what the ticket should NOT do based on description
+        negative_patterns = [
+            (r'without\s+(\w+)', "Changes found for explicitly excluded: "),
+            (r'don\'t\s+(\w+)', "Changes found for 'don't': "),
+            (r'no\s+(\w+)\s+changes', "Changes found despite 'no changes': "),
+            (r'keep\s+(\w+)\s+as\s+is', "Modified despite 'keep as is': ")
+        ]
+
+        for pattern, message in negative_patterns:
+            matches = re.findall(pattern, ticket_description.lower())
+            for match in matches:
+                if match in diff_text.lower():
+                    violations.append(f"{message}{match}")
+
+        return violations
+
+    def _extract_keywords(self, text: str) -> Set[str]:
+        """Extract relevant keywords from text.
+        
+        Args:
+            text: Text to extract keywords from
+            
+        Returns:
+            Set of keywords
+
+        """
+        # Remove common words
+        stopwords = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at',
+                    'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was',
+                    'are', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
+                    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may',
+                    'might', 'must', 'can', 'shall', 'need', 'add', 'update',
+                    'modify', 'change', 'implement', 'fix', 'create', 'remove'}
+
+        # Split into words and filter
+        words = re.findall(r'\b[a-z]+\b', text)
+        keywords = {word for word in words if len(word) > 3 and word not in stopwords}
+
+        # Add specific technical terms found in text
+        tech_terms = re.findall(r'\b(?:api|cli|gui|sdk|ai|ml|db|sql|auth|oauth|jwt|rest|graphql|grpc)\b', text)
+        keywords.update(tech_terms)
+
+        return keywords
+
+    def generate_comprehensive_report(self, analysis: DiffAnalysisReport,
+                                     ticket_id: str) -> str:
+        """Generate a comprehensive report from diff analysis.
+        
+        Args:
+            analysis: Analysis report
+            ticket_id: Ticket identifier
+            
+        Returns:
+            Formatted report string
+
+        """
+        lines = [
+            f"🔍 AI Detection Report for Ticket {ticket_id}",
+            "=" * 60,
+            "",
+            "📊 CHANGE STATISTICS:",
+            f"  Files Modified: {analysis.files_modified}",
+            f"  Lines Added: {analysis.lines_added}",
+            f"  Lines Removed: {analysis.lines_removed}",
+            "",
+            "🤖 AI PATTERN DETECTION:",
+            f"  Total Patterns Found: {analysis.ai_patterns_found}",
+            f"  Critical Issues: {len(analysis.critical_issues)}",
+            f"  Warnings: {len(analysis.warnings)}",
+            ""
+        ]
+
+        if analysis.critical_issues:
+            lines.append("❌ CRITICAL ISSUES (Must Fix):")
+            for issue in analysis.critical_issues[:5]:
+                lines.append(
+                    f"  • {issue['file']}:{issue['line']} - "
+                    f"{issue['pattern']}"
+                )
+            if len(analysis.critical_issues) > 5:
+                lines.append(f"  ... and {len(analysis.critical_issues) - 5} more")
+            lines.append("")
+
+        if analysis.warnings:
+            lines.append("⚠️  WARNINGS (Review Recommended):")
+            for warning in analysis.warnings[:5]:
+                lines.append(
+                    f"  • {warning['file']}:{warning['line']} - "
+                    f"{warning['pattern']}"
+                )
+            if len(analysis.warnings) > 5:
+                lines.append(f"  ... and {len(analysis.warnings) - 5} more")
+            lines.append("")
+
+        if analysis.unrelated_changes:
+            lines.append("🔄 POTENTIALLY UNRELATED CHANGES:")
+            for change in analysis.unrelated_changes[:5]:
+                lines.append(f"  • {change}")
+            lines.append("")
+
+        if analysis.ticket_scope_violations:
+            lines.append("⛔ SCOPE VIOLATIONS:")
+            for violation in analysis.ticket_scope_violations:
+                lines.append(f"  • {violation}")
+            lines.append("")
+
+        # Determine blocking status
+        should_block = False
+        if self.config.get('blocking_on_critical') and analysis.critical_issues:
+            should_block = True
+            lines.append("🚫 BLOCKING: Critical AI patterns detected")
+        elif len(analysis.warnings) > self.config.get('max_warnings_before_block', 50):
+            should_block = True
+            max_warnings = self.config.get('max_warnings_before_block', 50)
+            lines.append(
+                f"🚫 BLOCKING: Too many warnings "
+                f"({len(analysis.warnings)} > {max_warnings})"
+            )
+        elif analysis.ticket_scope_violations:
+            lines.append("⚠️  WARNING: Scope violations detected (non-blocking)")
+        else:
+            lines.append("✅ PASSED: No blocking issues found")
+
+        lines.append("")
+        lines.append(f"Strictness Level: {self.strictness.value.upper()}")
+
+        return "\n".join(lines)
+
+
+def check_file_for_ai_patterns(
+    file_path: str,
+    strictness: StrictnessLevel = StrictnessLevel.MODERATE
+) -> Tuple[bool, List[Dict[str, any]]]:
     """Check a file for AI-generated code patterns.
     
     Args:
         file_path: Path to file to check
+        strictness: Level of strictness for detection
         
     Returns:
         Tuple of (has_issues, list_of_issues)
 
     """
-    detector = AIGeneratedCodeDetector()
+    detector = AIGeneratedCodeDetector(strictness)
     issues = detector.detect_in_file(Path(file_path))
     return len(issues) > 0, issues
 
 
-def check_diff_for_ai_patterns(diff_text: str) -> Tuple[bool, List[Dict[str, any]]]:
+def check_diff_for_ai_patterns(
+    diff_text: str,
+    strictness: StrictnessLevel = StrictnessLevel.MODERATE
+) -> Tuple[bool, List[Dict[str, any]]]:
     """Check a git diff for AI-generated code patterns.
     
     Args:
         diff_text: Git diff output
+        strictness: Level of strictness for detection
         
     Returns:
         Tuple of (has_issues, list_of_issues)
 
     """
-    detector = AIGeneratedCodeDetector()
+    detector = AIGeneratedCodeDetector(strictness)
     issues = detector.detect_in_diff(diff_text)
     return len(issues) > 0, issues

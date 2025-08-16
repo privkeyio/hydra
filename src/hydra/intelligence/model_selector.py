@@ -16,7 +16,7 @@ class ModelCategory(Enum):
     SMART = "smart"  # Opus 4 - Complex reasoning and architecture
     CODER = "coder"  # Opus 4 - Complex implementation and refactoring
     BALANCED = "balanced"  # Sonnet 4 - Standard features and tests
-    FAST = "fast"  # Haiku - Simple tasks and documentation
+    FAST = "fast"  # Sonnet - Simple tasks and documentation
 
 
 @dataclass
@@ -516,7 +516,7 @@ Choose the model based on task complexity analysis:
 - Configuration changes
 - Complexity indicators: standard features, testing, moderate scope
 
-**fast** (Haiku) - Use for:
+**fast** (Sonnet) - Use for:
 - Simple file updates
 - Basic documentation
 - Configuration tweaks

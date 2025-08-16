@@ -44,6 +44,7 @@ def test_cli_multi_line_stdin():
     assert "Executing task:" in result.stdout
 
 
+@pytest.mark.skip(reason="Requires full environment setup with langgraph")
 def test_cli_json_output():
     result = run_cli(["run", "Simple task", "--json"])
     assert result.returncode == 0

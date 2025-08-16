@@ -18,10 +18,10 @@ from hydra.context import ArtifactTracker, TicketUpdater
 from hydra.orchestrator.claude_code_orchestrator import ClaudeCodeOrchestrator
 from hydra.quality import QualityGateRunner
 from hydra.safety.file_lock import get_file_lock_manager
+from hydra.shutdown_manager import get_shutdown_manager
 from hydra.ticket_workflow import (
     mark_ticket_completed,
     mark_ticket_in_progress,
-    parse_ticket,
 )
 
 
@@ -92,36 +92,39 @@ class ParallelExecutor:
         self.artifact_tracker = ArtifactTracker(project_root)
         self.ticket_updater = TicketUpdater(project_root)
 
+        # Register with shutdown manager for graceful shutdown
+        self.shutdown_manager = get_shutdown_manager()
+        self.shutdown_manager.register_shutdown_handler(self._cleanup_resources)
+
+        # Register background threads
+        if hasattr(self.agent_pool, '_cleanup_thread') and self.agent_pool._cleanup_thread:
+            self.shutdown_manager.register_background_thread(self.agent_pool._cleanup_thread)
+        if hasattr(self.smart_lock_manager, '_deadlock_monitor_thread'):
+            deadlock_thread = getattr(self.smart_lock_manager, '_deadlock_monitor_thread', None)
+            if deadlock_thread:
+                self.shutdown_manager.register_background_thread(deadlock_thread)
+
+        # Register state saving
+        if hasattr(self, 'dashboard_state') and self.dashboard_state:
+            self.shutdown_manager.register_state_saver(
+                lambda: getattr(self.dashboard_state, 'save_state', lambda: None)()
+            )
+
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
-        """Load all tickets from tickets.md."""
+        """Load all tickets from YAML or MD file."""
         self.tickets_path = tickets_path  # Store for smart scheduling
         tickets = {}
-
-        with open(tickets_path, 'r') as f:
-            content = f.read()
-
-        # Find all ticket IDs
-        import re
-        ticket_patterns = [
-            r'## Ticket (\d+):',  # Match "## Ticket 001:"
-            r'## TICKET-(\d+):',
-            r'## Ticket-(\d+):',
-            r'## \w+-(\d+):',     # Match any prefix like CALC-001
-            r'### TICKET-(\d+):',
-            r'## #(\d+):',
-            r'## (\d+):'
-        ]
-
-        ticket_ids = []
-        for pattern in ticket_patterns:
-            matches = re.findall(pattern, content, re.IGNORECASE)
-            if matches:
-                ticket_ids = matches
-                break
-
+        
+        # Use the unified TicketFormatHandler
+        from hydra.tickets.compatibility import TicketFormatHandler
+        handler = TicketFormatHandler()
+        
+        # Get all ticket IDs from the file
+        ticket_ids = handler.get_ticket_ids(tickets_path)
+        
         # Parse each ticket
         for ticket_id in ticket_ids:
-            ticket_data = parse_ticket(tickets_path, ticket_id)
+            ticket_data = handler.parse_ticket(tickets_path, ticket_id)
             if ticket_data:
                 # Check status field
                 ticket_status = ticket_data.get('status', 'TODO').upper()
@@ -344,6 +347,9 @@ class ParallelExecutor:
             node.status = ExecutionStatus.RUNNING
             node.start_time = time.time()
 
+            # Register task with shutdown manager
+            self.shutdown_manager.register_task(ticket_id)
+
             # Update dashboard
             if self.dashboard_state:
                 from hydra.dashboard.state import TicketStatus
@@ -362,7 +368,9 @@ class ParallelExecutor:
 
         try:
             # Parse ticket for full details
-            ticket_data = parse_ticket(tickets_path, ticket_id)
+            from hydra.tickets.compatibility import TicketFormatHandler
+            handler = TicketFormatHandler()
+            ticket_data = handler.parse_ticket(tickets_path, ticket_id)
 
             # Create model-specific orchestrator for this ticket
             ticket_model = ticket_data.get('model', 'balanced').lower()  # Default to balanced
@@ -391,20 +399,33 @@ class ParallelExecutor:
                     ticket_id, dependencies
                 )
 
-            # Build prompt - Claude Code will read tickets.md directly from the working directory
-            prompt = f"""Please execute Ticket {ticket_id} from tickets.md.
+            # Build prompt - production quality implementation
+            prompt = f"""Execute ticket {ticket_id} from tickets.yaml in the current directory.
+
+CRITICAL REQUIREMENTS:
+- Be minimalistic, surgical, and future-proof in your implementation
+- Avoid ANY code or comments that could be construed as AI-generated  
+- This MUST be production quality - NO shortcuts, workarounds, or mocks
+- Take your time to ensure excellence - other LLMs said your code quality was poor, prove them wrong!
+
+FILE SCOPE RULES - EXTREMELY IMPORTANT:
+❌ NEVER modify files in src/hydra/ directory - those are Hydra system files
+❌ NEVER modify files in tests/ directory - those are Hydra test files  
+✅ ONLY create/modify files in the current project directory (where tickets.yaml is)
+✅ Create the ACTUAL project files (HTML, CSS, JS, Python, etc.) as specified in acceptance criteria
+✅ If the ticket says "Create script.js" then CREATE script.js in the current directory
 
 {dependency_context}
 
-Steps to complete:
-1. Use the Read tool to open tickets.md
-2. Find "## Ticket {ticket_id}:" section
-3. Read the entire ticket including Output Files and Acceptance Criteria
-4. Create the files specified in "Output Files:" section using the Write tool
-5. Implement all the acceptance criteria
-6. Update tickets.md to mark the ticket Status as DONE and check off completed criteria
+EXECUTION STEPS:
+1. Use 'cat tickets.yaml' or Read tool to understand ticket {ticket_id} requirements
+2. Create the ACTUAL files needed IN THE CURRENT DIRECTORY (e.g., index.html, script.js, styles.css)
+3. Ensure ALL acceptance criteria are fully met - if it says "Create X" then X must exist
+4. Update tickets.yaml to change ticket {ticket_id} status from "TODO" to "DONE"
+5. Run quality checks if available (lint, prettier, etc.)
 
-Start by reading tickets.md to find Ticket {ticket_id}.
+IMPORTANT: You are implementing the actual project described in the ticket (e.g., a calculator), 
+NOT modifying the Hydra ticket system itself. Work in the project directory ONLY.
 
 PYTHON CODE QUALITY REQUIREMENTS:
 - Add module docstrings to all Python files
@@ -558,6 +579,9 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                         self.quality_failed_tickets.add(ticket_id)  # Track for reporting
                     self.running_tickets.remove(ticket_id)
 
+                    # Unregister task from shutdown manager
+                    self.shutdown_manager.unregister_task(ticket_id)
+
                     # Update dashboard
                     if self.dashboard_state:
                         from hydra.dashboard.state import TicketStatus
@@ -575,8 +599,14 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 self.agent_pool.release_agent(agent_id)
                 self.file_lock_manager.release_all_locks(agent_id)
                 return True
+            elif result.status.value == "timeout":
+                raise Exception(f"Task timed out after {task.timeout} seconds")
+            elif result.status.value == "failed":
+                error_msg = result.error if result.error else "Task execution failed"
+                raise Exception(error_msg)
             else:
-                raise Exception(f"Task failed: {result.error}")
+                # Unexpected status
+                raise Exception(f"Unexpected task status: {result.status.value}")
 
         except Exception as e:
             with self.lock:
@@ -585,6 +615,9 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 node.error = str(e)
                 self.failed_tickets.add(ticket_id)
                 self.running_tickets.remove(ticket_id)
+
+                # Unregister task from shutdown manager
+                self.shutdown_manager.unregister_task(ticket_id)
 
                 # Update dashboard
                 if self.dashboard_state:
@@ -1019,9 +1052,34 @@ Check your project directory for all the generated calculator files.
 
         return str(log_file)
 
-    def shutdown(self):
-        """Shutdown the executor and clean up resources."""
+    def _cleanup_resources(self):
+        """Clean up resources when called by shutdown manager."""
         # Stop the agent pool
         if hasattr(self, 'agent_pool'):
             self.agent_pool.stop()
-            print("🛑 Agent pool shutdown complete")
+
+        # Stop smart lock manager deadlock monitoring
+        if hasattr(self, 'smart_lock_manager'):
+            try:
+                if hasattr(self.smart_lock_manager, 'stop_deadlock_monitoring'):
+                    self.smart_lock_manager.stop_deadlock_monitoring()
+            except Exception as e:
+                print(f"⚠️  Warning: Error stopping deadlock monitoring: {e}")
+
+        # Close any open file handles
+        if hasattr(self, 'file_lock_manager'):
+            try:
+                # Release any remaining locks
+                for agent_id in list(self.running_tickets):
+                    self.file_lock_manager.release_all_locks(agent_id)
+            except Exception as e:
+                print(f"⚠️  Warning: Error releasing file locks: {e}")
+
+    def shutdown(self):
+        """Shutdown the executor and clean up resources."""
+        # Use the shutdown manager for coordinated shutdown
+        if hasattr(self, 'shutdown_manager'):
+            self.shutdown_manager.shutdown()
+        else:
+            # Fallback to direct cleanup
+            self._cleanup_resources()

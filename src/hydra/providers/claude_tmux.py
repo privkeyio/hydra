@@ -72,30 +72,42 @@ class ClaudeTmuxProvider(BaseProvider):
 
     def _send_to_session(self, session_name: str, text: str):
         """Send text to a tmux session."""
-        # For multiline text, use tmux's literal mode
-        # First, create a temp file with the text
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
-            f.write(text)
-            temp_file = f.name
-
-        try:
-            # Use tmux load-buffer and paste-buffer for accurate text transmission
-            subprocess.run(
-                ["tmux", "load-buffer", "-t", session_name, temp_file],
-                capture_output=True
+        # Clear any pending input first
+        subprocess.run(
+            ["tmux", "send-keys", "-t", session_name, "C-u"],
+            capture_output=True
+        )
+        time.sleep(0.1)
+        
+        # For multi-line text, use paste-buffer which handles it better
+        if '\n' in text:
+            # Load text into tmux buffer
+            process = subprocess.Popen(
+                ["tmux", "load-buffer", "-"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
+            process.communicate(input=text)
+            
+            # Paste the buffer into the session
             subprocess.run(
                 ["tmux", "paste-buffer", "-t", session_name],
                 capture_output=True
             )
-            # Send Enter to submit
+        else:
+            # For single-line text, use send-keys with -l flag
             subprocess.run(
-                ["tmux", "send-keys", "-t", session_name, "Enter"],
+                ["tmux", "send-keys", "-t", session_name, "-l", text],
                 capture_output=True
             )
-        finally:
-            Path(temp_file).unlink(missing_ok=True)
+        
+        # Send Enter to submit
+        subprocess.run(
+            ["tmux", "send-keys", "-t", session_name, "Enter"],
+            capture_output=True
+        )
 
     def _capture_session_output(self, session_name: str) -> str:
         """Capture the output from a tmux session."""
@@ -188,9 +200,10 @@ class ClaudeTmuxProvider(BaseProvider):
             claude_model = model_mapping.get(model_to_use.lower(), default_model)
 
             # Build the command with model flag
+            # IMPORTANT: Start Claude in the project directory to prevent it from modifying Hydra source
             cmd = [
                 "tmux", "new-session", "-d", "-s", session_name,
-                "-c", project_dir,
+                "-c", project_dir,  # Set working directory
                 self.claude_path, "--model", claude_model
             ]
 
@@ -205,16 +218,37 @@ class ClaudeTmuxProvider(BaseProvider):
             start_init = time.time()
             claude_ready = False
 
+            permission_accepted = False
             while time.time() - start_init < initialization_timeout:
                 output = self._capture_session_output(session_name)
-                # Check for various Claude Code prompts
-                indicators = [
-                    "Welcome to Claude", ">", "Claude Code", "Assistant:"
-                ]
-                if any(indicator in output for indicator in indicators):
-                    claude_ready = True
-                    print("✅ Claude Code is ready")
-                    break
+                
+                # First check if Claude is asking for permission (only accept once)
+                if not permission_accepted and "automatic bash execution" in output and "Yes, proceed" in output:
+                    print("🔐 Accepting bash execution permission...")
+                    # Option 1 is already selected by default, just press Enter
+                    subprocess.run(
+                        ["tmux", "send-keys", "-t", session_name, "Enter"],
+                        capture_output=True
+                    )
+                    permission_accepted = True
+                    time.sleep(5)  # Give Claude more time to process and start
+                    # After accepting, capture new output
+                    output = self._capture_session_output(session_name)
+                
+                # Check for Claude being ready - look for the prompt after welcome
+                # Both conditions must be present together
+                if "Welcome to Claude Code" in output and ("Try \"" in output or "> Try" in output or "│ >" in output):
+                    # Make sure we're not still on permission screen
+                    if "automatic bash execution" not in output[-500:]:
+                        claude_ready = True
+                        print("✅ Claude Code is ready")
+                        break
+                
+                # Debug output every 5 seconds
+                if int(time.time() - start_init) % 5 == 0:
+                    last_line = output.strip().split('\n')[-1] if output else ""
+                    print(f"⏳ Waiting... Last line: {last_line[:50]}")
+                
                 time.sleep(1)
 
             if not claude_ready:
@@ -236,6 +270,7 @@ class ClaudeTmuxProvider(BaseProvider):
             # Parse ticket if available to extract required files
             ticket = kwargs.get('ticket', None)
             file_creation_prompt = ""
+            required_files = []  # Initialize to empty list
             if ticket:
                 file_creation_prompt = enforce_file_creation(ticket)
                 required_files = extract_required_files(ticket)
@@ -247,13 +282,33 @@ class ClaudeTmuxProvider(BaseProvider):
             # Send a clear, direct prompt to Claude
             # Check if this is called from ticket_workflow with full prompt
             if prompt and len(prompt) > 100:  # Full prompt from ticket_workflow
-                # Prepend file creation enforcement to the prompt
-                prompt_text = file_creation_prompt + prompt if file_creation_prompt else prompt
+                # For ticket generation, use the FULL prompt with all instructions
+                is_ticket_generation = kwargs.get('mode') == 'ticket_generation'
+                if is_ticket_generation:
+                    # Just use the full prompt as-is - it has all the instructions
+                    prompt_text = prompt
+                elif required_files:
+                    # For ticket execution with known files
+                    tickets_file = kwargs.get('tickets_file', 'tickets.yaml')
+                    file_list = ", ".join(required_files)
+                    prompt_text = f"Read {tickets_file} ticket {ticket_id} and create these files: {file_list}"
+                else:
+                    # For ticket execution without specific files
+                    tickets_file = kwargs.get('tickets_file', 'tickets.yaml')
+                    prompt_text = f"Read {tickets_file} and implement ticket {ticket_id}. Create all files mentioned in the acceptance criteria."
             else:  # Fallback simple prompt
                 # Still prepend file creation enforcement if we have ticket info
                 base_prompt = (
                     f"Execute ticket {ticket_id} in tickets.md\n\n"
                     f"🚨 CRITICAL: CREATE ALL NEW FILES MENTIONED IN ACCEPTANCE CRITERIA 🚨\n\n"
+                    f"⚠️ IMPORTANT WORKING DIRECTORY RULES:\n"
+                    f"1. You are working in: {project_dir}\n"
+                    f"2. DO NOT use paths like '../' or absolute paths outside this directory\n"
+                    f"3. DO NOT modify ANY files in /home/kyle/Documents/GitHub/hydra/src/\n"
+                    f"4. DO NOT modify ANY files in src/hydra/ or tests/\n"
+                    f"5. ONLY create and modify files in the current directory: {project_dir}\n"
+                    f"6. When creating files, use simple names like 'styles.css', 'script.js', 'README.md'\n"
+                    f"7. Do NOT create files in subdirectories unless explicitly required\n\n"
                     f"Requirements:\n"
                     f"1. Read the acceptance criteria EXTREMELY CAREFULLY\n"
                     f"2. CREATE EVERY FILE that is mentioned, for example:\n"
@@ -286,11 +341,24 @@ class ClaudeTmuxProvider(BaseProvider):
             debug_log("=" * 60)
 
             # Send the prompt
+            print(f"📤 Sending prompt ({len(prompt_text)} chars)...")
+            if debug_mode:
+                print(f"First 200 chars: {prompt_text[:200]}...")
             self._send_to_session(session_name, prompt_text)
             debug_log("Prompt sent successfully")
 
             # Give Claude time to process the prompt
-            time.sleep(3)
+            print("⏳ Waiting for Claude to start processing...")
+            time.sleep(5)
+            
+            # Check if Claude received the prompt
+            check_output = self._capture_session_output(session_name)
+            if prompt_text[:50] in check_output:
+                print("✅ Claude received the prompt")
+            else:
+                print("⚠️ Claude may not have received the prompt correctly")
+                
+            time.sleep(5)  # More time to start processing
 
             # Capture initial response
             initial_response = self._capture_session_output(session_name)
@@ -299,16 +367,8 @@ class ClaudeTmuxProvider(BaseProvider):
                 if line.strip():
                     debug_log(f"  > {line[:150]}")
 
-            # Add done marker instruction after initial processing
-            if f"done_{session_name}" not in prompt:
-                done_instruction = (
-                    f"\nWhen you're completely done with all file operations, "
-                    f"please create a file called .hydra/sessions/done_{session_name} "
-                    f"to signal completion."
-                )
-                time.sleep(5)  # Wait before sending done instruction
-                self._send_to_session(session_name, done_instruction)
-                debug_log("Done marker instruction sent")
+            # Skip done marker instruction - it may confuse Claude
+            # We'll detect completion by monitoring output instead
 
             # Monitor for completion
             start_time = time.time()
@@ -321,11 +381,22 @@ class ClaudeTmuxProvider(BaseProvider):
             max_timeout = 900  # 15 minutes should be enough for complex tasks
             idle_timeout = 180  # 3 minutes of no activity suggests completion or stuck
 
+            # For ticket generation, check if tickets.yaml was created
+            is_ticket_generation = kwargs.get('mode') == 'ticket_generation'
+            tickets_file = Path(project_dir) / "tickets.yaml"
+            
             while time.time() - start_time < max_timeout:
                 # Check if done marker exists
                 if done_marker.exists():
                     print("✅ Claude Code signaled completion")
                     done_marker.unlink()
+                    break
+                
+                # For ticket generation, check if file was created
+                if is_ticket_generation and tickets_file.exists():
+                    # Give Claude a moment to finish writing
+                    time.sleep(2)
+                    print("✅ Claude created tickets.yaml")
                     break
 
                 # Capture current output
@@ -355,18 +426,21 @@ class ClaudeTmuxProvider(BaseProvider):
                             debug_log(f"  > {line[:100]}")
 
                     # Check if Claude has returned to prompt (indicates completion)
-                    last_lines = current_output.strip().split('\n')[-5:]
+                    last_lines = current_output.strip().split('\n')[-10:]
                     prompt_indicators = ['│ >                                                                            │',
                                        '│ > ',
-                                       '╰──────────────────────────────────────────────────────────────────────────────╯']
+                                       '╰──────────────────────────────────────────────────────────────────────────────╯',
+                                       '? for shortcuts']
 
-                    if no_change_count > 10:  # After 10 seconds of no activity
+                    # Don't check for prompt completion too early - Claude needs time to work
+                    # Only check after significant idle time
+                    if no_change_count > 30:  # After 30 seconds of no activity
                         # Check if we see the prompt
                         completion_detected = False
                         for line in last_lines:
                             if any(indicator in line for indicator in prompt_indicators):
-                                print("✅ Claude returned to prompt - task appears complete")
-                                debug_log("Detected Claude prompt - assuming completion")
+                                print("✅ Claude returned to prompt after long idle - task likely complete")
+                                debug_log("Detected Claude prompt after 2 min idle - assuming completion")
                                 completion_detected = True
                                 break
                         if completion_detected:
@@ -384,9 +458,21 @@ class ClaudeTmuxProvider(BaseProvider):
                         debug_log(f"Activity detected after {no_change_count}s idle")
                     no_change_count = 0
                     last_output = current_output
+                    
+                    # Check if Claude is actually creating files
+                    if "Write(" in current_output or "wrote" in current_output.lower():
+                        print("📝 Claude is writing files...")
+                    elif "Read(" in current_output or "reading" in current_output.lower():
+                        print("📖 Claude is reading files...")
+                    elif any(x in current_output.lower() for x in ["creating", "created", "writing"]):
+                        print("🔨 Claude is working on files...")
 
                     # Check if Claude needs permission for file operations
-                    if "don't ask again" in current_output.lower():
+                    if "do you want to create" in current_output.lower():
+                        print("⚠️  Claude Code asking for file creation permission - auto-approving")
+                        self._send_to_session(session_name, "1")  # Select "Yes"
+                        time.sleep(1)
+                    elif "don't ask again" in current_output.lower():
                         print("⚠️  Claude Code asking for permission - auto-approving file operations")
                         self._send_to_session(session_name, "2")  # Select "Yes, don't ask again"
                         time.sleep(1)
@@ -505,7 +591,7 @@ class ClaudeTmuxProvider(BaseProvider):
             # Send exit command to Claude
             print("🛑 Ending Claude session...")
             self._send_to_session(session_name, "/exit")
-            time.sleep(2)
+            time.sleep(10)  # Give Claude plenty of time to finish writing files
 
             # Validate required files were created if we have ticket info
             if 'required_files' in locals() and required_files:
@@ -685,28 +771,6 @@ class ClaudeTmuxProvider(BaseProvider):
                 cost_per_token=0.00003,
                 metadata={"version": "4", "release_date": "2025-05-14"}
             ),
-            ModelInfo(
-                identifier="claude-3-opus-20240229",
-                display_name="Claude 3 Opus",
-                category="smart",
-                context_window=200000,
-                max_output_tokens=4096,
-                supports_streaming=True,
-                supports_interactive=True,
-                cost_per_token=0.00015,
-                metadata={"version": "3", "release_date": "2024-02-29"}
-            ),
-            ModelInfo(
-                identifier="claude-3-sonnet-20240229",
-                display_name="Claude 3 Sonnet",
-                category="balanced",
-                context_window=200000,
-                max_output_tokens=4096,
-                supports_streaming=True,
-                supports_interactive=True,
-                cost_per_token=0.00003,
-                metadata={"version": "3", "release_date": "2024-02-29"}
-            ),
         ]
 
     def select_model(self, model_identifier: str) -> bool:
@@ -732,8 +796,6 @@ class ClaudeTmuxProvider(BaseProvider):
         return {
             "opus": "claude-opus-4-1-20250805",
             "sonnet": "claude-sonnet-4-20250514",
-            "opus-3": "claude-3-opus-20240229",
-            "sonnet-3": "claude-3-sonnet-20240229",
             "smart": "claude-opus-4-1-20250805",
             "balanced": "claude-sonnet-4-20250514",
             "fast": "claude-sonnet-4-20250514",

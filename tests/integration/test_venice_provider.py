@@ -328,8 +328,8 @@ class TestVeniceProviderIntegration:
         prompt = venice_provider._build_ticket_prompt(ticket_content)
 
         assert ticket_content in prompt
-        assert "markdown code blocks" in prompt
-        assert "file paths" in prompt
+        assert "Code files" in prompt
+        assert "Commands" in prompt or "bash blocks" in prompt
 
     @pytest.mark.parametrize("response_format", [
         # Different response formats to test

@@ -49,8 +49,8 @@ class ModelMapper:
             "claude_tmux": {
                 ModelCategory.FAST: ModelMapping(
                     category=ModelCategory.FAST,
-                    provider_model="claude-3-5-haiku-20241022",
-                    display_name="Claude 3.5 Haiku",
+                    provider_model="claude-3-5-sonnet-20241022",
+                    display_name="Claude 3.5 Sonnet",
                     context_window=200000,
                     max_output_tokens=8192,
                     relative_cost=0.1
@@ -65,8 +65,8 @@ class ModelMapper:
                 ),
                 ModelCategory.SMART: ModelMapping(
                     category=ModelCategory.SMART,
-                    provider_model="claude-3-opus-20240229",
-                    display_name="Claude 3 Opus",
+                    provider_model="claude-opus-4-1-20250805",
+                    display_name="Claude Opus 4.1",
                     context_window=200000,
                     max_output_tokens=4096,
                     relative_cost=1.0
@@ -163,7 +163,6 @@ class ModelMapper:
             "opus 4": ModelCategory.SMART,
             "claude-opus": ModelCategory.SMART,
             "claude-3-opus": ModelCategory.SMART,
-            "claude-3-opus-20240229": ModelCategory.SMART,
             "claude-opus-4-1-20250805": ModelCategory.SMART,
             "claude-opus-4-20250514": ModelCategory.SMART,
 
@@ -176,11 +175,6 @@ class ModelMapper:
             "claude-3-5-sonnet-20241022": ModelCategory.BALANCED,
             "claude-3-7-sonnet-20250220": ModelCategory.BALANCED,
 
-            "haiku": ModelCategory.FAST,
-            "claude-haiku": ModelCategory.FAST,
-            "claude-3-haiku": ModelCategory.FAST,
-            "claude-3-haiku-20240307": ModelCategory.FAST,
-            "claude-3-5-haiku-20241022": ModelCategory.FAST,
 
             # Venice model names
             "qwen-2.5-coder-32b": ModelCategory.CODER,
@@ -363,7 +357,7 @@ def get_model_mapper() -> ModelMapper:
 
 
 def map_model(model_name: str, provider: Optional[str] = None) -> Optional[str]:
-    """Convenience function to map a model name.
+    """Map a model name to provider-specific identifier.
 
     Args:
         model_name: Model name to map

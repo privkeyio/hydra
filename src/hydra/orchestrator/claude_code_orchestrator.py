@@ -154,6 +154,18 @@ class ClaudeCodeOrchestrator:
                     line.split()[-1] for line in git_status.stdout.strip().split('\n')
                     if line
                 ]
+                
+                # Check for system file modifications
+                system_files_modified = []
+                for file_path in task.files_changed:
+                    if file_path.startswith('src/hydra/') or file_path.startswith('tests/'):
+                        system_files_modified.append(file_path)
+                
+                if system_files_modified:
+                    print(f"\n⚠️  WARNING: Agent modified Hydra system files:")
+                    for file in system_files_modified:
+                        print(f"   ❌ {file}")
+                    print("   These changes will be flagged in validation!")
 
             task.result = result
             task.status = TaskStatus.COMPLETED

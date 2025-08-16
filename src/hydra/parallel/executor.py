@@ -22,7 +22,6 @@ from hydra.shutdown_manager import get_shutdown_manager
 from hydra.ticket_workflow import (
     mark_ticket_completed,
     mark_ticket_in_progress,
-    parse_ticket,
 )
 
 
@@ -112,35 +111,20 @@ class ParallelExecutor:
             )
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
-        """Load all tickets from tickets.md."""
+        """Load all tickets from YAML or MD file."""
         self.tickets_path = tickets_path  # Store for smart scheduling
         tickets = {}
-
-        with open(tickets_path, 'r') as f:
-            content = f.read()
-
-        # Find all ticket IDs
-        import re
-        ticket_patterns = [
-            r'## Ticket (\d+):',  # Match "## Ticket 001:"
-            r'## TICKET-(\d+):',
-            r'## Ticket-(\d+):',
-            r'## \w+-(\d+):',     # Match any prefix like CALC-001
-            r'### TICKET-(\d+):',
-            r'## #(\d+):',
-            r'## (\d+):'
-        ]
-
-        ticket_ids = []
-        for pattern in ticket_patterns:
-            matches = re.findall(pattern, content, re.IGNORECASE)
-            if matches:
-                ticket_ids = matches
-                break
-
+        
+        # Use the unified TicketFormatHandler
+        from hydra.tickets.compatibility import TicketFormatHandler
+        handler = TicketFormatHandler()
+        
+        # Get all ticket IDs from the file
+        ticket_ids = handler.get_ticket_ids(tickets_path)
+        
         # Parse each ticket
         for ticket_id in ticket_ids:
-            ticket_data = parse_ticket(tickets_path, ticket_id)
+            ticket_data = handler.parse_ticket(tickets_path, ticket_id)
             if ticket_data:
                 # Check status field
                 ticket_status = ticket_data.get('status', 'TODO').upper()
@@ -384,7 +368,9 @@ class ParallelExecutor:
 
         try:
             # Parse ticket for full details
-            ticket_data = parse_ticket(tickets_path, ticket_id)
+            from hydra.tickets.compatibility import TicketFormatHandler
+            handler = TicketFormatHandler()
+            ticket_data = handler.parse_ticket(tickets_path, ticket_id)
 
             # Create model-specific orchestrator for this ticket
             ticket_model = ticket_data.get('model', 'balanced').lower()  # Default to balanced
@@ -413,20 +399,27 @@ class ParallelExecutor:
                     ticket_id, dependencies
                 )
 
-            # Build prompt - Claude Code will read tickets.md directly from the working directory
-            prompt = f"""Please execute Ticket {ticket_id} from tickets.md.
+            # Build prompt - production quality implementation
+            prompt = f"""Execute ticket {ticket_id} from tickets.yaml in the current directory.
+
+CRITICAL REQUIREMENTS:
+- Be minimalistic, surgical, and future-proof in your implementation
+- Avoid ANY code or comments that could be construed as AI-generated  
+- This MUST be production quality - NO shortcuts, workarounds, or mocks
+- Take your time to ensure excellence - other LLMs said your code quality was poor, prove them wrong!
+- Create ACTUAL files (HTML, CSS, JS, etc.) as required by the ticket - DO NOT modify Hydra system files
 
 {dependency_context}
 
-Steps to complete:
-1. Use the Read tool to open tickets.md
-2. Find "## Ticket {ticket_id}:" section
-3. Read the entire ticket including Output Files and Acceptance Criteria
-4. Create the files specified in "Output Files:" section using the Write tool
-5. Implement all the acceptance criteria
-6. Update tickets.md to mark the ticket Status as DONE and check off completed criteria
+EXECUTION STEPS:
+1. Use 'cat tickets.yaml' or Read tool to understand ticket {ticket_id} requirements
+2. Create the ACTUAL files needed (e.g., index.html for a web calculator, NOT hydra system files)
+3. Ensure ALL acceptance criteria are fully met with production-quality code
+4. Update tickets.yaml to change ticket {ticket_id} status from "TODO" to "DONE"
+5. Run quality checks if available (lint, prettier, etc.)
 
-Start by reading tickets.md to find Ticket {ticket_id}.
+IMPORTANT: You are implementing the actual project described in the ticket (e.g., a calculator), 
+NOT modifying the Hydra ticket system itself. Create NEW files as needed for the project.
 
 PYTHON CODE QUALITY REQUIREMENTS:
 - Add module docstrings to all Python files

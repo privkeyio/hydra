@@ -30,8 +30,13 @@ def update_ticket_in_database(ticket_identifier: str, status: str, project_path:
         ticket_info: Optional dict with ticket details (title, description, etc.)
     """
     try:
+        import os
         from datetime import datetime
         from hydra.dashboard.database import get_db_manager, Project, Ticket, Execution
+        
+        # Set database URL to project-specific location if we're in a project
+        if project_path and os.path.exists(os.path.join(project_path, 'tickets.yaml')):
+            os.environ['DATABASE_URL'] = f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
         
         # Get database manager
         db_manager = get_db_manager()
@@ -334,7 +339,22 @@ def detect_project_context(tickets_path):
 
 
 def parse_ticket(tickets_path, ticket_identifier):
-    """Parse specific ticket from tickets.md with flexible format support."""
+    """Parse specific ticket from tickets file."""
+    from hydra.tickets.compatibility import TicketFormatHandler
+    handler = TicketFormatHandler()
+    ticket = handler.parse_ticket(tickets_path, ticket_identifier)
+    
+    if ticket:
+        # Cache the result
+        cache = get_file_meta_cache()
+        cache_key = get_cache_key(tickets_path, ticket_identifier)
+        cache.set(cache_key, ticket, tickets_path)
+        
+    return ticket
+
+
+def parse_ticket_md_legacy(tickets_path, ticket_identifier):
+    """Legacy MD parser kept for backward compatibility."""
     if not os.path.exists(tickets_path):
         print(f"❌ {tickets_path} not found")
         return None
@@ -410,8 +430,9 @@ def parse_ticket(tickets_path, ticket_identifier):
 
     for line in lines[1:]:
         line = line.strip()
-        if line.startswith('**Status:**'):
-            status_text = line.replace('**Status:**', '').strip().upper()
+        # Check for status line (markdown bold syntax: **Status**:)
+        if len(line) >= 11 and line[:11] == '**Status**:':
+            status_text = line.replace('**Status**:', '').strip().upper()
             ticket['status'] = status_text
             # Mark as completed if status is DONE
             if status_text == 'DONE':
@@ -420,7 +441,7 @@ def parse_ticket(tickets_path, ticket_identifier):
             elif status_text == 'QUALITY_FAILED':
                 ticket['completed'] = False
                 ticket['quality_failed'] = True
-        elif line.startswith('**Model:**'):
+        elif len(line) >= 10 and line[:10] == '**Model:**':
             # Use model mapper to handle both legacy and new model categories
             from hydra.providers.model_mapper import get_model_mapper
             mapper = get_model_mapper()
@@ -433,7 +454,7 @@ def parse_ticket(tickets_path, ticket_identifier):
             else:
                 # Default to balanced if unknown
                 ticket['model'] = 'balanced'
-        elif line.startswith('**Dependencies:**'):
+        elif len(line) >= 17 and line[:17] == '**Dependencies:**':
             # Parse simplified dependency format: "001,002,003" or "None"
             deps_text = line.replace('**Dependencies:**', '').strip()
             if deps_text.lower() not in ['none', 'n/a', '-', '']:
@@ -446,7 +467,7 @@ def parse_ticket(tickets_path, ticket_identifier):
         elif line.startswith('**Description:**'):
             # Capture single-line description
             ticket['description'] = line.replace('**Description:**', '').strip()
-        elif line.startswith('**Acceptance Criteria:**'):
+        elif len(line) >= 24 and line[:24] == '**Acceptance Criteria:**':
             in_criteria = True
         elif line.startswith('- [ ]'):
             criteria = line.replace('- [ ]', '').strip()
@@ -480,7 +501,15 @@ def parse_ticket(tickets_path, ticket_identifier):
 
 
 def generate_tickets_md(project_description, output_path="tickets.md", project_type=None):
-    """Generate tickets.md from project description using provider abstraction."""
+    """Generate tickets file from project description."""
+    from hydra.tickets.generator import TicketGenerator
+    from pathlib import Path
+    
+    if Path(output_path).suffix not in ['.yml', '.yaml']:
+        output_path = output_path.replace('.md', '.yaml')
+        
+    generator = TicketGenerator()
+    return generator.generate_tickets_yaml(project_description, output_path, project_type)
     print("🎫 Generating tickets.md...")
     print("=" * 30)
 
@@ -715,7 +744,7 @@ Project: {project_description}"""
                 for line in lines:
                     if line.startswith('**Model:**'):
                         ticket_dict['model'] = line.replace('**Model:**', '').strip().lower()
-                    elif line.startswith('**Dependencies:**'):
+                    elif len(line) >= 17 and line[:17] == '**Dependencies:**':
                         deps = line.replace('**Dependencies:**', '').strip()
                         if deps.lower() not in ['none', '']:
                             ticket_dict['dependencies'] = deps.split(',')
@@ -1360,29 +1389,39 @@ IMPORTANT: Save any artifacts, documents, or shared data that other tickets migh
             dependency_context += "\nIMPORTANT: Read these dependency artifacts FIRST to understand what has been implemented!"
 
     if provider_type == 'claude_tmux':
-        # Claude Code can read tickets.md directly
-        prompt = f"""Execute ONLY Ticket {ticket_identifier} from tickets.md.
+        # Claude can read files directly
+        tickets_file = os.path.basename(tickets_path)
+        
+        # Determine file format
+        if tickets_file.endswith('.yaml') or tickets_file.endswith('.yml'):
+            ticket_search = f"Find the ticket with id: '{ticket_identifier}' in the YAML file"
+            status_update = f"Update {tickets_file} to set status: DONE for ticket {ticket_identifier}"
+        else:
+            ticket_search = f'Find "## Ticket {ticket_identifier}:" in {tickets_file}'
+            status_update = f"Update {tickets_file} status to DONE"
+            
+        prompt = f"""Execute ONLY Ticket {ticket_identifier} from {tickets_file}.
 
-Find "## Ticket {ticket_identifier}:" in tickets.md and implement it.
+{ticket_search} and implement it.
 
 {workspace_info}
 {dependency_context}
 
 APPROACH:
-1. Make DIRECT code changes - don't create unnecessary documentation
+1. Make DIRECT code changes - create the files specified
 2. Be surgical and minimal - change only what's needed
-3. If the ticket mentions specific files/functions, change those directly
-4. Focus on making the tests pass
+3. If the ticket mentions specific files/functions, create those directly
+4. Focus on making everything work
 
 QUALITY:
-- Write clean, idiomatic code that matches the existing codebase style
+- Write clean, production code
 - No placeholders, mocks, or shortcuts
-- Make sure all tests pass after your changes
+- Make sure all files work together
 
 When done:
 1. Verify all acceptance criteria are met
-2. Update tickets.md status to DONE
-3. Run tests to ensure nothing broke
+2. {status_update}
+3. Ensure all created files work correctly
 
 REMINDER: You are working on Ticket {ticket_identifier} ONLY."""
     else:
@@ -1420,7 +1459,8 @@ REMINDER: You are working on Ticket {ticket_identifier} ONLY."""
             mode="ticket_execution",
             cwd=project_dir,
             ticket_id=ticket_identifier,
-            ticket=ticket
+            ticket=ticket,
+            tickets_file=os.path.basename(tickets_path)
         )
 
         # Handle result based on provider capabilities
@@ -1603,10 +1643,28 @@ REMINDER: You are working on Ticket {ticket_identifier} ONLY."""
 
 
 def mark_ticket_in_progress(tickets_path, ticket_identifier):
-    """Mark ticket as IN_PROGRESS in tickets.md."""
+    """Mark ticket as IN_PROGRESS in tickets file (YAML or MD)."""
     if not os.path.exists(tickets_path):
         return
 
+    # Check if it's YAML format
+    if tickets_path.endswith(('.yaml', '.yml')):
+        import yaml
+        with open(tickets_path, 'r') as f:
+            data = yaml.safe_load(f)
+        
+        # Update ticket status
+        for ticket in data.get('tickets', []):
+            if str(ticket.get('id', '')) == str(ticket_identifier):
+                ticket['status'] = 'IN_PROGRESS'
+                break
+        
+        # Write back
+        with open(tickets_path, 'w') as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        return
+
+    # Legacy MD format handling
     # Normalize ticket ID to 3 digits if it's numeric
     if ticket_identifier.isdigit():
         ticket_identifier = ticket_identifier.zfill(3)
@@ -1725,10 +1783,33 @@ def mark_ticket_quality_failed(tickets_path, ticket_identifier, quality_report=N
 
 
 def mark_ticket_completed(tickets_path, ticket_identifier):
-    """Mark ticket as completed in tickets.md."""
+    """Mark ticket as completed in tickets file (YAML or MD)."""
     if not os.path.exists(tickets_path):
         return
 
+    # Check if it's YAML format
+    if tickets_path.endswith(('.yaml', '.yml')):
+        import yaml
+        with open(tickets_path, 'r') as f:
+            data = yaml.safe_load(f)
+        
+        # Update ticket status
+        for ticket in data.get('tickets', []):
+            if str(ticket.get('id', '')) == str(ticket_identifier):
+                ticket['status'] = 'DONE'
+                break
+        
+        # Write back
+        with open(tickets_path, 'w') as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        
+        # Also update the dashboard
+        from hydra.ticket_workflow import update_ticket_in_database
+        project_path = os.path.dirname(os.path.abspath(tickets_path))
+        update_ticket_in_database(ticket_identifier, "DONE", project_path)
+        return
+
+    # Legacy MD format handling
     # Normalize ticket ID to 3 digits if it's numeric
     if ticket_identifier.isdigit():
         ticket_identifier = ticket_identifier.zfill(3)
@@ -1840,33 +1921,22 @@ def parse_all_tickets(tickets_path: str) -> Dict[str, dict]:
     if cached_result is not None:
         return cached_result
 
-    with open(tickets_path, 'r') as f:
-        content = f.read()
-
-    # Detect format and extract all ticket IDs
-    ticket_patterns = [
-        r'### TICKET-(\d+):',
-        r'## TICKET-(\d+):',
-        r'## Ticket-(\d+):',
-        r'## Ticket (\d+):',
-        r'## #(\d+):',
-        r'## (\d+):',
-    ]
-
+    # Use the unified TicketFormatHandler for both YAML and MD
+    from hydra.tickets.compatibility import TicketFormatHandler
+    handler = TicketFormatHandler()
+    
+    # Get all ticket IDs
+    ticket_ids = handler.get_ticket_ids(tickets_path)
+    
     tickets = {}
-    for pattern in ticket_patterns:
-        matches = re.findall(pattern, content, re.IGNORECASE)
-        if matches:
-            for ticket_num in matches:
-                # Parse with original ID format
-                ticket = parse_ticket(tickets_path, ticket_num)
-                if ticket:
-                    # Store with normalized 3-digit key
-                    normalized_id = ticket_num.zfill(3)
-                    tickets[normalized_id] = ticket
-                    # Store the original format for execution
-                    tickets[normalized_id]['raw_id'] = ticket_num
-            break
+    for ticket_id in ticket_ids:
+        ticket = handler.parse_ticket(tickets_path, ticket_id)
+        if ticket:
+            # Store with normalized 3-digit key
+            normalized_id = ticket_id.zfill(3)
+            tickets[normalized_id] = ticket
+            # Store the original format for execution
+            tickets[normalized_id]['raw_id'] = ticket_id
 
     # Cache the parsed tickets
     cache.set(cache_key, tickets, tickets_path)

@@ -1,0 +1,92 @@
+# Hydra Tickets YAML Schema
+# This defines the structure for tickets.yaml files
+
+version: "1.0"
+project:
+  name: "Project Name"
+  description: "Project description"
+  created_at: "2024-01-01T00:00:00Z"
+  repository: "/path/to/repo"
+  settings:
+    max_parallel: 3
+    quality_gates: true
+    auto_verify: true
+
+# Tickets are a list, making it easy to add/remove/reorder
+tickets:
+  - id: "001"
+    title: "Initialize Project Structure"
+    status: "TODO"  # TODO, IN_PROGRESS, DONE, BLOCKED, QUALITY_FAILED
+    priority: 1  # 1-10, lower is higher priority
+    model: "balanced"  # fast, balanced, smart, coder
+    complexity: "medium"  # low, medium, high
+    
+    description: |
+      Create the basic project structure with all necessary
+      directories and configuration files.
+    
+    acceptance_criteria:
+      - criterion: "Create src/ directory structure"
+        completed: false
+        verified: false
+      - criterion: "Add pyproject.toml with dependencies"
+        completed: false
+        verified: false
+      - criterion: "Create README.md with project overview"
+        completed: false
+        verified: false
+    
+    dependencies:
+      - type: "blocks"  # blocks, requires, optional
+        ticket_id: "002"
+      - type: "requires"
+        ticket_id: "003"
+    
+    # Metadata tracked automatically
+    metadata:
+      created_at: "2024-01-01T10:00:00Z"
+      started_at: null
+      completed_at: null
+      last_modified: "2024-01-01T10:00:00Z"
+      assigned_to: null
+      session_id: null
+      
+    # Execution tracking
+    execution:
+      attempts: 0
+      last_attempt: null
+      total_tokens: 0
+      total_cost: 0.00
+      errors: []
+      
+    # Artifacts created
+    artifacts:
+      - type: "file"
+        path: "src/__init__.py"
+        created: false
+      - type: "file"
+        path: "pyproject.toml"
+        created: false
+        
+    # Quality metrics
+    quality:
+      tests_passed: null
+      lint_passed: null
+      type_check_passed: null
+      coverage: null
+      ai_detection_score: null
+      
+    # Custom fields for extensibility
+    custom:
+      tags: ["setup", "infrastructure"]
+      estimated_hours: 2
+      actual_hours: null
+
+  - id: "002"
+    title: "Implement Core Module"
+    status: "TODO"
+    priority: 2
+    model: "smart"
+    complexity: "high"
+    description: "Implement the main application logic"
+    # ... rest of fields

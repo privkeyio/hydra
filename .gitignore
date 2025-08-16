@@ -152,10 +152,13 @@ logs/
 config/local.yaml
 config/production.yaml
 agent_activity.log*
+hydra.db
+*.db
 
 # Temporary files
 *.tmp
 *.bak
 .temp/
+tmp/
 
 .hydra/

@@ -57,7 +57,75 @@ class MockProvider(BaseProvider):
             return self.response_overrides[prompt]
 
         prompt_lower = prompt.lower()
-        if ("plan" in prompt_lower and "subtask" in prompt_lower and
+        # Check for ticket generation first (more specific)
+        if "generate yaml" in prompt_lower or "yaml tickets" in prompt_lower or "development tickets" in prompt_lower:
+            # Check what kind of project is being requested
+            if "calculator" in prompt_lower:
+                # Return proper calculator tickets with vague criteria to test validation
+                return """version: '1.0'
+project:
+  name: Calculator App
+  description: Simple calculator web app
+  created_at: '2025-08-15T00:00:00'
+  path: .
+tickets:
+- id: '001'
+  title: Build calculator web app
+  status: TODO
+  priority: 10
+  model: fast
+  description: Create functional web calculator with HTML/CSS/JS
+  acceptance_criteria:
+  - Calculator displays on web page with buttons
+  - Has number buttons and operators
+  - Performs calculations correctly
+  - Clear button resets calculator
+  dependencies: []"""
+            else:
+                # Return default mock structure for ticket generation
+                return """version: '1.0'
+project:
+  name: Mock Project
+  description: Mock project for testing
+  created_at: '2025-08-15T00:00:00'
+  path: .
+tickets:
+- id: '001'
+  title: Mock Implementation Task
+  status: TODO
+  priority: 10
+  model: fast
+  description: Implement the mock functionality
+  acceptance_criteria:
+  - Function accepts parameters
+  - Returns expected results
+  - Has proper documentation
+  dependencies: []"""
+        elif "ticket" in prompt_lower and "generate yaml" not in prompt_lower:
+            # Old ticket format for backward compatibility
+            return """- id: "001"
+  title: Create add function
+  status: TODO
+  priority: 1
+  model: fast
+  description: Create function to add two numbers
+  acceptance_criteria:
+    - Function accepts two parameters
+    - Returns sum of parameters
+    - Has docstring
+  dependencies: []
+
+- id: "002"
+  title: Add tests
+  status: TODO
+  priority: 2
+  model: fast
+  description: Write tests for add function
+  acceptance_criteria:
+    - Test normal cases
+    - Test edge cases
+  dependencies: ["001"]"""
+        elif ("plan" in prompt_lower and "subtask" in prompt_lower and
             "code" not in prompt_lower):
             return (
                 '{"plan": "Mock plan", '
@@ -78,6 +146,29 @@ class MockProvider(BaseProvider):
         for _ in range(2, n + 1):
             a, b = b, a + b
         return b"""
+        elif False:
+            return """- id: "001"
+  title: Create add function
+  status: TODO
+  priority: 1
+  model: fast
+  description: Create function to add two numbers
+  acceptance_criteria:
+    - Function accepts two parameters
+    - Returns sum of parameters
+    - Has docstring
+  dependencies: []
+
+- id: "002"
+  title: Add tests
+  status: TODO
+  priority: 2
+  model: fast
+  description: Write tests for add function
+  acceptance_criteria:
+    - Test normal cases
+    - Test edge cases
+  dependencies: ["001"]"""  # This line should never be reached
         else:
             return "Mock response for: " + prompt[:50]
 

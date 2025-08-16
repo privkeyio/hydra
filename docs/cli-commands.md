@@ -58,16 +58,16 @@ hydra ticket <subcommand> [options]
 
 ```bash
 # Create tickets from description
-hydra ticket create "Build a REST API with authentication"
+hydra ticket create "Build a REST API with authentication" --output tickets.yaml
 
 # Execute single ticket
-hydra ticket execute tickets.md 001
+hydra ticket execute tickets.yaml 001
 
 # Run all tickets
-hydra ticket run-all tickets.md --max-parallel 4
+hydra ticket run-all tickets.yaml --max-parallel 4
 
 # Auto workflow
-hydra ticket auto tickets.md --workers 4
+hydra ticket auto tickets.yaml --workers 4
 ```
 
 ### `hydra parallel`
@@ -89,10 +89,10 @@ hydra parallel [options] <tickets_file>
 
 ```bash
 # Execute with 4 workers
-hydra parallel tickets.md --workers 4
+hydra ticket parallel tickets.yaml --workers 4
 
 # Async mode with logging
-hydra parallel tickets.md --async --save-log
+hydra ticket parallel tickets.yaml --async --save-log
 ```
 
 ### `hydra verify`
@@ -193,7 +193,7 @@ hydra ticket create [options] <description>
 - `--model <name>` - Model for this ticket
 - `--priority <level>` - Priority (low, medium, high)
 - `--deps <ids>` - Comma-separated dependency IDs
-- `--file <path>` - Ticket file (default: tickets.md)
+- `--file <path>` - Ticket file (default: tickets.yaml)
 
 #### Examples
 
@@ -233,7 +233,7 @@ hydra ticket execute 001
 
 # Use specific provider for execution
 hydra ticket execute --provider venice 002 \
-  --tickets project-tickets.md
+  --tickets project-tickets.yaml
 
 # Execute with verification
 hydra ticket execute --verify 003

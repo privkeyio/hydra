@@ -507,5 +507,5 @@ def handle_parallel_commands(args) -> int:
     elif action == "batch":
         return _handle_batch_execution(args)
     else:
-        print(f"Unknown parallel action: {action}")
-        return 1
+        # Default to parallel if no specific action
+        return _handle_parallel_execution(args)

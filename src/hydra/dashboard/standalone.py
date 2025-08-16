@@ -138,8 +138,8 @@ def start_dashboard(
     signal.signal(signal.SIGINT, handle_shutdown)
 
     # Initialize database - use project-specific database if in a project directory
-    import os
-    if os.path.exists('tickets.md'):
+    if os.path.exists('tickets.md') or os.path.exists('tickets.yaml') or \
+       os.path.exists('tickets.yml'):
         # We're in a project directory, use local database
         os.environ['DATABASE_URL'] = f"sqlite:///{os.getcwd()}/.hydra/dashboard/hydra.db"
         logger.info(f"Using project database: {os.getcwd()}/.hydra/dashboard/")

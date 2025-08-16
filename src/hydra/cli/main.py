@@ -159,8 +159,6 @@ def create_parser() -> argparse.ArgumentParser:
     # Add command parsers
     add_template_parser(subparsers)
     add_ticket_parser(subparsers)
-    add_parallel_parser(subparsers)
-    add_verify_parser(subparsers)
     add_claude_parser(subparsers)
     add_context_parser(subparsers)
     add_dashboard_parser(subparsers)
@@ -287,10 +285,6 @@ def main() -> int:
         return handle_template_command(args)
     elif args.command == "ticket":
         return handle_ticket_command(args)
-    elif args.command == "parallel":
-        return handle_parallel_commands(args)
-    elif args.command == "verify":
-        return handle_verify_command(args)
     elif args.command == "claude":
         return handle_claude_command(args)
     elif args.command == "context":

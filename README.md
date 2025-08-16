@@ -83,13 +83,13 @@ export VENICE_API_KEY=your_key  # Get from https://venice.ai
 
 ```bash
 # 1. Generate tickets from your idea
-hydra ticket create "Build a REST API with authentication, database, and tests"
+hydra ticket create "Build a REST API with authentication, database, and tests" --output tickets.yaml
 
 # 2. Start the dashboard (auto-detects project)
 hydra dashboard start
 
 # 3. Execute tickets (dashboard auto-updates)
-hydra ticket execute tickets.md 001
+hydra ticket execute tickets.yaml 001
 
 # 4. View real-time progress at http://localhost:8080
 ```
@@ -104,16 +104,16 @@ hydra claude execute "Create a FastAPI service with JWT auth"
 ### Ticket Workflow
 ```bash
 # Generate tickets
-hydra ticket create "project description"
+hydra ticket create "project description" --output tickets.yaml
 
 # Execute single ticket
-hydra ticket execute tickets.md 001
+hydra ticket execute tickets.yaml 001
 
 # Execute all tickets in parallel
-hydra parallel tickets.md --workers 4
+hydra ticket parallel tickets.yaml --workers 4
 
 # Verify parallel execution results
-hydra verify-parallel <execution_id>
+hydra ticket verify-parallel tickets.yaml --workers 2
 ```
 
 ### Session Management
@@ -133,16 +133,20 @@ hydra claude attach dev
 
 ## Example Ticket
 
-```markdown
-## Ticket 001: Setup API
-**Model:** Balanced 4
-**Dependencies:** None
-**Description:** Create FastAPI application
-
-**Acceptance Criteria:**
-- [ ] Create main.py with FastAPI app
-- [ ] Add health check endpoint
-- [ ] Setup error handling
+```yaml
+tickets:
+  - id: "001"
+    title: Setup API
+    status: TODO
+    priority: 1
+    model: balanced
+    description: Create FastAPI application with core structure
+    acceptance_criteria:
+      - Create main.py with FastAPI app
+      - Add health check endpoint at /health
+      - Setup global error handling middleware
+      - Add CORS configuration
+    dependencies: []
 ```
 
 ## Key Features
@@ -202,21 +206,21 @@ Try these to see Hydra in action:
 
 ```bash
 # Build a complete web app
-hydra ticket create "Build a todo app with React frontend and FastAPI backend"
-hydra parallel tickets.md --workers 4
+hydra ticket create "Build a todo app with React frontend and FastAPI backend" --output tickets.yaml
+hydra ticket parallel tickets.yaml --workers 4
 
 # Run quality checks on implementation
 hydra quality 001 --strict
 
 # Verify all work is complete
-hydra verify tickets.md 001
+hydra ticket verify-parallel tickets.yaml --workers 2
 
 # Check the dashboard
 open http://localhost:8080
 
 # Check the results
 ls -la .hydra/reports/
-cat tickets.md
+cat tickets.yaml
 ```
 
 ## License

@@ -116,6 +116,74 @@ def add_ticket_parser(subparsers):
         help="Skip preflight checks for faster execution"
     )
 
+    # Parallel execution command
+    parallel_parser = ticket_subparsers.add_parser(
+        "parallel",
+        help="Execute tickets in parallel with dependency resolution"
+    )
+    parallel_parser.add_argument(
+        "tickets",
+        help="Path to tickets.md file"
+    )
+    parallel_parser.add_argument(
+        "--workers", "-w",
+        type=int,
+        default=3,
+        help="Number of parallel workers (default: 3)"
+    )
+    parallel_parser.add_argument(
+        "--save-log", "-l",
+        action="store_true",
+        help="Save execution log to file"
+    )
+    parallel_parser.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip preflight validation checks"
+    )
+    parallel_parser.add_argument(
+        "--async",
+        action="store_true",
+        dest="async_mode",
+        help="Use async execution mode for better concurrency"
+    )
+
+    # Verify parallel execution results
+    verify_parallel_parser = ticket_subparsers.add_parser(
+        "verify-parallel",
+        help="Verify results from parallel ticket execution and check acceptance criteria"
+    )
+    verify_parallel_parser.add_argument(
+        "tickets",
+        help="Path to tickets.md file to verify against"
+    )
+    verify_parallel_parser.add_argument(
+        "--workers", "-w",
+        type=int,
+        default=3,
+        help="Number of parallel verification workers (default: 3)"
+    )
+    verify_parallel_parser.add_argument(
+        "--check-ai",
+        action="store_true",
+        help="Check for and report AI-generated code patterns"
+    )
+    verify_parallel_parser.add_argument(
+        "--audit-diff",
+        action="store_true",
+        help="Audit the git diff to ensure changes match acceptance criteria"
+    )
+    verify_parallel_parser.add_argument(
+        "--save-report",
+        action="store_true",
+        help="Save verification report to file"
+    )
+    verify_parallel_parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Show detailed verification output"
+    )
+
     return ticket_parser
 
 
@@ -228,6 +296,100 @@ def handle_ticket_command(args) -> int:
         return _handle_run_all_tickets(args)
     elif args.ticket_action == "auto":
         return _handle_auto_workflow(args)
+    elif args.ticket_action == "parallel":
+        from hydra.cli.commands.parallel import handle_parallel_commands
+        return handle_parallel_commands(args)
+    elif args.ticket_action == "verify-parallel":
+        return _handle_verify_parallel(args)
     else:
         print(f"Unknown ticket action: {args.ticket_action}")
         return 1
+
+
+def _handle_verify_parallel(args) -> int:
+    """Handle comprehensive parallel verification of all tickets."""
+    from pathlib import Path
+    import asyncio
+    from hydra.verification.parallel_verifier import ParallelTicketVerifier
+    
+    async def run_verification():
+        try:
+            tickets_path = Path(args.tickets).resolve()
+            if not tickets_path.exists():
+                print(f"❌ Tickets file not found: {tickets_path}")
+                return 1
+                
+            print(f"🔍 Starting parallel verification of tickets from: {tickets_path}")
+            print(f"⚡ Using {args.workers} parallel workers")
+            
+            # Initialize verifier with options
+            verifier = ParallelTicketVerifier(
+                tickets_path=str(tickets_path),
+                max_workers=args.workers,
+                check_ai_patterns=getattr(args, 'check_ai', False),
+                audit_diff=getattr(args, 'audit_diff', False)
+            )
+            
+            # Run verification
+            report = await verifier.verify_all_tickets()
+            
+            # Display results
+            print("\n" + "="*60)
+            print("PARALLEL TICKET VERIFICATION REPORT")
+            print("="*60)
+            
+            print(f"\n📊 Summary:")
+            print(f"  Total tickets: {report['total_tickets']}")
+            print(f"  Tickets claiming DONE: {report.get('tickets_claiming_done', 0)}")
+            print(f"  ✅ Actually fully verified: {report['fully_verified']}")
+            print(f"  ⚠️  Partially verified: {report.get('partially_verified', 0)}")
+            print(f"  ❌ Failed verification: {report.get('failed_verification', 0)}")
+            print(f"  ⏸️  Not started: {report.get('not_started', 0)}")
+            
+            if report.get('status_mismatches'):
+                print(f"\n⚠️ Status Mismatches (ticket status vs actual):")
+                for ticket_id, mismatch in report['status_mismatches'].items():
+                    print(f"  {ticket_id}: {mismatch}")
+            
+            if report.get('ai_code_detected'):
+                print(f"\n🤖 AI-Generated Code Detection:")
+                for ticket_id, ai_issues in report['ai_code_detected'].items():
+                    print(f"  {ticket_id}: {len(ai_issues)} patterns detected")
+                    
+            if report.get('diff_audit_issues'):
+                print(f"\n📝 Diff Audit Issues:")
+                for ticket_id, issues in report['diff_audit_issues'].items():
+                    print(f"  {ticket_id}: {issues}")
+                    
+            if report['failed_verification'] > 0:
+                print(f"\n❌ Failed Tickets:")
+                for ticket_id, details in report['failures'].items():
+                    print(f"  {ticket_id}:")
+                    for criterion in details['failed_criteria']:
+                        print(f"    - {criterion}")
+                        
+            # Save report if requested
+            if args.save_report:
+                import json
+                report_path = Path(".hydra/reports") / f"verify_parallel_{Path(tickets_path).stem}.json"
+                report_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(report_path, 'w') as f:
+                    json.dump(report, f, indent=2, default=str)
+                print(f"\n📄 Verification report saved: {report_path}")
+                
+            # Return based on verification status
+            if report['failed_verification'] == 0:
+                print("\n✅ All tickets passed verification!")
+                return 0
+            else:
+                print(f"\n⚠️ {report['failed_verification']} tickets failed verification")
+                return 1
+                
+        except Exception as e:
+            print(f"❌ Verification error: {e}")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+            return 1
+            
+    return asyncio.run(run_verification())

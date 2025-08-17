@@ -295,7 +295,18 @@ class ClaudeTmuxProvider(BaseProvider):
                 else:
                     # For ticket execution without specific files
                     tickets_file = kwargs.get('tickets_file', 'tickets.yaml')
-                    prompt_text = f"Read {tickets_file} and implement ticket {ticket_id}. Create all files mentioned in the acceptance criteria."
+                    
+                    # Build a comprehensive prompt that emphasizes actual implementation
+                    prompt_text = (
+                        f"Read {tickets_file} and fully implement ticket {ticket_id}.\n\n"
+                        f"CRITICAL REQUIREMENTS:\n"
+                        f"1. Create ALL necessary files to satisfy EVERY acceptance criterion\n"
+                        f"2. Implement actual working code, not just folder structures\n"
+                        f"3. Each acceptance criterion should result in real, functional code files\n"
+                        f"4. Empty directories are NOT acceptable - populate them with implementation\n"
+                        f"5. If a criterion mentions a feature, create the files that implement it\n\n"
+                        f"Read each acceptance criterion carefully and create the corresponding implementation files."
+                    )
             else:  # Fallback simple prompt
                 # Still prepend file creation enforcement if we have ticket info
                 base_prompt = (

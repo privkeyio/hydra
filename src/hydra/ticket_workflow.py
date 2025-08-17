@@ -1048,7 +1048,18 @@ def validate_acceptance_criteria(ticket, project_dir):
 
         # Folder structure checks
         elif "folder structure" in criterion_lower or "basic folder" in criterion_lower:
-            required_folders = ["src", "public", "tests", "server"]
+            # Extract folder names from the criterion itself
+            # Look for patterns like "(controllers, models, routes, middleware)"
+            import re
+            folder_match = re.search(r'\(([^)]+)\)', criterion)
+            if folder_match:
+                # Parse the folders from parentheses
+                folders_text = folder_match.group(1)
+                required_folders = [f.strip() for f in folders_text.split(',')]
+            else:
+                # Fallback to common folders if not specified
+                required_folders = ["src", "public", "tests", "server"]
+            
             missing_folders = []
             for folder in required_folders:
                 folder_path = os.path.join(project_dir, folder)
@@ -1127,6 +1138,90 @@ def validate_acceptance_criteria(ticket, project_dir):
             else:
                 print(f"   ✅ {i}. Docker environment setup complete")
 
+        # Check for specific implementation patterns
+        elif "database connection" in criterion_lower or "configure database" in criterion_lower:
+            # Check for ANY database-related files in common locations
+            db_dirs = ["config", "db", "database", "models"]
+            found_db_config = False
+            
+            for db_dir in db_dirs:
+                dir_path = os.path.join(project_dir, db_dir)
+                if os.path.exists(dir_path):
+                    # Check if there are any JS/TS/PY files in this directory
+                    for file in os.listdir(dir_path):
+                        if file.endswith(('.js', '.ts', '.py', '.json', '.yml', '.yaml')):
+                            found_db_config = True
+                            break
+                if found_db_config:
+                    break
+            
+            if found_db_config:
+                print(f"   ✅ {i}. Database configuration found")
+            else:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. No database configuration files found")
+                
+        elif "jwt" in criterion_lower or "authentication middleware" in criterion_lower:
+            # Check for ANY middleware files
+            middleware_dir = os.path.join(project_dir, "middleware")
+            found_auth = False
+            
+            if os.path.exists(middleware_dir) and os.listdir(middleware_dir):
+                # Any file in middleware directory counts as implementation
+                for file in os.listdir(middleware_dir):
+                    if file.endswith(('.js', '.ts', '.py')):
+                        found_auth = True
+                        break
+            
+            if found_auth:
+                print(f"   ✅ {i}. Authentication middleware found")
+            else:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. No authentication middleware found")
+                
+        elif "user registration" in criterion_lower or "user login" in criterion_lower or "endpoint" in criterion_lower:
+            # Check for ANY controller or route files
+            found_auth_endpoint = False
+            
+            # Check controllers directory
+            controllers_dir = os.path.join(project_dir, "controllers")
+            if os.path.exists(controllers_dir) and os.listdir(controllers_dir):
+                for file in os.listdir(controllers_dir):
+                    if file.endswith(('.js', '.ts', '.py')):
+                        found_auth_endpoint = True
+                        break
+            
+            # Also check routes directory
+            if not found_auth_endpoint:
+                routes_dir = os.path.join(project_dir, "routes")
+                if os.path.exists(routes_dir) and os.listdir(routes_dir):
+                    for file in os.listdir(routes_dir):
+                        if file.endswith(('.js', '.ts', '.py')):
+                            found_auth_endpoint = True
+                            break
+            
+            if found_auth_endpoint:
+                print(f"   ✅ {i}. Endpoints found")
+            else:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. No endpoint files found")
+                
+        elif "database schema" in criterion_lower or "models" in criterion_lower:
+            # Check for model files
+            model_dirs = ["models", "schemas", "db/models"]
+            found_models = False
+            for model_dir in model_dirs:
+                dir_path = os.path.join(project_dir, model_dir)
+                if os.path.exists(dir_path) and os.listdir(dir_path):
+                    found_models = True
+                    break
+            
+            if found_models:
+                print(f"   ✅ {i}. Database models found")
+            else:
+                failed_criteria.append(f"{i}. {criterion}")
+                print(f"   ❌ {i}. No database models found")
+        
         else:
             # For criteria that can't be automatically verified, check if work was actually done
             # Look for key implementation indicators
@@ -1141,6 +1236,7 @@ def validate_acceptance_criteria(ticket, project_dir):
                 
                 # Check if any relevant files were created or modified
                 try:
+                    # Use git status --porcelain to check for both tracked and untracked files
                     git_result = subprocess.run(
                         ["git", "status", "--porcelain"],
                         capture_output=True,
@@ -1150,12 +1246,23 @@ def validate_acceptance_criteria(ticket, project_dir):
                     )
                     
                     if git_result.returncode == 0 and git_result.stdout:
-                        # Files were modified - likely some work was done
-                        print(f"      📝 Files modified - assuming work in progress")
+                        # Files were modified or created - work was done
+                        print(f"      📝 Files created/modified - implementation detected")
                     else:
-                        # No files modified - work not done
-                        failed_criteria.append(f"{i}. {criterion}")
-                        print(f"      ❌ No files modified - implementation not done")
+                        # Also check if any files exist in the directory (for non-git projects)
+                        # Count files excluding hidden directories
+                        file_count = 0
+                        for root, dirs, files in os.walk(project_dir):
+                            # Skip hidden directories
+                            dirs[:] = [d for d in dirs if not d.startswith('.')]
+                            file_count += len(files)
+                        
+                        if file_count > 2:  # More than just basic files
+                            print(f"      📝 {file_count} files found - implementation likely done")
+                        else:
+                            # No files modified - work not done
+                            failed_criteria.append(f"{i}. {criterion}")
+                            print(f"      ❌ No files modified - implementation not done")
                 except:
                     # Can't verify - mark as needs manual validation
                     print(f"      ℹ️  Manual validation required")

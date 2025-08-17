@@ -30,19 +30,23 @@ class StartupChecker:
         fallback = self._detect_fallback_linter()
 
         if fallback:
-            self.warnings.append({
-                "tool": "ruff",
-                "message": f"ruff not found, falling back to {fallback[1]}",
-                "installation": self._get_ruff_installation_instructions()
-            })
+            self.warnings.append(
+                {
+                    "tool": "ruff",
+                    "message": f"ruff not found, falling back to {fallback[1]}",
+                    "installation": self._get_ruff_installation_instructions(),
+                }
+            )
             return False, fallback[1]
         else:
-            self.issues.append({
-                "tool": "ruff",
-                "message": "ruff not found and no fallback linter available",
-                "installation": self._get_ruff_installation_instructions(),
-                "severity": "warning"
-            })
+            self.issues.append(
+                {
+                    "tool": "ruff",
+                    "message": "ruff not found and no fallback linter available",
+                    "installation": self._get_ruff_installation_instructions(),
+                    "severity": "warning",
+                }
+            )
             return False, None
 
     def _command_exists(self, command: str) -> bool:
@@ -51,7 +55,7 @@ class StartupChecker:
             result = subprocess.run(
                 ["which", command] if sys.platform != "win32" else ["where", command],
                 capture_output=True,
-                check=False
+                check=False,
             )
             return result.returncode == 0
         except Exception:
@@ -68,7 +72,7 @@ class StartupChecker:
             (["flake8"], "flake8"),
             (["pylint"], "pylint"),
             (["python", "-m", "flake8"], "flake8"),
-            (["python", "-m", "pylint"], "pylint")
+            (["python", "-m", "pylint"], "pylint"),
         ]
 
         for cmd, name in fallbacks:
@@ -98,7 +102,7 @@ class StartupChecker:
             "  sudo apt install ruff",
             "",
             "For more installation options, visit:",
-            "  https://docs.astral.sh/ruff/installation/"
+            "  https://docs.astral.sh/ruff/installation/",
         ]
 
     def run_startup_checks(self) -> Dict[str, any]:
@@ -108,18 +112,13 @@ class StartupChecker:
             Dict with check results and any issues found
 
         """
-        results = {
-            "success": True,
-            "issues": [],
-            "warnings": [],
-            "tools": {}
-        }
+        results = {"success": True, "issues": [], "warnings": [], "tools": {}}
 
         # Check ruff installation
         ruff_available, fallback_tool = self.check_ruff_installation()
         results["tools"]["ruff"] = {
             "available": ruff_available,
-            "fallback": fallback_tool
+            "fallback": fallback_tool,
         }
 
         # Add any collected issues and warnings

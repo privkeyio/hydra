@@ -42,7 +42,7 @@ class PerformanceReport:
     def __init__(
         self,
         analytics: ExecutionAnalytics,
-        report_title: str = "Hydra Analytics Report"
+        report_title: str = "Hydra Analytics Report",
     ):
         """Initialize the performance report.
 
@@ -100,7 +100,8 @@ class PerformanceReport:
 
         # Top recommendation
         top_recommendation = (
-            metrics.recommendations[0] if metrics.recommendations
+            metrics.recommendations[0]
+            if metrics.recommendations
             else "No specific recommendations at this time."
         )
 
@@ -122,7 +123,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
         return ReportSection(
             title="Executive Summary",
             content=content.strip(),
-            metadata={"priority": "high", "section_type": "summary"}
+            metadata={"priority": "high", "section_type": "summary"},
         )
 
     def generate_timing_analysis_section(self) -> ReportSection:
@@ -181,15 +182,15 @@ Data covers {metrics.total_tickets} tickets processed to date.
             "data": {
                 "labels": ["Accurate", "Underestimated", "Overestimated"],
                 "values": [accurate, underestimated, overestimated],
-                "colors": ["#28a745", "#ffc107", "#dc3545"]
-            }
+                "colors": ["#28a745", "#ffc107", "#dc3545"],
+            },
         }
 
         return ReportSection(
             title="Timing Analysis",
             content=content.strip(),
             charts=[chart_data],
-            metadata={"accuracy_score": accuracy}
+            metadata={"accuracy_score": accuracy},
         )
 
     def generate_model_performance_section(self) -> ReportSection:
@@ -204,7 +205,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
         if not model_performance:
             return ReportSection(
                 title="Model Performance",
-                content="No model performance data available yet."
+                content="No model performance data available yet.",
             )
 
         content = "## Model Performance Comparison\n\n"
@@ -217,14 +218,16 @@ Data covers {metrics.total_tickets} tickets processed to date.
 
         for model_name, performance in model_performance.items():
             if performance.total_tickets > 0:
-                table_rows.append({
-                    "Model": model_name.title(),
-                    "Total Tickets": performance.total_tickets,
-                    "Success Rate": f"{performance.success_rate:.1f}%",
-                    "Avg Time (min)": f"{performance.average_completion_time / 60:.1f}",
-                    "Estimation Accuracy": f"{performance.accuracy_vs_estimates:.1f}%",
-                    "Performance Score": f"{performance.performance_score:.1f}",
-                })
+                table_rows.append(
+                    {
+                        "Model": model_name.title(),
+                        "Total Tickets": performance.total_tickets,
+                        "Success Rate": f"{performance.success_rate:.1f}%",
+                        "Avg Time (min)": f"{performance.average_completion_time / 60:.1f}",
+                        "Estimation Accuracy": f"{performance.accuracy_vs_estimates:.1f}%",
+                        "Performance Score": f"{performance.performance_score:.1f}",
+                    }
+                )
 
                 chart_labels.append(model_name.title())
                 chart_success_rates.append(performance.success_rate)
@@ -238,56 +241,63 @@ Data covers {metrics.total_tickets} tickets processed to date.
             best_model = table_rows[0]["Model"]
             best_score = table_rows[0]["Performance Score"]
             content += (
-                f"**Best Performing Model**: {best_model} "
-                f"(Score: {best_score})\n\n"
+                f"**Best Performing Model**: {best_model} " f"(Score: {best_score})\n\n"
             )
 
             # Identify trends
             high_performers = [
-                row for row in table_rows
-                if float(row["Performance Score"]) >= 80
+                row for row in table_rows if float(row["Performance Score"]) >= 80
             ]
             if high_performers:
-                high_models = ', '.join([row['Model'] for row in high_performers])
+                high_models = ", ".join([row["Model"] for row in high_performers])
                 content += f"**High Performers** (≥80): {high_models}\n\n"
 
             low_performers = [
-                row for row in table_rows
-                if float(row["Performance Score"]) < 60
+                row for row in table_rows if float(row["Performance Score"]) < 60
             ]
             if low_performers:
-                models_list = ', '.join([row['Model'] for row in low_performers])
+                models_list = ", ".join([row["Model"] for row in low_performers])
                 content += f"**Needs Improvement** (<60): {models_list}\n\n"
 
         # Create charts
         charts = []
         if chart_labels:
-            charts.append({
-                "type": "bar",
-                "title": "Model Success Rates",
-                "data": {
-                    "labels": chart_labels,
-                    "values": chart_success_rates,
-                    "color": "#007bff"
+            charts.append(
+                {
+                    "type": "bar",
+                    "title": "Model Success Rates",
+                    "data": {
+                        "labels": chart_labels,
+                        "values": chart_success_rates,
+                        "color": "#007bff",
+                    },
                 }
-            })
+            )
 
-            charts.append({
-                "type": "bar",
-                "title": "Model Performance Scores",
-                "data": {
-                    "labels": chart_labels,
-                    "values": chart_performance_scores,
-                    "color": "#28a745"
+            charts.append(
+                {
+                    "type": "bar",
+                    "title": "Model Performance Scores",
+                    "data": {
+                        "labels": chart_labels,
+                        "values": chart_performance_scores,
+                        "color": "#28a745",
+                    },
                 }
-            })
+            )
 
         # Create table
         table = {
             "title": "Model Performance Summary",
-            "headers": ["Model", "Total Tickets", "Success Rate", "Avg Time (min)",
-                       "Estimation Accuracy", "Performance Score"],
-            "rows": table_rows
+            "headers": [
+                "Model",
+                "Total Tickets",
+                "Success Rate",
+                "Avg Time (min)",
+                "Estimation Accuracy",
+                "Performance Score",
+            ],
+            "rows": table_rows,
         }
 
         return ReportSection(
@@ -295,7 +305,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
             content=content.strip(),
             charts=charts,
             tables=[table],
-            metadata={"best_model": best_model if table_rows else None}
+            metadata={"best_model": best_model if table_rows else None},
         )
 
     def generate_failure_analysis_section(self) -> ReportSection:
@@ -310,7 +320,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
         if failure_patterns["total_failures"] == 0:
             return ReportSection(
                 title="Failure Analysis",
-                content="No failures recorded - excellent system reliability! ✅"
+                content="No failures recorded - excellent system reliability! ✅",
             )
 
         total_failures = failure_patterns["total_failures"]
@@ -330,7 +340,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
         for category, count in failure_categories.items():
             if count > 0:
                 percentage = (count / total_failures) * 100
-                cat_name = category.replace('_', ' ').title()
+                cat_name = category.replace("_", " ").title()
                 content += f"- **{cat_name}**: {count} ({percentage:.1f}%)\n"
 
         # Analysis and recommendations
@@ -348,7 +358,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
             failure_categories.items(), key=lambda x: x[1], reverse=True
         )
         if sorted_failures and sorted_failures[0][1] > 0:
-            top_cause = sorted_failures[0][0].replace('_', ' ').title()
+            top_cause = sorted_failures[0][0].replace("_", " ").title()
             content += f"\n- Primary failure cause: {top_cause}"
 
         # Create chart for failure distribution
@@ -357,15 +367,20 @@ Data covers {metrics.total_tickets} tickets processed to date.
             "title": "Failure Category Distribution",
             "data": {
                 "labels": [
-                    cat.replace('_', ' ').title()
-                    for cat, count in failure_categories.items() if count > 0
+                    cat.replace("_", " ").title()
+                    for cat, count in failure_categories.items()
+                    if count > 0
                 ],
                 "values": [count for count in failure_categories.values() if count > 0],
                 "colors": [
-                    "#dc3545", "#fd7e14", "#ffc107",
-                    "#6f42c1", "#e83e8c", "#20c997"
-                ]
-            }
+                    "#dc3545",
+                    "#fd7e14",
+                    "#ffc107",
+                    "#6f42c1",
+                    "#e83e8c",
+                    "#20c997",
+                ],
+            },
         }
 
         charts = [chart_data] if any(failure_categories.values()) else []
@@ -374,7 +389,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
             title="Failure Analysis",
             content=content.strip(),
             charts=charts,
-            metadata={"failure_rate": failure_rate, "total_failures": total_failures}
+            metadata={"failure_rate": failure_rate, "total_failures": total_failures},
         )
 
     def generate_recommendations_section(self) -> ReportSection:
@@ -399,7 +414,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
         priority_keywords = {
             "high": ["failure rate", "accuracy", "underestimated", "mismatch"],
             "medium": ["performance", "review", "improve"],
-            "low": ["monitor", "continue", "consider"]
+            "low": ["monitor", "continue", "consider"],
         }
 
         high_priority = []
@@ -438,8 +453,8 @@ Data covers {metrics.total_tickets} tickets processed to date.
             content=content.strip(),
             metadata={
                 "total_recommendations": len(recommendations),
-                "high_priority_count": len(high_priority)
-            }
+                "high_priority_count": len(high_priority),
+            },
         )
 
     def generate_complexity_trends_section(self) -> ReportSection:
@@ -454,7 +469,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
         if not any(complexity_trends.values()):
             return ReportSection(
                 title="Complexity Trends",
-                content="No complexity trend data available yet."
+                content="No complexity trend data available yet.",
             )
 
         content = "## Complexity Distribution Analysis\n\n"
@@ -475,7 +490,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
                     "average": avg_score,
                     "min": min_score,
                     "max": max_score,
-                    "count": count
+                    "count": count,
                 }
 
                 chart_labels.append(effort_category.title())
@@ -493,14 +508,14 @@ Data covers {metrics.total_tickets} tickets processed to date.
             # Find highest complexity category
             highest_complexity = max(trend_stats.items(), key=lambda x: x[1]["average"])
             cat_name = highest_complexity[0].title()
-            avg_score = highest_complexity[1]['average']
+            avg_score = highest_complexity[1]["average"]
             content += f"- Highest average complexity: {cat_name} ({avg_score:.1f})\n"
 
             # Check for outliers
             for category, stats in trend_stats.items():
                 if stats["max"] > stats["average"] * 2:
                     cat_name = category.title()
-                    max_score = stats['max']
+                    max_score = stats["max"]
                     content += (
                         f"- {cat_name} category has complexity outliers "
                         f"(max: {max_score:.1f})\n"
@@ -513,8 +528,8 @@ Data covers {metrics.total_tickets} tickets processed to date.
             "data": {
                 "labels": chart_labels,
                 "values": chart_averages,
-                "color": "#6f42c1"
-            }
+                "color": "#6f42c1",
+            },
         }
 
         charts = [chart_data] if chart_labels else []
@@ -523,7 +538,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
             title="Complexity Trends",
             content=content.strip(),
             charts=charts,
-            metadata={"trend_stats": trend_stats}
+            metadata={"trend_stats": trend_stats},
         )
 
     def generate_full_report(self) -> "PerformanceReport":
@@ -575,11 +590,11 @@ Data covers {metrics.total_tickets} tickets processed to date.
                     lines.append("")
 
                     # Create markdown table
-                    headers = table['headers']
+                    headers = table["headers"]
                     lines.append("| " + " | ".join(headers) + " |")
                     lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
 
-                    for row in table['rows']:
+                    for row in table["rows"]:
                         row_values = [str(row.get(header, "")) for header in headers]
                         lines.append("| " + " | ".join(row_values) + " |")
                     lines.append("")
@@ -606,7 +621,7 @@ Data covers {metrics.total_tickets} tickets processed to date.
                     "metadata": section.metadata,
                 }
                 for section in self.sections
-            ]
+            ],
         }
 
         return json.dumps(report_data, indent=2)
@@ -642,8 +657,7 @@ class ReportGenerator:
         # In production, you'd want to filter the analytics data by date range
 
         report = PerformanceReport(
-            self.analytics,
-            f"Daily Performance Report - {date.strftime('%Y-%m-%d')}"
+            self.analytics, f"Daily Performance Report - {date.strftime('%Y-%m-%d')}"
         )
 
         return report.generate_full_report()
@@ -667,7 +681,7 @@ class ReportGenerator:
         report = PerformanceReport(
             self.analytics,
             f"Weekly Performance Report - {week_start.strftime('%Y-%m-%d')} "
-            f"to {week_end.strftime('%Y-%m-%d')}"
+            f"to {week_end.strftime('%Y-%m-%d')}",
         )
 
         return report.generate_full_report()
@@ -680,8 +694,7 @@ class ReportGenerator:
 
         """
         report = PerformanceReport(
-            self.analytics,
-            "Model Performance Comparison Report"
+            self.analytics, "Model Performance Comparison Report"
         )
 
         # Add only model-related sections
@@ -700,8 +713,7 @@ class ReportGenerator:
 
         """
         report = PerformanceReport(
-            self.analytics,
-            "Executive Dashboard - Performance Overview"
+            self.analytics, "Executive Dashboard - Performance Overview"
         )
 
         # Add executive-focused sections
@@ -712,10 +724,7 @@ class ReportGenerator:
         return report
 
     def export_to_file(
-        self,
-        report: PerformanceReport,
-        file_path: str,
-        format: str = "markdown"
+        self, report: PerformanceReport, file_path: str, format: str = "markdown"
     ) -> None:
         """Export report to file.
 
@@ -735,5 +744,5 @@ class ReportGenerator:
         else:
             raise ValueError(f"Unsupported export format: {format}")
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write(content)

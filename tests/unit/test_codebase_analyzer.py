@@ -20,7 +20,7 @@ class TestCodebaseAnalyzer(unittest.TestCase):
         # Create test files
         test_file = Path(self.temp_dir) / "app.py"
         test_file.write_text("from flask import Flask\napp = Flask(__name__)")
-        
+
         project_type = self.analyzer._detect_project_type()
         self.assertIn(project_type, ["web", "api"])
 
@@ -29,7 +29,7 @@ class TestCodebaseAnalyzer(unittest.TestCase):
         # Create package.json
         pkg_file = Path(self.temp_dir) / "package.json"
         pkg_file.write_text('{"dependencies": {"react": "^18.0.0"}}')
-        
+
         framework = self.analyzer._detect_framework()
         self.assertEqual(framework, "react")
 
@@ -37,7 +37,8 @@ class TestCodebaseAnalyzer(unittest.TestCase):
         """Test complexity analysis."""
         # Create a Python file with known complexity
         test_file = Path(self.temp_dir) / "test.py"
-        test_file.write_text("""
+        test_file.write_text(
+            """
 def simple_function():
     if True:
         return 1
@@ -54,8 +55,9 @@ def complex_function(x):
         return "negative"
     else:
         return "zero"
-""")
-        
+"""
+        )
+
         complexity = self.analyzer._analyze_complexity()
         self.assertIn("test.py", complexity)
         self.assertGreater(complexity["test.py"], 1)
@@ -65,10 +67,10 @@ def complex_function(x):
         # Create test files
         py_file = Path(self.temp_dir) / "test.py"
         py_file.write_text("# Line 1\n# Line 2\n# Line 3")
-        
+
         js_file = Path(self.temp_dir) / "test.js"
         js_file.write_text("// Line 1\n// Line 2")
-        
+
         metrics = self.analyzer._calculate_size_metrics()
         self.assertEqual(metrics["python_files"], 1)
         self.assertEqual(metrics["javascript_files"], 1)
@@ -82,7 +84,7 @@ def complex_function(x):
         (Path(self.temp_dir) / "src").mkdir()
         (Path(self.temp_dir) / "tests").mkdir()
         (Path(self.temp_dir) / "docs").mkdir()
-        
+
         structure = self.analyzer._analyze_structure()
         self.assertIn("src", str(structure["directories"]))
         self.assertIn("tests", str(structure["directories"]))
@@ -93,11 +95,11 @@ def complex_function(x):
         # Create Dockerfile
         docker_file = Path(self.temp_dir) / "Dockerfile"
         docker_file.write_text("FROM python:3.9")
-        
+
         # Create Python file
         py_file = Path(self.temp_dir) / "app.py"
         py_file.write_text("import fastapi")
-        
+
         tech_stack = self.analyzer._detect_tech_stack()
         self.assertIn("Python", tech_stack)
         self.assertIn("Docker", tech_stack)
@@ -107,11 +109,11 @@ def complex_function(x):
         # Create test files
         test_file1 = Path(self.temp_dir) / "test_main.py"
         test_file1.write_text("def test_something(): pass")
-        
-        test_file2 = Path(self.temp_dir) / "tests" 
+
+        test_file2 = Path(self.temp_dir) / "tests"
         test_file2.mkdir(exist_ok=True)
         (test_file2 / "test_utils.py").write_text("def test_util(): pass")
-        
+
         test_info = self.analyzer._find_existing_tests()
         self.assertEqual(test_info["test_count"], 2)
         self.assertIn("test_main.py", str(test_info["test_files"]))
@@ -122,30 +124,34 @@ def complex_function(x):
         # Create a mini project
         (Path(self.temp_dir) / "src").mkdir()
         (Path(self.temp_dir) / "tests").mkdir()
-        
+
         main_file = Path(self.temp_dir) / "src" / "main.py"
-        main_file.write_text("""
+        main_file.write_text(
+            """
 def main():
     '''Main function.'''
     print("Hello World")
     
 if __name__ == "__main__":
     main()
-""")
-        
+"""
+        )
+
         test_file = Path(self.temp_dir) / "tests" / "test_main.py"
-        test_file.write_text("""
+        test_file.write_text(
+            """
 import pytest
 
 def test_main():
     assert True
-""")
-        
+"""
+        )
+
         readme = Path(self.temp_dir) / "README.md"
         readme.write_text("# Test Project")
-        
+
         analysis = self.analyzer.analyze()
-        
+
         # Check all major sections are present
         self.assertIn("project_type", analysis)
         self.assertIn("structure", analysis)
@@ -155,7 +161,7 @@ def test_main():
         self.assertIn("tech_stack", analysis)
         self.assertIn("existing_tests", analysis)
         self.assertIn("documentation", analysis)
-        
+
         # Check specific values
         self.assertTrue(analysis["documentation"]["has_readme"])
         self.assertGreater(analysis["size_metrics"]["python_loc"], 0)

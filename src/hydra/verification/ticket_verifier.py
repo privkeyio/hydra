@@ -59,33 +59,33 @@ class TicketVerifier:
             "file_created": [
                 r"[Cc]reate\s+(\S+)",
                 r"[Aa]dd\s+(\S+)\s+file",
-                r"[Gg]enerate\s+(\S+)"
+                r"[Gg]enerate\s+(\S+)",
             ],
             "directory_created": [
                 r"[Cc]reate\s+(\S+/)\s+directory",
                 r"[Mm]ake\s+(\S+/)\s+folder",
-                r"[Aa]dd\s+(\S+/)\s+structure"
+                r"[Aa]dd\s+(\S+/)\s+structure",
             ],
             "function_implemented": [
                 r"[Ii]mplement\s+(\w+)\s+function",
                 r"[Cc]reate\s+(\w+)\s+method",
-                r"[Aa]dd\s+(\w+)\s+endpoint"
+                r"[Aa]dd\s+(\w+)\s+endpoint",
             ],
             "dependency_added": [
                 r"[Aa]dd\s+(\S+)\s+to\s+requirements",
                 r"[Ii]nstall\s+(\S+)",
-                r"[Aa]dd\s+(\S+)\s+dependency"
+                r"[Aa]dd\s+(\S+)\s+dependency",
             ],
             "test_created": [
                 r"[Ww]rite\s+test\s+for\s+(\S+)",
                 r"[Aa]dd\s+(\S+)\s+test",
-                r"[Cc]reate\s+unit\s+test"
+                r"[Cc]reate\s+unit\s+test",
             ],
             "configuration": [
                 r"[Cc]onfigure\s+(\S+)",
                 r"[Ss]et\s+up\s+(\S+)",
-                r"[Aa]dd\s+(\S+)\s+configuration"
-            ]
+                r"[Aa]dd\s+(\S+)\s+configuration",
+            ],
         }
 
     def verify_ticket(
@@ -108,21 +108,23 @@ class TicketVerifier:
             # Add to recommendations but don't fail verification entirely
             recommendations = [
                 "Review and fix suspicious code patterns detected:",
-                *suspicious_code[:5]  # Limit to top 5 issues
+                *suspicious_code[:5],  # Limit to top 5 issues
             ]
         else:
             recommendations = []
 
         results = []
-        for criterion in ticket['acceptance_criteria']:
+        for criterion in ticket["acceptance_criteria"]:
             # Skip already completed criteria
-            if criterion.startswith('✅'):
-                results.append(VerificationResult(
-                    criterion=criterion,
-                    status=CriterionStatus.PASSED,
-                    evidence="Already marked as completed",
-                    confidence=1.0
-                ))
+            if criterion.startswith("✅"):
+                results.append(
+                    VerificationResult(
+                        criterion=criterion,
+                        status=CriterionStatus.PASSED,
+                        evidence="Already marked as completed",
+                        confidence=1.0,
+                    )
+                )
                 continue
 
             result = self._verify_criterion(criterion)
@@ -139,14 +141,14 @@ class TicketVerifier:
 
         return TicketVerificationReport(
             ticket_id=ticket_id,
-            ticket_title=ticket['title'],
+            ticket_title=ticket["title"],
             total_criteria=len(results),
             passed=passed,
             failed=failed,
             partial=partial,
             coverage=(passed + partial * 0.5) / len(results) * 100 if results else 0,
             results=results,
-            recommendations=recommendations
+            recommendations=recommendations,
         )
 
     def _verify_criterion(self, criterion: str) -> VerificationResult:
@@ -154,41 +156,44 @@ class TicketVerifier:
         criterion_lower = criterion.lower()
 
         # Skip file existence checks for save/write operations
-        save_keywords = ['save', 'write', 'persist', 'update', 'modify']
+        save_keywords = ["save", "write", "persist", "update", "modify"]
         is_save_operation = any(keyword in criterion_lower for keyword in save_keywords)
 
         # Check for file creation (but not for save/write operations)
-        file_keywords = ['create', 'add', 'generate']
+        file_keywords = ["create", "add", "generate"]
         has_file_keyword = any(keyword in criterion_lower for keyword in file_keywords)
-        if has_file_keyword and 'file' in criterion_lower and not is_save_operation:
+        if has_file_keyword and "file" in criterion_lower and not is_save_operation:
             return self._verify_file_exists(criterion)
 
         # Check for directory creation
-        dir_keywords = ['directory', 'folder', 'structure']
+        dir_keywords = ["directory", "folder", "structure"]
         if any(keyword in criterion_lower for keyword in dir_keywords):
             return self._verify_directory_exists(criterion)
 
         # Check for endpoint creation
-        if 'endpoint' in criterion_lower:
+        if "endpoint" in criterion_lower:
             return self._verify_endpoint_exists(criterion)
 
         # Check for function/method implementation
-        func_keywords = ['function', 'method', 'implement']
+        func_keywords = ["function", "method", "implement"]
         if any(keyword in criterion_lower for keyword in func_keywords):
             return self._verify_function_exists(criterion)
 
         # Check for dependency installation
-        dep_keywords = ['dependency', 'requirement', 'install']
+        dep_keywords = ["dependency", "requirement", "install"]
         if any(keyword in criterion_lower for keyword in dep_keywords):
             return self._verify_dependency_exists(criterion)
 
         # Check for test creation
-        if 'test' in criterion_lower:
+        if "test" in criterion_lower:
             return self._verify_test_exists(criterion)
 
         # Check for configuration (but skip for save/write operations that mention settings)
-        config_keywords = ['configure', 'configuration', 'setting']
-        if any(keyword in criterion_lower for keyword in config_keywords) and not is_save_operation:
+        config_keywords = ["configure", "configuration", "setting"]
+        if (
+            any(keyword in criterion_lower for keyword in config_keywords)
+            and not is_save_operation
+        ):
             return self._verify_configuration_exists(criterion)
 
         # Default: unable to automatically verify
@@ -196,7 +201,7 @@ class TicketVerifier:
             criterion=criterion,
             status=CriterionStatus.UNKNOWN,
             evidence="Unable to automatically verify this criterion",
-            confidence=0.0
+            confidence=0.0,
         )
 
     def _verify_file_exists(self, criterion: str) -> VerificationResult:
@@ -204,36 +209,36 @@ class TicketVerifier:
         # Extract potential file paths from criterion
         patterns = [
             r'[\'"`]([^\'"`]+\.\w+)[\'"`]',  # Quoted filenames
-            r'([\w\-]+/[\w\-]+\.[\w]+)',  # Path-like patterns with hyphens
-            r'([\w\-]+\.[\w]+)',  # Simple filenames with hyphens
-            r'(\S+\.html)',  # Any .html file
-            r'(\S+\.css)',  # Any .css file
-            r'(\S+\.ts)',  # Any .ts file
-            r'(\S+\.js)',  # Any .js file
-            r'(\S+\.md)',  # Any .md file
-            r'(\S+\.json)',  # Any .json file
-            r'(\S+\.txt)',  # Any .txt file
-            r'(\S+\.py)',  # Any .py file
-            r'(\S+\.yaml)',  # Any .yaml file
-            r'(\S+\.yml)',  # Any .yml file
+            r"([\w\-]+/[\w\-]+\.[\w]+)",  # Path-like patterns with hyphens
+            r"([\w\-]+\.[\w]+)",  # Simple filenames with hyphens
+            r"(\S+\.html)",  # Any .html file
+            r"(\S+\.css)",  # Any .css file
+            r"(\S+\.ts)",  # Any .ts file
+            r"(\S+\.js)",  # Any .js file
+            r"(\S+\.md)",  # Any .md file
+            r"(\S+\.json)",  # Any .json file
+            r"(\S+\.txt)",  # Any .txt file
+            r"(\S+\.py)",  # Any .py file
+            r"(\S+\.yaml)",  # Any .yaml file
+            r"(\S+\.yml)",  # Any .yml file
         ]
 
         for pattern in patterns:
             matches = re.findall(pattern, criterion)
             for match in matches:
                 # Skip common words that aren't filenames
-                if match in ['create', 'add', 'implement', 'with', 'for', 'to', 'in']:
+                if match in ["create", "add", "implement", "with", "for", "to", "in"]:
                     continue
 
                 # Check multiple possible locations
                 possible_paths = [
                     self.project_root / match,
-                    self.project_root / 'src' / match,
-                    self.project_root / 'src/utils' / match,
-                    self.project_root / 'src/core' / match,
-                    self.project_root / 'src/events' / match,
-                    self.project_root / 'docs' / match,
-                    self.project_root / 'test-results' / match,
+                    self.project_root / "src" / match,
+                    self.project_root / "src/utils" / match,
+                    self.project_root / "src/core" / match,
+                    self.project_root / "src/events" / match,
+                    self.project_root / "docs" / match,
+                    self.project_root / "test-results" / match,
                 ]
 
                 for file_path in possible_paths:
@@ -242,41 +247,41 @@ class TicketVerifier:
                             criterion=criterion,
                             status=CriterionStatus.PASSED,
                             evidence=f"File {match} exists at {file_path.relative_to(self.project_root)}",
-                            confidence=0.9
+                            confidence=0.9,
                         )
 
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence="File not found",
-            confidence=0.7
+            confidence=0.7,
         )
 
     def _verify_directory_exists(self, criterion: str) -> VerificationResult:
         """Verify that a directory was created."""
         patterns = [
-            r'(\w+/)',  # Directory with trailing slash
-            r'(\w+)\s+directory',  # Directory name before 'directory'
-            r'(\w+)\s+folder',  # Directory name before 'folder'
+            r"(\w+/)",  # Directory with trailing slash
+            r"(\w+)\s+directory",  # Directory name before 'directory'
+            r"(\w+)\s+folder",  # Directory name before 'folder'
         ]
 
         for pattern in patterns:
             matches = re.findall(pattern, criterion, re.IGNORECASE)
             for match in matches:
-                dir_path = self.project_root / match.rstrip('/')
+                dir_path = self.project_root / match.rstrip("/")
                 if dir_path.exists() and dir_path.is_dir():
                     return VerificationResult(
                         criterion=criterion,
                         status=CriterionStatus.PASSED,
                         evidence=f"Directory {match} exists",
-                        confidence=0.9
+                        confidence=0.9,
                     )
 
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence="Directory not found",
-            confidence=0.7
+            confidence=0.7,
         )
 
     def _verify_endpoint_exists(self, criterion: str) -> VerificationResult:
@@ -284,8 +289,8 @@ class TicketVerifier:
         # Extract endpoint path
         patterns = [
             r'[\'"`](/[^\'"`]+)[\'"`]',  # Quoted paths
-            r'(GET|POST|PUT|DELETE|PATCH)\s+(/\S+)',  # HTTP method + path
-            r'(/\w+(?:/\w+)*)',  # Path-like patterns
+            r"(GET|POST|PUT|DELETE|PATCH)\s+(/\S+)",  # HTTP method + path
+            r"(/\w+(?:/\w+)*)",  # Path-like patterns
         ]
 
         endpoint_path = None
@@ -303,25 +308,25 @@ class TicketVerifier:
                 criterion=criterion,
                 status=CriterionStatus.UNKNOWN,
                 evidence="Could not extract endpoint path",
-                confidence=0.3
+                confidence=0.3,
             )
 
         # Search for endpoint in code
-        found = self._search_in_files(endpoint_path, ['.py', '.js', '.ts'])
+        found = self._search_in_files(endpoint_path, [".py", ".js", ".ts"])
 
         if found:
             return VerificationResult(
                 criterion=criterion,
                 status=CriterionStatus.PASSED,
                 evidence=f"Endpoint {endpoint_path} found in {found[0]}",
-                confidence=0.85
+                confidence=0.85,
             )
 
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence=f"Endpoint {endpoint_path} not found in code",
-            confidence=0.6
+            confidence=0.6,
         )
 
     def _verify_function_exists(self, criterion: str) -> VerificationResult:
@@ -329,9 +334,9 @@ class TicketVerifier:
         # Extract function name
         patterns = [
             r'[\'"`](\w+)[\'"`]',  # Quoted function name
-            r'(\w+)\s+function',  # Function name before 'function'
-            r'(\w+)\s+method',  # Method name before 'method'
-            r'implement\s+(\w+)',  # After 'implement'
+            r"(\w+)\s+function",  # Function name before 'function'
+            r"(\w+)\s+method",  # Method name before 'method'
+            r"implement\s+(\w+)",  # After 'implement'
         ]
 
         func_name = None
@@ -346,7 +351,7 @@ class TicketVerifier:
                 criterion=criterion,
                 status=CriterionStatus.UNKNOWN,
                 evidence="Could not extract function name",
-                confidence=0.3
+                confidence=0.3,
             )
 
         # Search for function definition
@@ -357,14 +362,14 @@ class TicketVerifier:
                 criterion=criterion,
                 status=CriterionStatus.PASSED,
                 evidence=f"Function {func_name} found in {found[0]}",
-                confidence=0.9
+                confidence=0.9,
             )
 
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence=f"Function {func_name} not found",
-            confidence=0.7
+            confidence=0.7,
         )
 
     def _verify_dependency_exists(self, criterion: str) -> VerificationResult:
@@ -372,7 +377,7 @@ class TicketVerifier:
         # Extract package name
         patterns = [
             r'[\'"`]([^\'"`]+)[\'"`]',  # Quoted package name
-            r'(\w+(?:-\w+)*)',  # Package name pattern
+            r"(\w+(?:-\w+)*)",  # Package name pattern
         ]
 
         package_name = None
@@ -381,7 +386,7 @@ class TicketVerifier:
             if matches:
                 # Filter out common words
                 for match in matches:
-                    common_words = ['add', 'install', 'dependency', 'to', 'with', 'in']
+                    common_words = ["add", "install", "dependency", "to", "with", "in"]
                     if match not in common_words:
                         package_name = match
                         break
@@ -393,7 +398,7 @@ class TicketVerifier:
                 criterion=criterion,
                 status=CriterionStatus.UNKNOWN,
                 evidence="Could not extract package name",
-                confidence=0.3
+                confidence=0.3,
             )
 
         # Check in various dependency files
@@ -404,22 +409,26 @@ class TicketVerifier:
                 criterion=criterion,
                 status=CriterionStatus.PASSED,
                 evidence=f"Package {package_name} found in {found}",
-                confidence=0.95
+                confidence=0.95,
             )
 
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.FAILED,
             evidence=f"Package {package_name} not found in dependency files",
-            confidence=0.8
+            confidence=0.8,
         )
 
     def _verify_test_exists(self, criterion: str) -> VerificationResult:
         """Verify that tests were created."""
         # Look for test files
         test_patterns = [
-            'test_*.py', '*_test.py', '*.test.js',
-            '*.test.ts', '*.spec.js', '*.spec.ts'
+            "test_*.py",
+            "*_test.py",
+            "*.test.js",
+            "*.test.ts",
+            "*.spec.js",
+            "*.spec.ts",
         ]
         test_files = []
 
@@ -431,11 +440,12 @@ class TicketVerifier:
                 criterion=criterion,
                 status=CriterionStatus.FAILED,
                 evidence="No test files found",
-                confidence=0.8
+                confidence=0.8,
             )
 
         # Check if tests were recently modified
         import time
+
         current_time = time.time()
         # Within last hour
         recent_tests = [
@@ -449,21 +459,25 @@ class TicketVerifier:
                 criterion=criterion,
                 status=CriterionStatus.PASSED,
                 evidence=evidence,
-                confidence=0.85
+                confidence=0.85,
             )
 
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.PARTIAL,
             evidence="Test files exist but were not recently modified",
-            confidence=0.6
+            confidence=0.6,
         )
 
     def _verify_configuration_exists(self, criterion: str) -> VerificationResult:
         """Verify that configuration was added."""
         config_files = [
-            '.env', '.env.example', 'config.py',
-            'config.js', 'settings.py', 'settings.json'
+            ".env",
+            ".env.example",
+            "config.py",
+            "config.js",
+            "settings.py",
+            "settings.json",
         ]
 
         for config_file in config_files:
@@ -471,19 +485,20 @@ class TicketVerifier:
             if file_path.exists():
                 # Check if file was recently modified
                 import time
+
                 if (time.time() - file_path.stat().st_mtime) < 3600:
                     return VerificationResult(
                         criterion=criterion,
                         status=CriterionStatus.PASSED,
                         evidence=f"Configuration file {config_file} recently modified",
-                        confidence=0.8
+                        confidence=0.8,
                     )
 
         return VerificationResult(
             criterion=criterion,
             status=CriterionStatus.PARTIAL,
             evidence="Configuration files exist but were not recently modified",
-            confidence=0.5
+            confidence=0.5,
         )
 
     def _search_in_files(
@@ -493,7 +508,7 @@ class TicketVerifier:
         found_in = []
 
         for ext in extensions:
-            for file_path in self.project_root.rglob(f'*{ext}'):
+            for file_path in self.project_root.rglob(f"*{ext}"):
                 try:
                     content = file_path.read_text()
                     if pattern in content:
@@ -506,22 +521,24 @@ class TicketVerifier:
     def _search_function_definition(self, func_name: str) -> Optional[List[str]]:
         """Search for function definitions in code files."""
         patterns = [
-            rf'def\s+{func_name}\s*\(',  # Python
-            rf'function\s+{func_name}\s*\(',  # JavaScript
-            rf'const\s+{func_name}\s*=',  # JS arrow function
-            rf'{func_name}\s*:\s*function',  # Object method
+            rf"def\s+{func_name}\s*\(",  # Python
+            rf"function\s+{func_name}\s*\(",  # JavaScript
+            rf"const\s+{func_name}\s*=",  # JS arrow function
+            rf"{func_name}\s*:\s*function",  # Object method
         ]
 
         found_in = []
-        code_extensions = ['.py', '.js', '.ts', '.jsx', '.tsx']
+        code_extensions = [".py", ".js", ".ts", ".jsx", ".tsx"]
 
         for ext in code_extensions:
-            for file_path in self.project_root.rglob(f'*{ext}'):
+            for file_path in self.project_root.rglob(f"*{ext}"):
                 try:
                     content = file_path.read_text()
                     for pattern in patterns:
                         if re.search(pattern, content):
-                            found_in.append(str(file_path.relative_to(self.project_root)))
+                            found_in.append(
+                                str(file_path.relative_to(self.project_root))
+                            )
                             break
                 except Exception:
                     continue
@@ -531,11 +548,11 @@ class TicketVerifier:
     def _check_dependency_files(self, package_name: str) -> Optional[str]:
         """Check if a package is listed in dependency files."""
         dependency_files = {
-            'requirements.txt': package_name,
-            'package.json': f'"{package_name}"',
-            'Cargo.toml': f'{package_name}',
-            'go.mod': package_name,
-            'pom.xml': f'<artifactId>{package_name}</artifactId>',
+            "requirements.txt": package_name,
+            "package.json": f'"{package_name}"',
+            "Cargo.toml": f"{package_name}",
+            "go.mod": package_name,
+            "pom.xml": f"<artifactId>{package_name}</artifactId>",
         }
 
         for file_name, search_pattern in dependency_files.items():
@@ -552,7 +569,7 @@ class TicketVerifier:
 
     def check_suspicious_patterns_in_diff(self) -> List[str]:
         """Check git diff for suspicious code patterns.
-        
+
         Returns:
             List of suspicious patterns found
 
@@ -565,7 +582,7 @@ class TicketVerifier:
                 ["git", "diff", "HEAD"],
                 capture_output=True,
                 text=True,
-                cwd=self.project_root
+                cwd=self.project_root,
             )
 
             if git_diff.returncode != 0:
@@ -575,42 +592,58 @@ class TicketVerifier:
 
             # Patterns to check in the diff
             suspicious_patterns = [
-                (r'\+.*def\s+(hello_world|test_function|foo|bar|baz)\s*\(\s*\)\s*:',
-                 "Suspicious test/placeholder function added"),
-                (r'\+.*print\s*\(\s*["\']Hello,?\s+World["\']',
-                 "Hello World debug statement added"),
-                (r'\+.*#\s*TODO:\s*implement\s+this',
-                 "Unimplemented TODO added"),
-                (r'\+.*return\s+["\']placeholder["\']',
-                 "Placeholder return value added"),
-                (r'\+.*(password|api_key|secret)\s*=\s*["\'][^"\']+["\']',
-                 "Potential hardcoded credential added"),
-                (r'\+.*def\s+\w+\([^)]*\):\s*\n\s*\+\s*(pass|return\s+None)\s*$',
-                 "Empty function implementation added"),
-                (r'\+.*console\.log\s*\(\s*["\']test["\']',
-                 "Test console.log added"),
-                (r'\+.*debugger;',
-                 "Debugger statement added"),
+                (
+                    r"\+.*def\s+(hello_world|test_function|foo|bar|baz)\s*\(\s*\)\s*:",
+                    "Suspicious test/placeholder function added",
+                ),
+                (
+                    r'\+.*print\s*\(\s*["\']Hello,?\s+World["\']',
+                    "Hello World debug statement added",
+                ),
+                (r"\+.*#\s*TODO:\s*implement\s+this", "Unimplemented TODO added"),
+                (
+                    r'\+.*return\s+["\']placeholder["\']',
+                    "Placeholder return value added",
+                ),
+                (
+                    r'\+.*(password|api_key|secret)\s*=\s*["\'][^"\']+["\']',
+                    "Potential hardcoded credential added",
+                ),
+                (
+                    r"\+.*def\s+\w+\([^)]*\):\s*\n\s*\+\s*(pass|return\s+None)\s*$",
+                    "Empty function implementation added",
+                ),
+                (r'\+.*console\.log\s*\(\s*["\']test["\']', "Test console.log added"),
+                (r"\+.*debugger;", "Debugger statement added"),
             ]
 
             # Check each pattern
             for pattern, description in suspicious_patterns:
-                matches = re.findall(pattern, diff_content, re.MULTILINE | re.IGNORECASE)
+                matches = re.findall(
+                    pattern, diff_content, re.MULTILINE | re.IGNORECASE
+                )
                 if matches:
                     # Extract context around the match
                     for match in matches[:3]:  # Limit to first 3
                         suspicious_issues.append(f"{description}: {match[:50]}...")
 
             # Check for large blocks of commented code being added
-            commented_lines = re.findall(r'\+\s*#.*', diff_content)
+            commented_lines = re.findall(r"\+\s*#.*", diff_content)
             if len(commented_lines) > 20:
-                suspicious_issues.append(f"Large amount of commented code added ({len(commented_lines)} lines)")
+                suspicious_issues.append(
+                    f"Large amount of commented code added ({len(commented_lines)} lines)"
+                )
 
             # Check for files that shouldn't normally be modified
-            protected_files = ['package-lock.json', 'yarn.lock', '.gitignore']
+            protected_files = ["package-lock.json", "yarn.lock", ".gitignore"]
             for protected_file in protected_files:
-                if f'diff --git a/{protected_file}' in diff_content or f'b/{protected_file}' in diff_content:
-                    suspicious_issues.append(f"Protected file modified: {protected_file}")
+                if (
+                    f"diff --git a/{protected_file}" in diff_content
+                    or f"b/{protected_file}" in diff_content
+                ):
+                    suspicious_issues.append(
+                        f"Protected file modified: {protected_file}"
+                    )
 
         except Exception:
             # Silently fail if git is not available
@@ -647,12 +680,12 @@ class TicketVerifier:
         # Specific recommendations based on failure types
         for result in results:
             if result.status == CriterionStatus.FAILED:
-                if 'file' in result.criterion.lower():
+                if "file" in result.criterion.lower():
                     file_msg = f"Create missing file: {result.criterion[:50]}"
                     recommendations.append(file_msg)
-                elif 'test' in result.criterion.lower():
+                elif "test" in result.criterion.lower():
                     recommendations.append("Add missing tests")
-                elif 'endpoint' in result.criterion.lower():
+                elif "endpoint" in result.criterion.lower():
                     recommendations.append("Implement missing API endpoint")
 
         return recommendations[:5]  # Limit to top 5 recommendations
@@ -680,7 +713,7 @@ class TicketVerifier:
                 CriterionStatus.FAILED: "❌",
                 CriterionStatus.PARTIAL: "⚠️",
                 CriterionStatus.SKIPPED: "⏭️",
-                CriterionStatus.UNKNOWN: "❓"
+                CriterionStatus.UNKNOWN: "❓",
             }.get(result.status, "")
 
             lines.append(f"  {status_icon} {result.criterion[:60]}")
@@ -688,10 +721,12 @@ class TicketVerifier:
             lines.append(f"     → {result.evidence} (confidence: {confidence_pct})")
 
         if report.recommendations:
-            lines.extend([
-                "",
-                "💡 Recommendations:",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "💡 Recommendations:",
+                ]
+            )
             for rec in report.recommendations:
                 lines.append(f"  • {rec}")
 

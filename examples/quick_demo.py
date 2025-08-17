@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Quick Hydra Demo - See the multi-agent system in action!
-"""
+"""Quick Hydra Demo - See the multi-agent system in action!"""
 
 import os
 import sys
@@ -8,8 +7,8 @@ import sys
 from dotenv import load_dotenv
 
 # Setup
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 from hydra import execute_workflow
 from hydra.agents.base import CodeAgent
@@ -33,7 +32,7 @@ def demo_single_agent():
     test_code = code + '\n\nprint(reverse_string("Hello Hydra!"))'
     result = agent.execute_code(test_code)
 
-    if result['success']:
+    if result["success"]:
         print(f"\nExecution Output: {result['stdout'].strip()}")
 
 
@@ -75,14 +74,14 @@ def demo_complex_task():
 
     print("\n✅ Construction complete!")
     print("\nAgent Hierarchy:")
-    for agent in result['agents']:
-        depth = agent.count('_employee')
+    for agent in result["agents"]:
+        depth = agent.count("_employee")
         indent = "  " * depth
         print(f"{indent}└─ {agent}")
 
 
 def main():
-    if not os.getenv('VENICE_API_KEY'):
+    if not os.getenv("VENICE_API_KEY"):
         print("❌ VENICE_API_KEY not found! Set it in .env file")
         return
 

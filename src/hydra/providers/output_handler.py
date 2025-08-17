@@ -68,20 +68,22 @@ class StreamingBuffer:
         """Extract any complete code blocks from buffer."""
         blocks = []
         # Look for complete code blocks
-        pattern = r'```(\w+)?\n(.*?)```'
+        pattern = r"```(\w+)?\n(.*?)```"
         matches = re.finditer(pattern, self.content, re.DOTALL)
 
         for match in matches:
             language = match.group(1) or "text"
             content = match.group(2).strip()
 
-            blocks.append(CodeBlock(
-                language=language,
-                content=content,
-                line_start=0,
-                line_end=0,
-                executable=self._is_executable(language)
-            ))
+            blocks.append(
+                CodeBlock(
+                    language=language,
+                    content=content,
+                    line_start=0,
+                    line_end=0,
+                    executable=self._is_executable(language),
+                )
+            )
 
         return blocks
 
@@ -89,8 +91,18 @@ class StreamingBuffer:
     def _is_executable(language: str) -> bool:
         """Check if language is executable."""
         executable_langs = {
-            "python", "py", "javascript", "js", "bash", "sh",
-            "ruby", "go", "rust", "java", "cpp", "c"
+            "python",
+            "py",
+            "javascript",
+            "js",
+            "bash",
+            "sh",
+            "ruby",
+            "go",
+            "rust",
+            "java",
+            "cpp",
+            "c",
         }
         return language.lower() in executable_langs
 
@@ -147,21 +159,23 @@ class OutputHandler(ABC):
         blocks = []
 
         # Standard markdown code blocks
-        pattern = r'```(\w+)?\n(.*?)```'
+        pattern = r"```(\w+)?\n(.*?)```"
         matches = re.finditer(pattern, text, re.DOTALL)
 
         for match in matches:
             language = match.group(1) or "text"
             content = match.group(2).strip()
 
-            blocks.append(CodeBlock(
-                language=language,
-                content=content,
-                line_start=text[:match.start()].count('\n') + 1,
-                line_end=text[:match.end()].count('\n') + 1,
-                executable=self._is_executable_language(language),
-                filename=self._extract_filename(content, language)
-            ))
+            blocks.append(
+                CodeBlock(
+                    language=language,
+                    content=content,
+                    line_start=text[: match.start()].count("\n") + 1,
+                    line_end=text[: match.end()].count("\n") + 1,
+                    executable=self._is_executable_language(language),
+                    filename=self._extract_filename(content, language),
+                )
+            )
 
         # Also look for inline code if no blocks found
         if not blocks:
@@ -184,30 +198,32 @@ class OutputHandler(ABC):
         # Common code patterns
         patterns = {
             "python": [
-                r'(def\s+\w+.*?(?:\n\n|\Z))',
-                r'(class\s+\w+.*?(?:\n\n|\Z))',
-                r'(import\s+.*?(?:\n|$))',
-                r'(from\s+\w+\s+import.*?(?:\n|$))'
+                r"(def\s+\w+.*?(?:\n\n|\Z))",
+                r"(class\s+\w+.*?(?:\n\n|\Z))",
+                r"(import\s+.*?(?:\n|$))",
+                r"(from\s+\w+\s+import.*?(?:\n|$))",
             ],
             "javascript": [
-                r'(function\s+\w+.*?\})',
-                r'(const\s+\w+\s*=.*?(?:;|\n))',
-                r'(var\s+\w+\s*=.*?(?:;|\n))',
-                r'(let\s+\w+\s*=.*?(?:;|\n))'
-            ]
+                r"(function\s+\w+.*?\})",
+                r"(const\s+\w+\s*=.*?(?:;|\n))",
+                r"(var\s+\w+\s*=.*?(?:;|\n))",
+                r"(let\s+\w+\s*=.*?(?:;|\n))",
+            ],
         }
 
         for language, lang_patterns in patterns.items():
             for pattern in lang_patterns:
                 matches = re.finditer(pattern, text, re.MULTILINE | re.DOTALL)
                 for match in matches:
-                    blocks.append(CodeBlock(
-                        language=language,
-                        content=match.group(1).strip(),
-                        line_start=text[:match.start()].count('\n') + 1,
-                        line_end=text[:match.end()].count('\n') + 1,
-                        executable=True
-                    ))
+                    blocks.append(
+                        CodeBlock(
+                            language=language,
+                            content=match.group(1).strip(),
+                            line_start=text[: match.start()].count("\n") + 1,
+                            line_end=text[: match.end()].count("\n") + 1,
+                            executable=True,
+                        )
+                    )
 
         return blocks
 
@@ -222,18 +238,31 @@ class OutputHandler(ABC):
 
         """
         executable = {
-            "python", "py", "python3",
-            "javascript", "js", "node",
-            "typescript", "ts",
-            "bash", "sh", "shell", "zsh",
-            "ruby", "rb",
-            "go", "golang",
-            "rust", "rs",
+            "python",
+            "py",
+            "python3",
+            "javascript",
+            "js",
+            "node",
+            "typescript",
+            "ts",
+            "bash",
+            "sh",
+            "shell",
+            "zsh",
+            "ruby",
+            "rb",
+            "go",
+            "golang",
+            "rust",
+            "rs",
             "java",
-            "c", "cpp", "c++",
+            "c",
+            "cpp",
+            "c++",
             "php",
             "perl",
-            "lua"
+            "lua",
         }
         return language.lower() in executable
 
@@ -250,12 +279,12 @@ class OutputHandler(ABC):
         """
         # Look for filename in first line comment
         patterns = [
-            r'^#\s*(?:filename|file):\s*(.+)$',  # Python/Bash style
-            r'^//\s*(?:filename|file):\s*(.+)$',  # C/JS style
-            r'^/\*\s*(?:filename|file):\s*(.+)\s*\*/$',  # Block comment
+            r"^#\s*(?:filename|file):\s*(.+)$",  # Python/Bash style
+            r"^//\s*(?:filename|file):\s*(.+)$",  # C/JS style
+            r"^/\*\s*(?:filename|file):\s*(.+)\s*\*/$",  # Block comment
         ]
 
-        first_line = content.split('\n')[0] if content else ""
+        first_line = content.split("\n")[0] if content else ""
 
         for pattern in patterns:
             match = re.match(pattern, first_line.strip())
@@ -289,32 +318,32 @@ class OutputHandler(ABC):
         commands = []
 
         # Look for command patterns line by line
-        lines = text.split('\n')
+        lines = text.split("\n")
         for line in lines:
             # Shell prompt patterns
-            if line.strip().startswith('$ '):
+            if line.strip().startswith("$ "):
                 commands.append(line.strip()[2:].strip())
-            elif line.strip().startswith('> '):
+            elif line.strip().startswith("> "):
                 commands.append(line.strip()[2:].strip())
 
         # Also look for bash code blocks
-        bash_pattern = r'```(?:bash|sh|shell)\n(.*?)```'
+        bash_pattern = r"```(?:bash|sh|shell)\n(.*?)```"
         matches = re.finditer(bash_pattern, text, re.DOTALL)
         for match in matches:
             # Split into individual commands
-            block_commands = match.group(1).strip().split('\n')
-            commands.extend([
-                cmd.strip() for cmd in block_commands
-                if cmd.strip() and not cmd.strip().startswith('#')
-            ])
+            block_commands = match.group(1).strip().split("\n")
+            commands.extend(
+                [
+                    cmd.strip()
+                    for cmd in block_commands
+                    if cmd.strip() and not cmd.strip().startswith("#")
+                ]
+            )
 
         return commands
 
     def format_code_block(
-        self,
-        code: str,
-        language: str,
-        filename: Optional[str] = None
+        self, code: str, language: str, filename: Optional[str] = None
     ) -> str:
         """Format code into a markdown code block.
 
@@ -351,7 +380,7 @@ class OutputHandler(ABC):
             return ParsedResponse(
                 text=self.streaming_buffer.content,
                 code_blocks=blocks,
-                metadata={"streaming": True, "partial": True}
+                metadata={"streaming": True, "partial": True},
             )
 
         return None
@@ -395,11 +424,7 @@ class ClaudeOutputHandler(OutputHandler):
         # Extract Claude-specific metadata
         metadata = self._extract_claude_metadata(response)
 
-        return ParsedResponse(
-            text=response,
-            code_blocks=code_blocks,
-            metadata=metadata
-        )
+        return ParsedResponse(text=response, code_blocks=code_blocks, metadata=metadata)
 
     def extract_content(self, response: str) -> ExtractedContent:
         """Extract all content from Claude response.
@@ -421,7 +446,7 @@ class ClaudeOutputHandler(OutputHandler):
             text_sections=text_sections,
             commands=commands,
             files=files,
-            metadata=self._extract_claude_metadata(response)
+            metadata=self._extract_claude_metadata(response),
         )
 
     def _extract_claude_metadata(self, response: str) -> Dict[str, Any]:
@@ -438,7 +463,7 @@ class ClaudeOutputHandler(OutputHandler):
             "provider": "claude",
             "interactive": True,
             "has_file_operations": False,
-            "has_commands": False
+            "has_commands": False,
         }
 
         # Check for file operations
@@ -453,9 +478,9 @@ class ClaudeOutputHandler(OutputHandler):
         # Extract tool usage
         tools_used = []
         tool_patterns = [
-            r'Using (\w+) tool',
-            r'(\w+) tool:',
-            r'<(\w+)>',  # XML-style tool tags
+            r"Using (\w+) tool",
+            r"(\w+) tool:",
+            r"<(\w+)>",  # XML-style tool tags
         ]
 
         for pattern in tool_patterns:
@@ -483,7 +508,7 @@ class ClaudeOutputHandler(OutputHandler):
         files = {}
 
         # More flexible patterns for file creation/writing
-        lines = response.split('\n')
+        lines = response.split("\n")
         current_file = None
         in_code_block = False
         code_content = []
@@ -492,9 +517,9 @@ class ClaudeOutputHandler(OutputHandler):
             # Check for file operation indicators
             if not in_code_block:
                 file_match = re.match(
-                    r'(?:Writing|Creating|Editing)\s+(?:file\s+)?([^\s:]+):?\s*$',
+                    r"(?:Writing|Creating|Editing)\s+(?:file\s+)?([^\s:]+):?\s*$",
                     line.strip(),
-                    re.IGNORECASE
+                    re.IGNORECASE,
                 )
                 if file_match:
                     current_file = file_match.group(1).strip()
@@ -502,16 +527,16 @@ class ClaudeOutputHandler(OutputHandler):
                     continue
 
                 # Check for start of code block
-                if line.strip().startswith('```') and current_file:
+                if line.strip().startswith("```") and current_file:
                     in_code_block = True
                     code_content = []
                     continue
             else:
                 # In code block
-                if line.strip().startswith('```'):
+                if line.strip().startswith("```"):
                     # End of code block
                     if current_file and code_content:
-                        files[current_file] = '\n'.join(code_content)
+                        files[current_file] = "\n".join(code_content)
                     in_code_block = False
                     current_file = None
                     code_content = []
@@ -531,11 +556,11 @@ class ClaudeOutputHandler(OutputHandler):
 
         """
         # Remove code blocks
-        text = re.sub(r'```.*?```', '', response, flags=re.DOTALL)
+        text = re.sub(r"```.*?```", "", response, flags=re.DOTALL)
 
         # Split into paragraphs
         sections = []
-        paragraphs = text.split('\n\n')
+        paragraphs = text.split("\n\n")
 
         for para in paragraphs:
             para = para.strip()
@@ -568,10 +593,7 @@ class VeniceOutputHandler(OutputHandler):
         return ParsedResponse(
             text=response,
             code_blocks=code_blocks,
-            metadata={
-                "provider": "venice",
-                "requires_code_extraction": True
-            }
+            metadata={"provider": "venice", "requires_code_extraction": True},
         )
 
     def extract_content(self, response: str) -> ExtractedContent:
@@ -594,7 +616,7 @@ class VeniceOutputHandler(OutputHandler):
             text_sections=text_sections,
             commands=commands,
             files=files,
-            metadata={"provider": "venice", "model": "varies"}
+            metadata={"provider": "venice", "model": "varies"},
         )
 
     def _extract_venice_code(self, response: str) -> List[CodeBlock]:
@@ -626,7 +648,7 @@ class VeniceOutputHandler(OutputHandler):
 
         """
         blocks = []
-        lines = text.split('\n')
+        lines = text.split("\n")
 
         # Track code sections
         in_code = False
@@ -650,25 +672,29 @@ class VeniceOutputHandler(OutputHandler):
                 else:
                     # End of code section
                     if code_lines:
-                        blocks.append(CodeBlock(
-                            language=code_language,
-                            content='\n'.join(code_lines),
-                            line_start=0,
-                            line_end=0,
-                            executable=self._is_executable_language(code_language)
-                        ))
+                        blocks.append(
+                            CodeBlock(
+                                language=code_language,
+                                content="\n".join(code_lines),
+                                line_start=0,
+                                line_end=0,
+                                executable=self._is_executable_language(code_language),
+                            )
+                        )
                     in_code = False
                     code_lines = []
 
         # Handle remaining code
         if code_lines:
-            blocks.append(CodeBlock(
-                language=code_language,
-                content='\n'.join(code_lines),
-                line_start=0,
-                line_end=0,
-                executable=self._is_executable_language(code_language)
-            ))
+            blocks.append(
+                CodeBlock(
+                    language=code_language,
+                    content="\n".join(code_lines),
+                    line_start=0,
+                    line_end=0,
+                    executable=self._is_executable_language(code_language),
+                )
+            )
 
         return blocks
 
@@ -683,18 +709,18 @@ class VeniceOutputHandler(OutputHandler):
 
         """
         indicators = [
-            r'^\s*def\s+\w+',  # Python function
-            r'^\s*class\s+\w+',  # Python/Java class
-            r'^\s*import\s+',  # Import statement
-            r'^\s*from\s+\w+\s+import',  # Python import
-            r'^\s*function\s+\w+',  # JavaScript function
-            r'^\s*const\s+\w+\s*=',  # JS const
-            r'^\s*var\s+\w+\s*=',  # JS var
-            r'^\s*let\s+\w+\s*=',  # JS let
-            r'^\s*if\s*\(',  # If statement
-            r'^\s*for\s*\(',  # For loop
-            r'^\s*while\s*\(',  # While loop
-            r'^\s*return\s+',  # Return statement
+            r"^\s*def\s+\w+",  # Python function
+            r"^\s*class\s+\w+",  # Python/Java class
+            r"^\s*import\s+",  # Import statement
+            r"^\s*from\s+\w+\s+import",  # Python import
+            r"^\s*function\s+\w+",  # JavaScript function
+            r"^\s*const\s+\w+\s*=",  # JS const
+            r"^\s*var\s+\w+\s*=",  # JS var
+            r"^\s*let\s+\w+\s*=",  # JS let
+            r"^\s*if\s*\(",  # If statement
+            r"^\s*for\s*\(",  # For loop
+            r"^\s*while\s*\(",  # While loop
+            r"^\s*return\s+",  # Return statement
         ]
 
         return any(re.match(pattern, line) for pattern in indicators)
@@ -710,11 +736,11 @@ class VeniceOutputHandler(OutputHandler):
 
         """
         # Indented lines are usually continuations
-        if line.startswith('    ') or line.startswith('\t'):
+        if line.startswith("    ") or line.startswith("\t"):
             return True
 
         # Lines starting with operators
-        if line.strip().startswith(('.', '+', '-', '*', '/', '|', '&')):
+        if line.strip().startswith((".", "+", "-", "*", "/", "|", "&")):
             return True
 
         return False
@@ -730,24 +756,31 @@ class VeniceOutputHandler(OutputHandler):
 
         """
         # Python patterns
-        if re.search(r'\bdef\s+\w+', line) or re.search(r'\bimport\s+', line) or re.search(r'\bfrom\s+\w+\s+import', line):
+        if (
+            re.search(r"\bdef\s+\w+", line)
+            or re.search(r"\bimport\s+", line)
+            or re.search(r"\bfrom\s+\w+\s+import", line)
+        ):
             return "python"
         # JavaScript patterns
-        elif re.search(r'\bfunction\s+\w+', line) or re.search(r'\bconst\s+\w+\s*=', line) or re.search(r'\bvar\s+\w+\s*=', line) or re.search(r'\blet\s+\w+\s*=', line):
+        elif (
+            re.search(r"\bfunction\s+\w+", line)
+            or re.search(r"\bconst\s+\w+\s*=", line)
+            or re.search(r"\bvar\s+\w+\s*=", line)
+            or re.search(r"\blet\s+\w+\s*=", line)
+        ):
             return "javascript"
         # Java patterns
-        elif re.search(r'\bclass\s+\w+.*\{', line):
+        elif re.search(r"\bclass\s+\w+.*\{", line):
             return "java"
         # C/C++ patterns
-        elif '#include' in line or 'int main' in line:
+        elif "#include" in line or "int main" in line:
             return "c"
 
         return "text"
 
     def _extract_implied_files(
-        self,
-        response: str,
-        code_blocks: List[CodeBlock]
+        self, response: str, code_blocks: List[CodeBlock]
     ) -> Dict[str, str]:
         """Extract implied file contents from response.
 
@@ -762,13 +795,13 @@ class VeniceOutputHandler(OutputHandler):
         files = {}
 
         # Look for file references
-        file_pattern = r'(?:create|write|save|in)\s+(?:file\s+)?`?([^\s`]+\.\w+)`?'
+        file_pattern = r"(?:create|write|save|in)\s+(?:file\s+)?`?([^\s`]+\.\w+)`?"
         matches = re.finditer(file_pattern, response, re.IGNORECASE)
 
         filenames = []
         for match in matches:
             filename = match.group(1)
-            if '/' not in filename:  # Simple filename
+            if "/" not in filename:  # Simple filename
                 filenames.append(filename)
 
         # Try to match filenames with code blocks
@@ -794,13 +827,13 @@ class VeniceOutputHandler(OutputHandler):
 
         """
         # Remove code blocks
-        text = re.sub(r'```.*?```', '', response, flags=re.DOTALL)
+        text = re.sub(r"```.*?```", "", response, flags=re.DOTALL)
 
         # Remove inline code
-        text = re.sub(r'`[^`]+`', '', text)
+        text = re.sub(r"`[^`]+`", "", text)
 
         # Split into sentences
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
 
         # Group into sections
         sections = []
@@ -811,13 +844,13 @@ class VeniceOutputHandler(OutputHandler):
             if sentence:
                 current_section.append(sentence)
                 # Start new section after certain markers
-                if any(marker in sentence for marker in [':', 'following', 'below']):
+                if any(marker in sentence for marker in [":", "following", "below"]):
                     if current_section:
-                        sections.append(' '.join(current_section))
+                        sections.append(" ".join(current_section))
                         current_section = []
 
         if current_section:
-            sections.append(' '.join(current_section))
+            sections.append(" ".join(current_section))
 
         return sections
 
@@ -857,7 +890,7 @@ class OutputHandlerFactory:
                     return ParsedResponse(
                         text=response,
                         code_blocks=self.extract_code_blocks(response),
-                        metadata={"provider": provider_name}
+                        metadata={"provider": provider_name},
                     )
 
                 def extract_content(self, response: str) -> ExtractedContent:
@@ -866,7 +899,7 @@ class OutputHandlerFactory:
                         text_sections=[response],
                         commands=self.extract_commands(response),
                         files={},
-                        metadata={"provider": provider_name}
+                        metadata={"provider": provider_name},
                     )
 
             return DefaultHandler()
@@ -913,11 +946,7 @@ def extract_executable_code(response: str, provider: str = "unknown") -> List[st
     return executable
 
 
-def format_code_for_execution(
-    code: str,
-    language: str,
-    add_main: bool = True
-) -> str:
+def format_code_for_execution(code: str, language: str, add_main: bool = True) -> str:
     """Format code for execution.
 
     Args:
@@ -932,24 +961,24 @@ def format_code_for_execution(
     if language in ["python", "py"]:
         if add_main and "if __name__" not in code:
             # Add main block
-            lines = code.split('\n')
+            lines = code.split("\n")
             # Find where to add main
             for _i, line in enumerate(lines):
-                if line.strip() and not line.startswith(('import', 'from', '#')):
+                if line.strip() and not line.startswith(("import", "from", "#")):
                     break
 
             # Check if we have function definitions
-            has_functions = any('def ' in line for line in lines)
+            has_functions = any("def " in line for line in lines)
 
             if has_functions:
                 # Add main block that calls the first function
-                func_match = re.search(r'def\s+(\w+)\s*\(', code)
+                func_match = re.search(r"def\s+(\w+)\s*\(", code)
                 if func_match:
                     func_name = func_match.group(1)
                     lines.append("")
                     lines.append("if __name__ == '__main__':")
                     lines.append(f"    {func_name}()")
-                    code = '\n'.join(lines)
+                    code = "\n".join(lines)
 
     return code
 
@@ -964,31 +993,42 @@ def merge_streaming_responses(chunks: List[str]) -> ParsedResponse:
         Merged parsed response
 
     """
-    full_text = ''.join(chunks)
+    full_text = "".join(chunks)
 
     # Use a simple implementation for merging
     # Extract code blocks from merged text
     code_blocks = []
-    pattern = r'```(\w+)?\n(.*?)```'
+    pattern = r"```(\w+)?\n(.*?)```"
     matches = re.finditer(pattern, full_text, re.DOTALL)
 
     for match in matches:
         language = match.group(1) or "text"
         content = match.group(2).strip()
 
-        code_blocks.append(CodeBlock(
-            language=language,
-            content=content,
-            line_start=full_text[:match.start()].count('\n') + 1,
-            line_end=full_text[:match.end()].count('\n') + 1,
-            executable=language.lower() in {
-                "python", "py", "javascript", "js", "bash", "sh",
-                "ruby", "go", "rust", "java", "cpp", "c"
-            }
-        ))
+        code_blocks.append(
+            CodeBlock(
+                language=language,
+                content=content,
+                line_start=full_text[: match.start()].count("\n") + 1,
+                line_end=full_text[: match.end()].count("\n") + 1,
+                executable=language.lower()
+                in {
+                    "python",
+                    "py",
+                    "javascript",
+                    "js",
+                    "bash",
+                    "sh",
+                    "ruby",
+                    "go",
+                    "rust",
+                    "java",
+                    "cpp",
+                    "c",
+                },
+            )
+        )
 
     return ParsedResponse(
-        text=full_text,
-        code_blocks=code_blocks,
-        metadata={"merged_from_stream": True}
+        text=full_text, code_blocks=code_blocks, metadata={"merged_from_stream": True}
     )

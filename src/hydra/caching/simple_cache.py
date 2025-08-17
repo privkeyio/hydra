@@ -13,7 +13,7 @@ class FileMetaCache:
 
     def __init__(self, max_size: int = 128):
         """Initialize cache with maximum size.
-        
+
         Args:
             max_size: Maximum number of cached items
 
@@ -24,11 +24,11 @@ class FileMetaCache:
 
     def get(self, key: str, file_path: Optional[str] = None) -> Optional[Any]:
         """Get cached value if file hasn't been modified.
-        
+
         Args:
             key: Cache key
             file_path: File path to check modification time
-            
+
         Returns:
             Cached value if valid, None otherwise
 
@@ -57,7 +57,7 @@ class FileMetaCache:
 
     def set(self, key: str, value: Any, file_path: Optional[str] = None) -> None:
         """Cache a value with optional file modification time.
-        
+
         Args:
             key: Cache key
             value: Value to cache
@@ -90,18 +90,19 @@ class FileMetaCache:
 
 def lru_cache_with_bypass(maxsize: int = 128, typed: bool = False):
     """LRU cache decorator that can be bypassed via environment variable.
-    
+
     Args:
         maxsize: Maximum cache size
         typed: Whether to consider types in cache key
-        
+
     Returns:
         Decorator function
 
     """
+
     def decorator(func: Callable) -> Callable:
         # Check if caching is disabled
-        if os.getenv('NO_CACHE', '').lower() in ('1', 'true', 'yes'):
+        if os.getenv("NO_CACHE", "").lower() in ("1", "true", "yes"):
             # Return unwrapped function if caching disabled
             return func
 
@@ -111,7 +112,7 @@ def lru_cache_with_bypass(maxsize: int = 128, typed: bool = False):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Allow bypassing cache at runtime
-            if kwargs.pop('_no_cache', False):
+            if kwargs.pop("_no_cache", False):
                 return func(*args, **kwargs)
             return cached_func(*args, **kwargs)
 
@@ -126,11 +127,11 @@ def lru_cache_with_bypass(maxsize: int = 128, typed: bool = False):
 
 def get_cache_key(*args, **kwargs) -> str:
     """Generate cache key from arguments.
-    
+
     Args:
         *args: Positional arguments
         **kwargs: Keyword arguments
-        
+
     Returns:
         Cache key string
 
@@ -142,20 +143,20 @@ def get_cache_key(*args, **kwargs) -> str:
 
 def file_cache(cache_dir: Optional[str] = None):
     """File-based cache decorator with mtime checking.
-    
+
     Args:
         cache_dir: Directory to store cache files
-        
+
     Returns:
         Decorator function
 
     """
     if cache_dir is None:
-        cache_dir = os.path.join(os.path.expanduser('~'), '.cache', 'hydra')
+        cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "hydra")
 
     def decorator(func: Callable) -> Callable:
         # Check if caching is disabled
-        if os.getenv('NO_CACHE', '').lower() in ('1', 'true', 'yes'):
+        if os.getenv("NO_CACHE", "").lower() in ("1", "true", "yes"):
             return func
 
         # Ensure cache directory exists
@@ -164,7 +165,7 @@ def file_cache(cache_dir: Optional[str] = None):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Allow bypassing cache at runtime
-            if kwargs.pop('_no_cache', False):
+            if kwargs.pop("_no_cache", False):
                 return func(*args, **kwargs)
 
             # Generate cache key
@@ -175,7 +176,8 @@ def file_cache(cache_dir: Optional[str] = None):
             if os.path.exists(cache_file):
                 try:
                     import pickle
-                    with open(cache_file, 'rb') as f:
+
+                    with open(cache_file, "rb") as f:
                         result = pickle.load(f)
                     return result
                 except (pickle.PickleError, EOFError):
@@ -187,7 +189,8 @@ def file_cache(cache_dir: Optional[str] = None):
 
             try:
                 import pickle
-                with open(cache_file, 'wb') as f:
+
+                with open(cache_file, "wb") as f:
                     pickle.dump(result, f)
             except pickle.PickleError:
                 # Failed to cache, but return result
@@ -206,7 +209,7 @@ _file_meta_cache: Optional[FileMetaCache] = None
 
 def get_file_meta_cache() -> FileMetaCache:
     """Get global file meta cache instance.
-    
+
     Returns:
         File meta cache instance
 

@@ -1,4 +1,5 @@
 """OpenAI provider implementation."""
+
 from typing import Any, Dict, List, Optional
 
 import orjson
@@ -34,7 +35,7 @@ class OpenAIProvider(LLMProvider):
         self.client = OpenAI(
             api_key=self.config.api_key,
             base_url=self.config.base_url,  # Allow custom endpoints
-            http_client=http_client
+            http_client=http_client,
         )
 
         # Initialize token tracker
@@ -58,16 +59,13 @@ class OpenAIProvider(LLMProvider):
                 raise ValueError(f"Token budget exceeded: {message}")
 
             # Merge kwargs with config
-            temperature = kwargs.get('temperature', self.config.temperature)
-            max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+            temperature = kwargs.get("temperature", self.config.temperature)
+            max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
 
             # Add concise system message
             messages = [
-                {
-                    "role": "system",
-                    "content": get_system_prompt("code")
-                },
-                {"role": "user", "content": optimize_prompt(prompt, "code_gen")}
+                {"role": "system", "content": get_system_prompt("code")},
+                {"role": "user", "content": optimize_prompt(prompt, "code_gen")},
             ]
 
             response = self.client.chat.completions.create(
@@ -75,13 +73,13 @@ class OpenAIProvider(LLMProvider):
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **self.config.extra_params
+                **self.config.extra_params,
             )
 
             response_text = response.choices[0].message.content
 
             # Track token usage (OpenAI provides usage in response)
-            usage_data = response.usage if hasattr(response, 'usage') else None
+            usage_data = response.usage if hasattr(response, "usage") else None
             if usage_data:
                 # Use actual token counts from OpenAI
                 input_tokens = usage_data.prompt_tokens
@@ -103,8 +101,8 @@ class OpenAIProvider(LLMProvider):
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     "actual_input_tokens": input_tokens,
-                    "actual_output_tokens": output_tokens
-                }
+                    "actual_output_tokens": output_tokens,
+                },
             )
 
             return response_text
@@ -119,16 +117,13 @@ class OpenAIProvider(LLMProvider):
             response = self.client.chat.completions.create(
                 model=self.config.model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": get_system_prompt("json")
-                    },
-                    {"role": "user", "content": optimize_prompt(prompt, "json_gen")}
+                    {"role": "system", "content": get_system_prompt("json")},
+                    {"role": "user", "content": optimize_prompt(prompt, "json_gen")},
                 ],
                 response_format={"type": "json_object"},
-                max_tokens=kwargs.get('max_tokens', self.config.max_tokens),
-                temperature=kwargs.get('temperature', self.config.temperature),
-                **self.config.extra_params
+                max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
+                temperature=kwargs.get("temperature", self.config.temperature),
+                **self.config.extra_params,
             )
 
             return orjson.loads(response.choices[0].message.content)
@@ -150,8 +145,9 @@ class OpenAIProvider(LLMProvider):
             models = self.client.models.list()
             # Filter for chat models
             return [
-                model.id for model in models.data
-                if 'gpt' in model.id.lower() or 'o1' in model.id.lower()
+                model.id
+                for model in models.data
+                if "gpt" in model.id.lower() or "o1" in model.id.lower()
             ]
         except Exception:
             # Return known models if API call fails
@@ -161,13 +157,14 @@ class OpenAIProvider(LLMProvider):
                 "gpt-4",
                 "gpt-3.5-turbo",
                 "o1-preview",
-                "o1-mini"
+                "o1-mini",
             ]
 
-    def set_tracking_context(self, ticket_id: Optional[int] = None,
-                            session_id: Optional[int] = None) -> None:
+    def set_tracking_context(
+        self, ticket_id: Optional[int] = None, session_id: Optional[int] = None
+    ) -> None:
         """Set context for token tracking.
-        
+
         Args:
             ticket_id: Optional ticket ID for tracking
             session_id: Optional session ID for tracking

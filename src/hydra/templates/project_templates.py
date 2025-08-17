@@ -53,35 +53,20 @@ class ProjectTemplateManager:
                 "Design",
                 "Implementation",
                 "Testing",
-                "Validation"
+                "Validation",
             ],
             ProjectType.FEATURE: [
                 "Requirements",
                 "Design",
                 "Backend",
                 "Frontend",
-                "Integration"
+                "Integration",
             ],
-            ProjectType.BUGFIX: [
-                "Reproduce",
-                "Analyze",
-                "Fix",
-                "Test",
-                "Verify"
-            ],
-            ProjectType.REFACTOR: [
-                "Analysis",
-                "Plan",
-                "Refactor",
-                "Test",
-                "Cleanup"
-            ]
+            ProjectType.BUGFIX: ["Reproduce", "Analyze", "Fix", "Test", "Verify"],
+            ProjectType.REFACTOR: ["Analysis", "Plan", "Refactor", "Test", "Cleanup"],
         }
 
-        return {
-            "phases": structures[project_type],
-            "project_type": project_type.value
-        }
+        return {"phases": structures[project_type], "project_type": project_type.value}
 
     def validate_project_type(self, project_type: str) -> bool:
         """Validate if a project type is supported."""

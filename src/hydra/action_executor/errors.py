@@ -319,11 +319,9 @@ class ErrorHandler:
             Delay in seconds
 
         """
-        return self.backoff_factor ** attempt
+        return self.backoff_factor**attempt
 
-    def should_retry(
-        self, error: Exception, attempt: int
-    ) -> bool:
+    def should_retry(self, error: Exception, attempt: int) -> bool:
         """Determine if an operation should be retried.
 
         Args:

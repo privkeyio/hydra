@@ -20,10 +20,10 @@ class ResourceUsagePrediction:
     def __init__(self, window_size: int = 100):
         self.window_size = window_size
         self.history: Dict[str, deque] = {
-            'cpu': deque(maxlen=window_size),
-            'memory': deque(maxlen=window_size),
-            'disk': deque(maxlen=window_size),
-            'api_calls': deque(maxlen=window_size)
+            "cpu": deque(maxlen=window_size),
+            "memory": deque(maxlen=window_size),
+            "disk": deque(maxlen=window_size),
+            "api_calls": deque(maxlen=window_size),
         }
 
     def add_sample(self, metric: str, value: float, timestamp: datetime = None):
@@ -31,20 +31,17 @@ class ResourceUsagePrediction:
             timestamp = datetime.now()
 
         if metric in self.history:
-            self.history[metric].append({
-                'value': value,
-                'timestamp': timestamp
-            })
+            self.history[metric].append({"value": value, "timestamp": timestamp})
 
     def predict_next_hour(self, metric: str) -> Optional[Dict[str, float]]:
         if metric not in self.history or len(self.history[metric]) < 10:
             return None
 
         samples = list(self.history[metric])
-        values = [s['value'] for s in samples]
+        values = [s["value"] for s in samples]
 
         if len(values) < 3:
-            return {'predicted': values[-1] if values else 0, 'confidence': 0.1}
+            return {"predicted": values[-1] if values else 0, "confidence": 0.1}
 
         # Simple moving average with trend
         recent_avg = sum(values[-5:]) / min(5, len(values))
@@ -62,9 +59,9 @@ class ResourceUsagePrediction:
         confidence = max(0.1, min(0.95, confidence_calc))
 
         return {
-            'predicted': max(0, predicted),
-            'confidence': confidence,
-            'trend': trend
+            "predicted": max(0, predicted),
+            "confidence": confidence,
+            "trend": trend,
         }
 
 
@@ -73,10 +70,10 @@ class ResourceLimits:
 
     def __init__(self, limits: Dict[str, float] = None):
         self.limits = limits or {
-            'cpu_percent': 80.0,
-            'memory_percent': 85.0,
-            'disk_percent': 90.0,
-            'api_calls_per_minute': 1000
+            "cpu_percent": 80.0,
+            "memory_percent": 85.0,
+            "disk_percent": 90.0,
+            "api_calls_per_minute": 1000,
         }
         self.throttling_active = defaultdict(bool)
         self.throttling_callbacks: Dict[str, List[Callable]] = defaultdict(list)
@@ -133,14 +130,14 @@ class APICallTracker:
 
     def __init__(self, rate_limits: Dict[str, int] = None):
         self.rate_limits = rate_limits or {
-            'default': 60,  # calls per minute
-            'claude': 30,
-            'openai': 50
+            "default": 60,  # calls per minute
+            "claude": 30,
+            "openai": 50,
         }
         self.call_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
         self.lock = threading.Lock()
 
-    def record_call(self, provider: str = 'default', endpoint: str = None) -> bool:
+    def record_call(self, provider: str = "default", endpoint: str = None) -> bool:
         """Record an API call and check if rate limit allows it."""
         with self.lock:
             now = datetime.now()
@@ -152,7 +149,7 @@ class APICallTracker:
                 self.call_history[key].popleft()
 
             # Check rate limit
-            limit = self.rate_limits.get(provider, self.rate_limits.get('default', 60))
+            limit = self.rate_limits.get(provider, self.rate_limits.get("default", 60))
             if len(self.call_history[key]) >= limit:
                 count = len(self.call_history[key])
                 msg = f"Rate limit exceeded for {key}: {count} >= {limit}"
@@ -175,10 +172,10 @@ class APICallTracker:
                     history.popleft()
 
                 counts[key] = {
-                    'calls_last_minute': len(history),
-                    'limit': self.rate_limits.get(
-                        key.split(':')[0], self.rate_limits.get('default', 60)
-                    )
+                    "calls_last_minute": len(history),
+                    "limit": self.rate_limits.get(
+                        key.split(":")[0], self.rate_limits.get("default", 60)
+                    ),
                 }
 
             return counts
@@ -189,12 +186,12 @@ class ResourceAlert:
 
     def __init__(self, thresholds: Dict[str, float] = None):
         self.thresholds = thresholds or {
-            'cpu_critical': 95.0,
-            'memory_critical': 95.0,
-            'disk_critical': 98.0,
-            'cpu_warning': 80.0,
-            'memory_warning': 85.0,
-            'disk_warning': 90.0
+            "cpu_critical": 95.0,
+            "memory_critical": 95.0,
+            "disk_critical": 98.0,
+            "cpu_warning": 80.0,
+            "memory_warning": 85.0,
+            "disk_warning": 90.0,
         }
         self.alert_callbacks: List[Callable] = []
         self.active_alerts: Dict[str, Dict] = {}
@@ -206,44 +203,44 @@ class ResourceAlert:
 
         # Check for new alerts
         for threshold_name, threshold_value in self.thresholds.items():
-            metric_name = (
-                threshold_name.replace('_critical', '').replace('_warning', '')
+            metric_name = threshold_name.replace("_critical", "").replace(
+                "_warning", ""
             )
-            severity = 'critical' if '_critical' in threshold_name else 'warning'
+            severity = "critical" if "_critical" in threshold_name else "warning"
 
             if metric_name in metrics and metrics[metric_name] > threshold_value:
                 alert_key = f"{metric_name}_{severity}"
 
                 if alert_key not in self.active_alerts:
                     alert = {
-                        'metric': metric_name,
-                        'severity': severity,
-                        'value': metrics[metric_name],
-                        'threshold': threshold_value,
-                        'timestamp': datetime.now().isoformat(),
-                        'resolved': False
+                        "metric": metric_name,
+                        "severity": severity,
+                        "value": metrics[metric_name],
+                        "threshold": threshold_value,
+                        "timestamp": datetime.now().isoformat(),
+                        "resolved": False,
                     }
                     new_alerts[alert_key] = alert
                     self.active_alerts[alert_key] = alert
 
         # Check for resolved alerts
         for alert_key, alert in list(self.active_alerts.items()):
-            metric = alert['metric']
-            severity = alert['severity']
+            metric = alert["metric"]
+            severity = alert["severity"]
             threshold_name = f"{metric}_{severity}"
 
             if metric in metrics and metrics[metric] <= self.thresholds[threshold_name]:
-                alert['resolved'] = True
-                alert['resolved_at'] = datetime.now().isoformat()
+                alert["resolved"] = True
+                alert["resolved_at"] = datetime.now().isoformat()
                 resolved_alerts.append(alert_key)
                 del self.active_alerts[alert_key]
 
         # Trigger callbacks for new and resolved alerts
         for alert in new_alerts.values():
-            self._trigger_alert_callbacks(alert, 'triggered')
+            self._trigger_alert_callbacks(alert, "triggered")
 
         for alert_key in resolved_alerts:
-            self._trigger_alert_callbacks({'key': alert_key}, 'resolved')
+            self._trigger_alert_callbacks({"key": alert_key}, "resolved")
 
     def _trigger_alert_callbacks(self, alert: Dict, action: str):
         for callback in self.alert_callbacks:
@@ -264,10 +261,12 @@ class ResourceAlert:
 class ResourceTracker:
     """Main resource tracking and monitoring system."""
 
-    def __init__(self,
-                 update_interval: float = 1.0,
-                 metrics_dir: Optional[str] = None,
-                 limits: Dict[str, float] = None):
+    def __init__(
+        self,
+        update_interval: float = 1.0,
+        metrics_dir: Optional[str] = None,
+        limits: Dict[str, float] = None,
+    ):
         self.update_interval = update_interval
         self.metrics_dir = Path(metrics_dir or ".hydra/metrics")
         self.metrics_dir.mkdir(parents=True, exist_ok=True)
@@ -301,7 +300,9 @@ class ResourceTracker:
             self.running = True  # Only set running to True after successful start
             logger.info("Resource monitoring started")
         except RuntimeError as e:
-            logger.warning(f"Could not start monitoring thread: {e}. Running in test mode without background monitoring.")
+            logger.warning(
+                f"Could not start monitoring thread: {e}. Running in test mode without background monitoring."
+            )
             self.monitor_thread = None
             # Still set running to True so monitoring functions work, just without background collection
             self.running = True
@@ -328,7 +329,7 @@ class ResourceTracker:
                 # Update predictive model
                 now = datetime.now()
                 for metric, value in metrics.items():
-                    if metric in ['cpu_percent', 'memory_percent', 'disk_percent']:
+                    if metric in ["cpu_percent", "memory_percent", "disk_percent"]:
                         self.predictor.add_sample(metric, value, now)
 
                 # Check limits and trigger throttling
@@ -350,24 +351,24 @@ class ResourceTracker:
         try:
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
+            disk = psutil.disk_usage("/")
 
             # Get API call metrics
             api_counts = self.api_tracker.get_call_counts()
             total_api_calls = sum(
-                data['calls_last_minute'] for data in api_counts.values()
+                data["calls_last_minute"] for data in api_counts.values()
             )
 
             metrics = {
-                'cpu_percent': cpu_percent,
-                'memory_percent': memory.percent,
-                'memory_used_gb': memory.used / (1024**3),
-                'memory_available_gb': memory.available / (1024**3),
-                'disk_percent': (disk.used / disk.total) * 100,
-                'disk_used_gb': disk.used / (1024**3),
-                'disk_free_gb': disk.free / (1024**3),
-                'api_calls_per_minute': total_api_calls,
-                'timestamp': time.time()
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory.percent,
+                "memory_used_gb": memory.used / (1024**3),
+                "memory_available_gb": memory.available / (1024**3),
+                "disk_percent": (disk.used / disk.total) * 100,
+                "disk_used_gb": disk.used / (1024**3),
+                "disk_free_gb": disk.free / (1024**3),
+                "api_calls_per_minute": total_api_calls,
+                "timestamp": time.time(),
             }
 
             return metrics
@@ -379,13 +380,10 @@ class ResourceTracker:
     def _save_metrics(self, metrics: Dict[str, float]):
         """Save metrics to historical data file."""
         try:
-            record = {
-                'timestamp': datetime.now().isoformat(),
-                'metrics': metrics
-            }
+            record = {"timestamp": datetime.now().isoformat(), "metrics": metrics}
 
-            with open(self.history_file, 'a') as f:
-                f.write(json.dumps(record) + '\n')
+            with open(self.history_file, "a") as f:
+                f.write(json.dumps(record) + "\n")
 
         except Exception as e:
             logger.error(f"Error saving metrics: {e}")
@@ -402,11 +400,11 @@ class ResourceTracker:
             historical_data = []
 
             if self.history_file.exists():
-                with open(self.history_file, 'r') as f:
+                with open(self.history_file, "r") as f:
                     for line in f:
                         try:
                             record = json.loads(line.strip())
-                            record_time = datetime.fromisoformat(record['timestamp'])
+                            record_time = datetime.fromisoformat(record["timestamp"])
                             if record_time > cutoff:
                                 historical_data.append(record)
                         except (json.JSONDecodeError, KeyError, ValueError):
@@ -418,14 +416,14 @@ class ResourceTracker:
             logger.error(f"Error reading historical metrics: {e}")
             return []
 
-    def record_api_call(self, provider: str = 'default', endpoint: str = None) -> bool:
+    def record_api_call(self, provider: str = "default", endpoint: str = None) -> bool:
         """Record an API call and check rate limits."""
         return self.api_tracker.record_call(provider, endpoint)
 
     def get_predictions(self) -> Dict[str, Dict]:
         """Get resource usage predictions for the next hour."""
         predictions = {}
-        for metric in ['cpu_percent', 'memory_percent', 'disk_percent']:
+        for metric in ["cpu_percent", "memory_percent", "disk_percent"]:
             prediction = self.predictor.predict_next_hour(metric)
             if prediction:
                 predictions[metric] = prediction
@@ -463,24 +461,21 @@ class ResourceDashboard:
         api_counts = self.tracker.api_tracker.get_call_counts()
 
         return {
-            'timestamp': datetime.now().isoformat(),
-            'current_metrics': current_metrics,
-            'historical_data': historical_data[-60:],  # Last 60 data points
-            'predictions': predictions,
-            'alerts': {
-                'active_count': len(active_alerts),
-                'alerts': active_alerts
+            "timestamp": datetime.now().isoformat(),
+            "current_metrics": current_metrics,
+            "historical_data": historical_data[-60:],  # Last 60 data points
+            "predictions": predictions,
+            "alerts": {"active_count": len(active_alerts), "alerts": active_alerts},
+            "api_usage": api_counts,
+            "throttling_status": {
+                "cpu": self.tracker.is_throttling_active("cpu_percent"),
+                "memory": self.tracker.is_throttling_active("memory_percent"),
+                "disk": self.tracker.is_throttling_active("disk_percent"),
+                "api": self.tracker.is_throttling_active("api_calls_per_minute"),
             },
-            'api_usage': api_counts,
-            'throttling_status': {
-                'cpu': self.tracker.is_throttling_active('cpu_percent'),
-                'memory': self.tracker.is_throttling_active('memory_percent'),
-                'disk': self.tracker.is_throttling_active('disk_percent'),
-                'api': self.tracker.is_throttling_active('api_calls_per_minute')
-            },
-            'health_status': self._calculate_health_status(
+            "health_status": self._calculate_health_status(
                 current_metrics, active_alerts
-            )
+            ),
         }
 
     def _calculate_health_status(
@@ -488,27 +483,27 @@ class ResourceDashboard:
     ) -> str:
         """Calculate overall system health status."""
         if not metrics:
-            return 'unknown'
+            return "unknown"
 
-        critical_alerts = [a for a in alerts if a.get('severity') == 'critical']
+        critical_alerts = [a for a in alerts if a.get("severity") == "critical"]
         if critical_alerts:
-            return 'critical'
+            return "critical"
 
-        warning_alerts = [a for a in alerts if a.get('severity') == 'warning']
+        warning_alerts = [a for a in alerts if a.get("severity") == "warning"]
         if warning_alerts:
-            return 'warning'
+            return "warning"
 
         # Check if any metric is above warning thresholds
         warning_thresholds = {
-            'cpu_percent': 80,
-            'memory_percent': 85,
-            'disk_percent': 90
+            "cpu_percent": 80,
+            "memory_percent": 85,
+            "disk_percent": 90,
         }
         for metric, threshold in warning_thresholds.items():
             if metrics.get(metric, 0) > threshold:
-                return 'warning'
+                return "warning"
 
-        return 'healthy'
+        return "healthy"
 
     def get_resource_summary(self) -> Dict[str, Any]:
         """Get a summary of resource usage."""
@@ -516,23 +511,24 @@ class ResourceDashboard:
         historical = self.tracker.get_historical_metrics(hours=24)
 
         if not metrics or not historical:
-            return {'status': 'no_data'}
+            return {"status": "no_data"}
 
         # Calculate 24-hour averages
         avg_metrics = {}
-        for metric in ['cpu_percent', 'memory_percent', 'disk_percent']:
+        for metric in ["cpu_percent", "memory_percent", "disk_percent"]:
             values = [
-                h['metrics'].get(metric, 0) for h in historical
-                if metric in h.get('metrics', {})
+                h["metrics"].get(metric, 0)
+                for h in historical
+                if metric in h.get("metrics", {})
             ]
-            avg_metrics[f'{metric}_24h_avg'] = (
+            avg_metrics[f"{metric}_24h_avg"] = (
                 sum(values) / len(values) if values else 0
             )
 
         return {
-            'current': metrics,
-            'averages_24h': avg_metrics,
-            'active_alerts': len(self.tracker.get_active_alerts()),
-            'throttling_active': self.tracker.limits.is_throttling_active(),
-            'predictions': self.tracker.get_predictions()
+            "current": metrics,
+            "averages_24h": avg_metrics,
+            "active_alerts": len(self.tracker.get_active_alerts()),
+            "throttling_active": self.tracker.limits.is_throttling_active(),
+            "predictions": self.tracker.get_predictions(),
         }

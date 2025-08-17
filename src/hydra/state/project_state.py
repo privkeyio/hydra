@@ -71,23 +71,23 @@ class StateSerializer:
     @staticmethod
     def deserialize_state(data: bytes) -> ProjectState:
         state_dict = pickle.loads(data)
-        state_dict['status'] = ProjectStatus(state_dict['status'])
+        state_dict["status"] = ProjectStatus(state_dict["status"])
         return ProjectState(**state_dict)
 
     @staticmethod
     def export_json(state: ProjectState) -> str:
         state_dict = asdict(state)
-        state_dict['status'] = state.status.value
-        state_dict['created_at'] = datetime.fromtimestamp(state.created_at).isoformat()
-        state_dict['updated_at'] = datetime.fromtimestamp(state.updated_at).isoformat()
+        state_dict["status"] = state.status.value
+        state_dict["created_at"] = datetime.fromtimestamp(state.created_at).isoformat()
+        state_dict["updated_at"] = datetime.fromtimestamp(state.updated_at).isoformat()
         return json.dumps(state_dict, indent=2)
 
     @staticmethod
     def import_json(json_str: str) -> ProjectState:
         data = json.loads(json_str)
-        data['status'] = ProjectStatus(data['status'])
-        data['created_at'] = datetime.fromisoformat(data['created_at']).timestamp()
-        data['updated_at'] = datetime.fromisoformat(data['updated_at']).timestamp()
+        data["status"] = ProjectStatus(data["status"])
+        data["created_at"] = datetime.fromisoformat(data["created_at"]).timestamp()
+        data["updated_at"] = datetime.fromisoformat(data["updated_at"]).timestamp()
         return ProjectState(**data)
 
 
@@ -98,7 +98,8 @@ class StateStorage:
 
     def _init_database(self):
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS projects (
                     project_id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -107,9 +108,11 @@ class StateStorage:
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 )
-            """)
+            """
+            )
 
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS checkpoints (
                     checkpoint_id TEXT PRIMARY KEY,
                     project_id TEXT NOT NULL,
@@ -121,9 +124,11 @@ class StateStorage:
                     timestamp REAL NOT NULL,
                     FOREIGN KEY (project_id) REFERENCES projects (project_id)
                 )
-            """)
+            """
+            )
 
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS operations (
                     operation_id TEXT PRIMARY KEY,
                     project_id TEXT NOT NULL,
@@ -135,31 +140,40 @@ class StateStorage:
                     timestamp REAL NOT NULL,
                     FOREIGN KEY (project_id) REFERENCES projects (project_id)
                 )
-            """)
+            """
+            )
 
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_operations_project_time
                 ON operations (project_id, timestamp)
-            """)
+            """
+            )
 
     def save_state(self, state: ProjectState):
         state_data = StateSerializer.serialize_state(state)
 
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO projects
                 (project_id, name, status, state_data, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                state.project_id, state.name, state.status.value,
-                state_data, state.created_at, state.updated_at
-            ))
+            """,
+                (
+                    state.project_id,
+                    state.name,
+                    state.status.value,
+                    state_data,
+                    state.created_at,
+                    state.updated_at,
+                ),
+            )
 
     def load_state(self, project_id: str) -> Optional[ProjectState]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                "SELECT state_data FROM projects WHERE project_id = ?",
-                (project_id,)
+                "SELECT state_data FROM projects WHERE project_id = ?", (project_id,)
             )
             row = cursor.fetchone()
 
@@ -171,29 +185,39 @@ class StateStorage:
         metadata_json = json.dumps(checkpoint.metadata)
 
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO checkpoints
                 (checkpoint_id, project_id, checkpoint_type, state_hash,
                  description, operations_count, metadata, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                checkpoint.id, checkpoint.metadata.get('project_id', ''),
-                checkpoint.checkpoint_type.value, checkpoint.state_hash,
-                checkpoint.description, checkpoint.operations_count,
-                metadata_json, checkpoint.timestamp
-            ))
+            """,
+                (
+                    checkpoint.id,
+                    checkpoint.metadata.get("project_id", ""),
+                    checkpoint.checkpoint_type.value,
+                    checkpoint.state_hash,
+                    checkpoint.description,
+                    checkpoint.operations_count,
+                    metadata_json,
+                    checkpoint.timestamp,
+                ),
+            )
 
     def load_checkpoints(self, project_id: str) -> List[Checkpoint]:
         checkpoints = []
 
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT checkpoint_id, checkpoint_type, state_hash, description,
                        operations_count, metadata, timestamp
                 FROM checkpoints
                 WHERE project_id = ?
                 ORDER BY timestamp DESC
-            """, (project_id,))
+            """,
+                (project_id,),
+            )
 
             for row in cursor:
                 metadata = json.loads(row[5]) if row[5] else {}
@@ -204,7 +228,7 @@ class StateStorage:
                     description=row[3],
                     operations_count=row[4],
                     metadata=metadata,
-                    timestamp=row[6]
+                    timestamp=row[6],
                 )
                 checkpoints.append(checkpoint)
 
@@ -214,29 +238,40 @@ class StateStorage:
         details_json = json.dumps(operation.details)
 
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO operations
                 (operation_id, project_id, operation_type, details, success,
                  duration_ms, error_message, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                operation.id, project_id, operation.operation_type,
-                details_json, operation.success, operation.duration_ms,
-                operation.error_message, operation.timestamp
-            ))
+            """,
+                (
+                    operation.id,
+                    project_id,
+                    operation.operation_type,
+                    details_json,
+                    operation.success,
+                    operation.duration_ms,
+                    operation.error_message,
+                    operation.timestamp,
+                ),
+            )
 
     def load_operations(self, project_id: str, limit: int = 1000) -> List[Operation]:
         operations = []
 
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT operation_id, operation_type, details, success,
                        duration_ms, error_message, timestamp
                 FROM operations
                 WHERE project_id = ?
                 ORDER BY timestamp DESC
                 LIMIT ?
-            """, (project_id, limit))
+            """,
+                (project_id, limit),
+            )
 
             for row in cursor:
                 details = json.loads(row[2])
@@ -247,7 +282,7 @@ class StateStorage:
                     details=details,
                     success=bool(row[3]),
                     duration_ms=row[4],
-                    error_message=row[5]
+                    error_message=row[5],
                 )
                 operations.append(operation)
 
@@ -271,7 +306,7 @@ class ProjectStateManager:
             status=ProjectStatus.INITIALIZED,
             created_at=now,
             updated_at=now,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         self._current_states[project_id] = state
@@ -280,7 +315,7 @@ class ProjectStateManager:
         self.create_checkpoint(
             project_id=project_id,
             checkpoint_type=CheckpointType.MILESTONE,
-            description="Project initialized"
+            description="Project initialized",
         )
 
         return state
@@ -302,10 +337,15 @@ class ProjectStateManager:
             state.updated_at = time.time()
             self.storage.save_state(state)
 
-    def record_operation(self, project_id: str, operation_type: str,
-                        details: Dict, success: bool = True,
-                        duration_ms: Optional[int] = None,
-                        error_message: Optional[str] = None):
+    def record_operation(
+        self,
+        project_id: str,
+        operation_type: str,
+        details: Dict,
+        success: bool = True,
+        duration_ms: Optional[int] = None,
+        error_message: Optional[str] = None,
+    ):
 
         operation = Operation(
             id=f"{project_id}_{int(time.time() * 1000)}_{len(details)}",
@@ -314,7 +354,7 @@ class ProjectStateManager:
             details=details,
             success=success,
             duration_ms=duration_ms,
-            error_message=error_message
+            error_message=error_message,
         )
 
         self.storage.save_operation(operation, project_id)
@@ -333,8 +373,13 @@ class ProjectStateManager:
 
             self._check_auto_checkpoint(project_id)
 
-    def create_checkpoint(self, project_id: str, checkpoint_type: CheckpointType,
-                         description: str, metadata: Dict = None) -> Checkpoint:
+    def create_checkpoint(
+        self,
+        project_id: str,
+        checkpoint_type: CheckpointType,
+        description: str,
+        metadata: Dict = None,
+    ) -> Checkpoint:
 
         state = self.get_project_state(project_id)
         if not state:
@@ -350,7 +395,7 @@ class ProjectStateManager:
             state_hash=state_hash,
             description=description,
             operations_count=state.total_operations,
-            metadata={**(metadata or {}), 'project_id': project_id}
+            metadata={**(metadata or {}), "project_id": project_id},
         )
 
         self.storage.save_checkpoint(checkpoint)
@@ -381,8 +426,8 @@ class ProjectStateManager:
                 operation_type="resume",
                 details={
                     "checkpoint_id": checkpoint_id,
-                    "description": target_checkpoint.description
-                }
+                    "description": target_checkpoint.description,
+                },
             )
 
             return True
@@ -398,7 +443,7 @@ class ProjectStateManager:
                 project_id=project_id,
                 checkpoint_type=CheckpointType.AUTO,
                 description=f"Auto-checkpoint at "
-                           f"{datetime.fromtimestamp(now).strftime('%H:%M:%S')}"
+                f"{datetime.fromtimestamp(now).strftime('%H:%M:%S')}",
             )
             self._last_auto_checkpoint[project_id] = now
 
@@ -408,11 +453,11 @@ class ProjectStateManager:
         operations = self.storage.load_operations(project_id, 100)
 
         return {
-            'state': state,
-            'checkpoints': checkpoints,
-            'recent_operations': operations,
-            'total_checkpoints': len(checkpoints),
-            'uptime_hours': (time.time() - state.created_at) / 3600 if state else 0
+            "state": state,
+            "checkpoints": checkpoints,
+            "recent_operations": operations,
+            "total_checkpoints": len(checkpoints),
+            "uptime_hours": (time.time() - state.created_at) / 3600 if state else 0,
         }
 
     def export_project(self, project_id: str) -> Dict[str, Any]:
@@ -421,30 +466,30 @@ class ProjectStateManager:
             raise ValueError(f"Project {project_id} not found")
 
         return {
-            'state': StateSerializer.export_json(state),
-            'checkpoints': [
+            "state": StateSerializer.export_json(state),
+            "checkpoints": [
                 asdict(c) for c in self.storage.load_checkpoints(project_id)
             ],
-            'operations': [
+            "operations": [
                 asdict(op) for op in self.storage.load_operations(project_id)
-            ]
+            ],
         }
 
     def import_project(self, project_data: Dict[str, Any]) -> str:
-        state = StateSerializer.import_json(project_data['state'])
+        state = StateSerializer.import_json(project_data["state"])
         project_id = state.project_id
 
         self._current_states[project_id] = state
         self.storage.save_state(state)
 
-        for checkpoint_data in project_data.get('checkpoints', []):
-            checkpoint_data['checkpoint_type'] = CheckpointType(
-                checkpoint_data['checkpoint_type']
+        for checkpoint_data in project_data.get("checkpoints", []):
+            checkpoint_data["checkpoint_type"] = CheckpointType(
+                checkpoint_data["checkpoint_type"]
             )
             checkpoint = Checkpoint(**checkpoint_data)
             self.storage.save_checkpoint(checkpoint)
 
-        for operation_data in project_data.get('operations', []):
+        for operation_data in project_data.get("operations", []):
             operation = Operation(**operation_data)
             self.storage.save_operation(operation, project_id)
 
@@ -453,39 +498,43 @@ class ProjectStateManager:
     def visualize_progress(self, project_id: str) -> Dict[str, Any]:
         history = self.get_project_history(project_id)
 
-        if not history['state']:
-            return {'error': 'Project not found'}
+        if not history["state"]:
+            return {"error": "Project not found"}
 
-        checkpoints = history['checkpoints']
-        operations = history['recent_operations']
+        checkpoints = history["checkpoints"]
+        operations = history["recent_operations"]
 
         timeline = []
         for checkpoint in checkpoints:
-            timeline.append({
-                'timestamp': checkpoint.timestamp,
-                'type': 'checkpoint',
-                'description': checkpoint.description,
-                'checkpoint_type': checkpoint.checkpoint_type.value
-            })
+            timeline.append(
+                {
+                    "timestamp": checkpoint.timestamp,
+                    "type": "checkpoint",
+                    "description": checkpoint.description,
+                    "checkpoint_type": checkpoint.checkpoint_type.value,
+                }
+            )
 
         for op in operations[-20:]:
-            timeline.append({
-                'timestamp': op.timestamp,
-                'type': 'operation',
-                'description': f"{op.operation_type}: {op.success}",
-                'success': op.success
-            })
+            timeline.append(
+                {
+                    "timestamp": op.timestamp,
+                    "type": "operation",
+                    "description": f"{op.operation_type}: {op.success}",
+                    "success": op.success,
+                }
+            )
 
-        timeline.sort(key=lambda x: x['timestamp'])
+        timeline.sort(key=lambda x: x["timestamp"])
 
         return {
-            'project_id': project_id,
-            'status': history['state'].status.value,
-            'progress': {
-                'total_operations': history['state'].total_operations,
-                'success_rate': history['state'].success_rate,
-                'uptime_hours': round(history['uptime_hours'], 2),
-                'checkpoints_count': history['total_checkpoints']
+            "project_id": project_id,
+            "status": history["state"].status.value,
+            "progress": {
+                "total_operations": history["state"].total_operations,
+                "success_rate": history["state"].success_rate,
+                "uptime_hours": round(history["uptime_hours"], 2),
+                "checkpoints_count": history["total_checkpoints"],
             },
-            'timeline': timeline
+            "timeline": timeline,
         }

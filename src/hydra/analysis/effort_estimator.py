@@ -27,7 +27,7 @@ class EffortEstimator:
         velocity = 1.0
 
         # Adjust based on project size
-        total_loc = self.analysis['size_metrics']['total_loc']
+        total_loc = self.analysis["size_metrics"]["total_loc"]
         if total_loc < 1000:
             velocity *= 1.2  # Small project, faster iteration
         elif total_loc > 10000:
@@ -36,25 +36,27 @@ class EffortEstimator:
             velocity *= 0.6  # Very large, significant overhead
 
         # Adjust based on test coverage
-        test_count = self.analysis['existing_tests']['test_count']
+        test_count = self.analysis["existing_tests"]["test_count"]
         if test_count > 20:
             velocity *= 1.1  # Good test coverage, safer changes
         elif test_count == 0:
             velocity *= 0.9  # No tests, riskier changes
 
         # Adjust based on documentation
-        if self.analysis['documentation']['has_readme']:
+        if self.analysis["documentation"]["has_readme"]:
             velocity *= 1.05
-        if self.analysis['documentation']['docstring_coverage'] > 0.5:
+        if self.analysis["documentation"]["docstring_coverage"] > 0.5:
             velocity *= 1.05
 
         # Adjust based on CI/CD
-        if self.analysis['ci_cd']['automated_tests']:
+        if self.analysis["ci_cd"]["automated_tests"]:
             velocity *= 1.1
 
         return velocity
 
-    def estimate_ticket_effort(self, ticket: Dict, complexity_score: int) -> Dict[str, any]:
+    def estimate_ticket_effort(
+        self, ticket: Dict, complexity_score: int
+    ) -> Dict[str, any]:
         """Estimate effort for a single ticket.
 
         Args:
@@ -67,41 +69,40 @@ class EffortEstimator:
         """
         # Base hours by complexity
         base_hours = {
-            1: 0.5,   # Trivial
-            2: 1,     # Simple
-            3: 2,     # Easy
-            5: 4,     # Moderate
-            8: 8,     # Complex
-            13: 16,   # Very complex
-            21: 32,   # Extremely complex
+            1: 0.5,  # Trivial
+            2: 1,  # Simple
+            3: 2,  # Easy
+            5: 4,  # Moderate
+            8: 8,  # Complex
+            13: 16,  # Very complex
+            21: 32,  # Extremely complex
         }
 
         # Map complexity score to nearest Fibonacci number
-        fib_complexity = min(base_hours.keys(),
-                            key=lambda x: abs(x - complexity_score))
+        fib_complexity = min(base_hours.keys(), key=lambda x: abs(x - complexity_score))
 
         hours = base_hours[fib_complexity]
 
         # Adjust based on ticket characteristics
-        criteria_count = len(ticket.get('criteria', []))
-        hours *= (1 + criteria_count * 0.1)  # Each criterion adds 10%
+        criteria_count = len(ticket.get("criteria", []))
+        hours *= 1 + criteria_count * 0.1  # Each criterion adds 10%
 
         # Adjust for dependencies
-        dep_count = len(ticket.get('dependencies', []))
+        dep_count = len(ticket.get("dependencies", []))
         if dep_count > 0:
-            hours *= (1 + dep_count * 0.05)  # Each dependency adds 5%
+            hours *= 1 + dep_count * 0.05  # Each dependency adds 5%
 
         # Adjust based on ticket type
-        title = ticket.get('title', '').lower()
-        description = ticket.get('description', '').lower()
+        title = ticket.get("title", "").lower()
+        description = ticket.get("description", "").lower()
 
-        if 'refactor' in title or 'refactor' in description:
+        if "refactor" in title or "refactor" in description:
             hours *= 1.3  # Refactoring takes longer
-        elif 'bug' in title or 'fix' in title:
+        elif "bug" in title or "fix" in title:
             hours *= 0.8  # Bugs often quicker than features
-        elif 'test' in title or 'test' in description:
+        elif "test" in title or "test" in description:
             hours *= 0.7  # Writing tests is usually faster
-        elif 'documentation' in title or 'docs' in title:
+        elif "documentation" in title or "docs" in title:
             hours *= 0.5  # Documentation is quicker
 
         # Apply velocity factor
@@ -117,11 +118,11 @@ class EffortEstimator:
             hours = round(hours)
 
         return {
-            'hours': hours,
-            'range': (hours * 0.7, hours * 1.5),  # -30% to +50%
-            'confidence': confidence,
-            'complexity_level': self._get_complexity_label(fib_complexity),
-            'factors': self._get_estimation_factors(ticket, complexity_score)
+            "hours": hours,
+            "range": (hours * 0.7, hours * 1.5),  # -30% to +50%
+            "confidence": confidence,
+            "complexity_level": self._get_complexity_label(fib_complexity),
+            "factors": self._get_estimation_factors(ticket, complexity_score),
         }
 
     def _calculate_confidence(self, ticket: Dict, complexity_score: int) -> str:
@@ -138,9 +139,9 @@ class EffortEstimator:
         confidence_score = 0
 
         # Clear acceptance criteria increase confidence
-        if len(ticket.get('criteria', [])) > 3:
+        if len(ticket.get("criteria", [])) > 3:
             confidence_score += 2
-        elif len(ticket.get('criteria', [])) > 0:
+        elif len(ticket.get("criteria", [])) > 0:
             confidence_score += 1
 
         # Known complexity increases confidence
@@ -148,19 +149,19 @@ class EffortEstimator:
             confidence_score += 1
 
         # Clear description increases confidence
-        if len(ticket.get('description', '')) > 50:
+        if len(ticket.get("description", "")) > 50:
             confidence_score += 1
 
         # Files identified increases confidence
-        if any(f in str(ticket) for f in ['.py', '.js', '.ts']):
+        if any(f in str(ticket) for f in [".py", ".js", ".ts"]):
             confidence_score += 1
 
         if confidence_score >= 4:
-            return 'high'
+            return "high"
         elif confidence_score >= 2:
-            return 'medium'
+            return "medium"
         else:
-            return 'low'
+            return "low"
 
     def _get_complexity_label(self, score: int) -> str:
         """Get human-readable complexity label.
@@ -173,15 +174,15 @@ class EffortEstimator:
 
         """
         labels = {
-            1: 'trivial',
-            2: 'simple',
-            3: 'easy',
-            5: 'moderate',
-            8: 'complex',
-            13: 'very_complex',
-            21: 'extremely_complex'
+            1: "trivial",
+            2: "simple",
+            3: "easy",
+            5: "moderate",
+            8: "complex",
+            13: "very_complex",
+            21: "extremely_complex",
         }
-        return labels.get(score, 'unknown')
+        return labels.get(score, "unknown")
 
     def _get_estimation_factors(self, ticket: Dict, complexity_score: int) -> List[str]:
         """Get factors that influenced the estimation.
@@ -197,29 +198,29 @@ class EffortEstimator:
         factors = []
 
         if complexity_score > 10:
-            factors.append('high_code_complexity')
+            factors.append("high_code_complexity")
         elif complexity_score > 5:
-            factors.append('moderate_code_complexity')
+            factors.append("moderate_code_complexity")
 
-        if len(ticket.get('dependencies', [])) > 2:
-            factors.append('multiple_dependencies')
+        if len(ticket.get("dependencies", [])) > 2:
+            factors.append("multiple_dependencies")
 
-        if len(ticket.get('criteria', [])) > 5:
-            factors.append('many_acceptance_criteria')
+        if len(ticket.get("criteria", [])) > 5:
+            factors.append("many_acceptance_criteria")
 
-        title = ticket.get('title', '').lower()
-        if 'refactor' in title:
-            factors.append('refactoring_task')
-        if 'migration' in title:
-            factors.append('data_migration')
-        if 'api' in title:
-            factors.append('api_changes')
+        title = ticket.get("title", "").lower()
+        if "refactor" in title:
+            factors.append("refactoring_task")
+        if "migration" in title:
+            factors.append("data_migration")
+        if "api" in title:
+            factors.append("api_changes")
 
-        if self.analysis['size_metrics']['total_loc'] > 10000:
-            factors.append('large_codebase')
+        if self.analysis["size_metrics"]["total_loc"] > 10000:
+            factors.append("large_codebase")
 
-        if self.analysis['existing_tests']['test_count'] == 0:
-            factors.append('no_test_coverage')
+        if self.analysis["existing_tests"]["test_count"] == 0:
+            factors.append("no_test_coverage")
 
         return factors
 
@@ -238,17 +239,12 @@ class EffortEstimator:
 
         for ticket in tickets:
             # Simple complexity estimation based on model
-            complexity_map = {
-                'fast': 3,
-                'balanced': 5,
-                'smart': 8,
-                'coder': 13
-            }
-            complexity = complexity_map.get(ticket.get('model', 'balanced'), 5)
+            complexity_map = {"fast": 3, "balanced": 5, "smart": 8, "coder": 13}
+            complexity = complexity_map.get(ticket.get("model", "balanced"), 5)
 
             estimate = self.estimate_ticket_effort(ticket, complexity)
             estimates.append(estimate)
-            total_hours += estimate['hours']
+            total_hours += estimate["hours"]
 
         # Calculate parallel execution potential
         dependency_graph = self._build_dependency_graph(tickets)
@@ -256,38 +252,38 @@ class EffortEstimator:
 
         # Estimate with different team sizes
         timelines = {
-            'sequential': {
-                'hours': total_hours,
-                'days': total_hours / 8,
-                'weeks': total_hours / 40
+            "sequential": {
+                "hours": total_hours,
+                "days": total_hours / 8,
+                "weeks": total_hours / 40,
             },
-            'parallel_2_devs': {
-                'hours': max(critical_path_hours, total_hours / 2),
-                'days': max(critical_path_hours, total_hours / 2) / 8,
-                'weeks': max(critical_path_hours, total_hours / 2) / 40
+            "parallel_2_devs": {
+                "hours": max(critical_path_hours, total_hours / 2),
+                "days": max(critical_path_hours, total_hours / 2) / 8,
+                "weeks": max(critical_path_hours, total_hours / 2) / 40,
             },
-            'parallel_3_devs': {
-                'hours': max(critical_path_hours, total_hours / 3),
-                'days': max(critical_path_hours, total_hours / 3) / 8,
-                'weeks': max(critical_path_hours, total_hours / 3) / 40
-            }
+            "parallel_3_devs": {
+                "hours": max(critical_path_hours, total_hours / 3),
+                "days": max(critical_path_hours, total_hours / 3) / 8,
+                "weeks": max(critical_path_hours, total_hours / 3) / 40,
+            },
         }
 
         # Add buffer for coordination overhead
         for timeline in timelines.values():
-            timeline['with_buffer'] = {
-                'hours': timeline['hours'] * 1.2,
-                'days': timeline['days'] * 1.2,
-                'weeks': timeline['weeks'] * 1.2
+            timeline["with_buffer"] = {
+                "hours": timeline["hours"] * 1.2,
+                "days": timeline["days"] * 1.2,
+                "weeks": timeline["weeks"] * 1.2,
             }
 
         return {
-            'total_effort_hours': total_hours,
-            'critical_path_hours': critical_path_hours,
-            'timelines': timelines,
-            'ticket_count': len(tickets),
-            'average_ticket_hours': total_hours / len(tickets) if tickets else 0,
-            'complexity_distribution': self._get_complexity_distribution(estimates)
+            "total_effort_hours": total_hours,
+            "critical_path_hours": critical_path_hours,
+            "timelines": timelines,
+            "ticket_count": len(tickets),
+            "average_ticket_hours": total_hours / len(tickets) if tickets else 0,
+            "complexity_distribution": self._get_complexity_distribution(estimates),
         }
 
     def _build_dependency_graph(self, tickets: List[Dict]) -> Dict[str, List[str]]:
@@ -304,7 +300,7 @@ class EffortEstimator:
         for i, ticket in enumerate(tickets):
             ticket_id = str(i)
             deps = []
-            for dep in ticket.get('dependencies', []):
+            for dep in ticket.get("dependencies", []):
                 if isinstance(dep, str) and dep.isdigit():
                     dep_idx = int(dep) - 1
                     if 0 <= dep_idx < len(tickets):
@@ -312,8 +308,9 @@ class EffortEstimator:
             graph[ticket_id] = deps
         return graph
 
-    def _calculate_critical_path(self, graph: Dict[str, List[str]],
-                                 estimates: List[Dict]) -> float:
+    def _calculate_critical_path(
+        self, graph: Dict[str, List[str]], estimates: List[Dict]
+    ) -> float:
         """Calculate critical path through dependency graph.
 
         Args:
@@ -335,7 +332,9 @@ class EffortEstimator:
                 return path_lengths[node]
 
             node_idx = int(node)
-            node_hours = estimates[node_idx]['hours'] if node_idx < len(estimates) else 0
+            node_hours = (
+                estimates[node_idx]["hours"] if node_idx < len(estimates) else 0
+            )
 
             deps = graph.get(node, [])
             if not deps:
@@ -365,17 +364,17 @@ class EffortEstimator:
 
         """
         distribution = {
-            'trivial': 0,
-            'simple': 0,
-            'easy': 0,
-            'moderate': 0,
-            'complex': 0,
-            'very_complex': 0,
-            'extremely_complex': 0
+            "trivial": 0,
+            "simple": 0,
+            "easy": 0,
+            "moderate": 0,
+            "complex": 0,
+            "very_complex": 0,
+            "extremely_complex": 0,
         }
 
         for estimate in estimates:
-            level = estimate.get('complexity_level', 'unknown')
+            level = estimate.get("complexity_level", "unknown")
             if level in distribution:
                 distribution[level] += 1
 

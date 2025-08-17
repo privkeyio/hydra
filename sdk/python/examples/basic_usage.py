@@ -12,8 +12,7 @@ def main():
         return
 
     client = HydraClient(
-        api_key=api_key,
-        base_url=os.getenv("HYDRA_BASE_URL", "http://localhost:8000")
+        api_key=api_key, base_url=os.getenv("HYDRA_BASE_URL", "http://localhost:8000")
     )
 
     try:
@@ -26,7 +25,7 @@ def main():
         print("Generating code...")
         task = client.generate_code(
             prompt="Create a Python function that calculates the factorial of a number",
-            language="python"
+            language="python",
         )
         print(f"Task created: {task.task_id}")
 
@@ -44,6 +43,7 @@ def main():
 
     except Exception as e:
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     main()

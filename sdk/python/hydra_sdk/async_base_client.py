@@ -77,7 +77,9 @@ class AsyncBaseClient:
                             error_data = await response.json()
                             error_msg = error_data.get("detail", str(error_data))
                         except (json.JSONDecodeError, aiohttp.ContentTypeError):
-                            error_msg = await response.text() or f"HTTP {response.status}"
+                            error_msg = (
+                                await response.text() or f"HTTP {response.status}"
+                            )
 
                         if attempt < self.max_retries and response.status >= 500:
                             delay = self._exponential_backoff(attempt)
@@ -100,4 +102,4 @@ class AsyncBaseClient:
                 raise HydraAPIError(0, f"Request failed: {str(e)}")
 
     def _exponential_backoff(self, attempt: int) -> float:
-        return self.retry_delay * (2 ** attempt)
+        return self.retry_delay * (2**attempt)

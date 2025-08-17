@@ -77,7 +77,7 @@ class ProviderError:
             ErrorCategory.NETWORK,
             ErrorCategory.API_LIMIT,
             ErrorCategory.TIMEOUT,
-            ErrorCategory.SESSION
+            ErrorCategory.SESSION,
         }
         return self.category in retryable_categories
 
@@ -91,21 +91,23 @@ class RetryConfig:
     max_delay: float = 30.0
     exponential_base: float = 2.0
     jitter: bool = True
-    retry_on: List[ErrorCategory] = field(default_factory=lambda: [
-        ErrorCategory.NETWORK,
-        ErrorCategory.API_LIMIT,
-        ErrorCategory.TIMEOUT
-    ])
+    retry_on: List[ErrorCategory] = field(
+        default_factory=lambda: [
+            ErrorCategory.NETWORK,
+            ErrorCategory.API_LIMIT,
+            ErrorCategory.TIMEOUT,
+        ]
+    )
 
     def get_delay(self, attempt: int) -> float:
         """Calculate delay for retry attempt."""
         delay = min(
-            self.initial_delay * (self.exponential_base ** attempt),
-            self.max_delay
+            self.initial_delay * (self.exponential_base**attempt), self.max_delay
         )
         if self.jitter:
             import random
-            delay *= (0.5 + random.random())
+
+            delay *= 0.5 + random.random()
         return delay
 
 
@@ -120,9 +122,7 @@ class ProviderErrorHandler:
         self.retry_config = RetryConfig()
 
     def register_handler(
-        self,
-        category: ErrorCategory,
-        handler: Callable[[ProviderError], Optional[Any]]
+        self, category: ErrorCategory, handler: Callable[[ProviderError], Optional[Any]]
     ):
         """Register a custom error handler for a category.
 
@@ -145,10 +145,7 @@ class ProviderErrorHandler:
         self.fallback_providers = providers
 
     def handle_error(
-        self,
-        provider: str,
-        error: Exception,
-        context: Optional[Dict[str, Any]] = None
+        self, provider: str, error: Exception, context: Optional[Dict[str, Any]] = None
     ) -> ProviderError:
         """Handle and categorize a provider error.
 
@@ -172,7 +169,7 @@ class ProviderErrorHandler:
             message=self._get_user_friendly_message(category, error),
             original_error=error,
             context=context or {},
-            error_type=self._get_error_type(category)
+            error_type=self._get_error_type(category),
         )
 
         # Log the error
@@ -186,7 +183,9 @@ class ProviderErrorHandler:
 
         return provider_error
 
-    def _categorize_error(self, error: Exception) -> tuple[ErrorCategory, ErrorSeverity]:
+    def _categorize_error(
+        self, error: Exception
+    ) -> tuple[ErrorCategory, ErrorSeverity]:
         """Categorize an error based on its type and message.
 
         Args:
@@ -200,43 +199,49 @@ class ProviderErrorHandler:
         type(error).__name__
 
         # Authentication errors
-        if any(x in error_str for x in ['api key', 'authentication', 'unauthorized', 'forbidden']):
+        if any(
+            x in error_str
+            for x in ["api key", "authentication", "unauthorized", "forbidden"]
+        ):
             return ErrorCategory.AUTHENTICATION, ErrorSeverity.CRITICAL
 
         # Network errors
-        if any(x in error_str for x in ['connection', 'network', 'dns', 'ssl', 'certificate']):
+        if any(
+            x in error_str
+            for x in ["connection", "network", "dns", "ssl", "certificate"]
+        ):
             return ErrorCategory.NETWORK, ErrorSeverity.HIGH
 
         # Rate limiting
-        if any(x in error_str for x in ['rate limit', 'too many requests', '429']):
+        if any(x in error_str for x in ["rate limit", "too many requests", "429"]):
             return ErrorCategory.API_LIMIT, ErrorSeverity.MEDIUM
 
         # Timeout errors
-        if any(x in error_str for x in ['timeout', 'timed out']):
+        if any(x in error_str for x in ["timeout", "timed out"]):
             return ErrorCategory.TIMEOUT, ErrorSeverity.MEDIUM
 
         # Model unavailable
-        if any(x in error_str for x in ['model', 'not found', 'unavailable']):
+        if any(x in error_str for x in ["model", "not found", "unavailable"]):
             return ErrorCategory.MODEL_UNAVAILABLE, ErrorSeverity.HIGH
 
         # Session errors
-        if any(x in error_str for x in ['session', 'tmux', 'terminal']):
+        if any(x in error_str for x in ["session", "tmux", "terminal"]):
             return ErrorCategory.SESSION, ErrorSeverity.MEDIUM
 
         # Resource errors
-        if any(x in error_str for x in ['memory', 'disk', 'resource', 'quota']):
+        if any(x in error_str for x in ["memory", "disk", "resource", "quota"]):
             return ErrorCategory.RESOURCE, ErrorSeverity.HIGH
 
         # Invalid request
-        if any(x in error_str for x in ['invalid', 'bad request', '400']):
+        if any(x in error_str for x in ["invalid", "bad request", "400"]):
             return ErrorCategory.INVALID_REQUEST, ErrorSeverity.LOW
 
         # Initialization errors
-        if any(x in error_str for x in ['init', 'setup', 'config', 'not found at']):
+        if any(x in error_str for x in ["init", "setup", "config", "not found at"]):
             return ErrorCategory.INITIALIZATION, ErrorSeverity.CRITICAL
 
         # Critical errors
-        if any(x in error_str for x in ['critical', 'fatal', 'severe']):
+        if any(x in error_str for x in ["critical", "fatal", "severe"]):
             return ErrorCategory.UNKNOWN, ErrorSeverity.CRITICAL
 
         # Default
@@ -244,10 +249,10 @@ class ProviderErrorHandler:
 
     def _get_error_type(self, category: ErrorCategory) -> ErrorType:
         """Get error type from category for backward compatibility.
-        
+
         Args:
             category: Error category
-            
+
         Returns:
             Corresponding ErrorType
 
@@ -266,7 +271,9 @@ class ProviderErrorHandler:
         }
         return mapping.get(category, ErrorType.PROVIDER_ERROR)
 
-    def _get_user_friendly_message(self, category: ErrorCategory, error: Exception) -> str:
+    def _get_user_friendly_message(
+        self, category: ErrorCategory, error: Exception
+    ) -> str:
         """Generate user-friendly error message.
 
         Args:
@@ -317,7 +324,7 @@ class ProviderErrorHandler:
             ErrorCategory.UNKNOWN: (
                 f"An unexpected error occurred: {str(error)}. "
                 "Please check the logs for more details."
-            )
+            ),
         }
 
         base_message = messages.get(category, str(error))
@@ -341,7 +348,7 @@ class ProviderErrorHandler:
             ErrorSeverity.HIGH: logging.ERROR,
             ErrorSeverity.MEDIUM: logging.WARNING,
             ErrorSeverity.LOW: logging.INFO,
-            ErrorSeverity.WARNING: logging.WARNING
+            ErrorSeverity.WARNING: logging.WARNING,
         }
 
         level = log_levels.get(error.severity, logging.ERROR)
@@ -349,11 +356,11 @@ class ProviderErrorHandler:
             level,
             f"Provider error: {error}",
             extra={
-                'provider': error.provider,
-                'category': error.category.value,
-                'severity': error.severity.value,
-                'context': error.context
-            }
+                "provider": error.provider,
+                "category": error.category.value,
+                "severity": error.severity.value,
+                "context": error.context,
+            },
         )
 
     def _run_handlers(self, error: ProviderError):
@@ -430,8 +437,7 @@ class ProviderErrorHandler:
         """
         if provider:
             self.error_history = [
-                e for e in self.error_history
-                if e.provider != provider
+                e for e in self.error_history if e.provider != provider
             ]
         else:
             self.error_history.clear()
@@ -446,39 +452,34 @@ class ProviderErrorHandler:
             Health status dictionary
 
         """
-        provider_errors = [
-            e for e in self.error_history
-            if e.provider == provider
-        ]
+        provider_errors = [e for e in self.error_history if e.provider == provider]
 
         if not provider_errors:
-            return {
-                'status': 'healthy',
-                'error_count': 0,
-                'last_error': None
-            }
+            return {"status": "healthy", "error_count": 0, "last_error": None}
 
         recent_errors = [
-            e for e in provider_errors
+            e
+            for e in provider_errors
             if time.time() - e.timestamp < 300  # Last 5 minutes
         ]
 
         critical_errors = [
-            e for e in recent_errors
+            e
+            for e in recent_errors
             if e.severity in [ErrorSeverity.CRITICAL, ErrorSeverity.HIGH]
         ]
 
-        status = 'healthy'
+        status = "healthy"
         if len(critical_errors) > 0:
-            status = 'unhealthy'
+            status = "unhealthy"
         elif len(recent_errors) > 5:
-            status = 'degraded'
+            status = "degraded"
 
         return {
-            'status': status,
-            'error_count': len(recent_errors),
-            'last_error': provider_errors[-1] if provider_errors else None,
-            'critical_errors': len(critical_errors)
+            "status": status,
+            "error_count": len(recent_errors),
+            "last_error": provider_errors[-1] if provider_errors else None,
+            "critical_errors": len(critical_errors),
         }
 
 

@@ -41,7 +41,8 @@ app = FastAPI(title="Hydra Monitoring Dashboard")
 
 @app.get("/")
 async def dashboard():
-    return HTMLResponse("""
+    return HTMLResponse(
+        """
 <!DOCTYPE html>
 <html>
 <head>
@@ -294,7 +295,8 @@ async def dashboard():
     </script>
 </body>
 </html>
-    """)
+    """
+    )
 
 
 @app.get("/health")
@@ -326,16 +328,12 @@ async def broadcast_updates():
     while True:
         try:
             health_data = monitoring.get_health_status()
-            await dashboard_ws.broadcast({
-                'type': 'health_update',
-                'data': health_data
-            })
+            await dashboard_ws.broadcast({"type": "health_update", "data": health_data})
 
             bottlenecks_data = profiler.get_bottlenecks()
-            await dashboard_ws.broadcast({
-                'type': 'bottlenecks_update',
-                'data': bottlenecks_data
-            })
+            await dashboard_ws.broadcast(
+                {"type": "bottlenecks_update", "data": bottlenecks_data}
+            )
 
         except Exception as e:
             print(f"Error broadcasting updates: {e}")

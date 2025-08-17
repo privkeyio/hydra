@@ -82,7 +82,7 @@ class CodeBlockStrategy(ParsingStrategy):
 
         for lang, content in all_blocks:
             # Look for file path patterns in the first few lines of each block
-            lines = content.split('\n')
+            lines = content.split("\n")
             if not lines:
                 continue
 
@@ -92,9 +92,9 @@ class CodeBlockStrategy(ParsingStrategy):
 
             # Try different comment styles
             path_patterns = [
-                r'^(?://|#|--)\s*(.+)$',  # Comment with path
-                r'^#\s*file:\s*(.+)$',   # Explicit file: directive
-                r'^(?://|#|--)\s*file:\s*(.+)$',  # Comment file: directive
+                r"^(?://|#|--)\s*(.+)$",  # Comment with path
+                r"^#\s*file:\s*(.+)$",  # Explicit file: directive
+                r"^(?://|#|--)\s*file:\s*(.+)$",  # Comment file: directive
             ]
 
             for pattern in path_patterns:
@@ -105,7 +105,7 @@ class CodeBlockStrategy(ParsingStrategy):
 
             if path and not re.search(r'[\\<>:"|?*]', path):
                 # Remove the path line from content
-                remaining_content = '\n'.join(lines[1:])
+                remaining_content = "\n".join(lines[1:])
 
                 # Determine action type (default to CREATE_FILE)
                 action_type = ActionType.CREATE_FILE
@@ -151,14 +151,14 @@ class CodeBlockStrategy(ParsingStrategy):
     def _find_code_blocks(self, response: str) -> List[tuple]:
         """Find all code blocks by properly matching backticks."""
         blocks = []
-        lines = response.split('\n')
+        lines = response.split("\n")
 
         i = 0
         while i < len(lines):
             line = lines[i].strip()
 
             # Look for opening ```
-            if line.startswith('```'):
+            if line.startswith("```"):
                 # Extract language if present
                 lang = line[3:].strip() if len(line) > 3 else ""
 
@@ -170,8 +170,8 @@ class CodeBlockStrategy(ParsingStrategy):
                 while j < len(lines) and depth > 0:
                     current_line = lines[j].strip()
 
-                    if current_line.startswith('```'):
-                        if current_line == '```':
+                    if current_line.startswith("```"):
+                        if current_line == "```":
                             # This is a closing ```
                             depth -= 1
                         else:
@@ -184,7 +184,7 @@ class CodeBlockStrategy(ParsingStrategy):
 
                 if depth == 0:
                     # Found properly matched closing backticks
-                    blocks.append((lang, '\n'.join(content_lines)))
+                    blocks.append((lang, "\n".join(content_lines)))
                     i = j
                 else:
                     # No matching closing backticks found, skip this block
@@ -212,9 +212,7 @@ class CommandStrategy(ParsingStrategy):
             r"(?:Run|Execute|Exec):\s*(?P<cmd>.*?)(?:\n|$)", re.IGNORECASE
         ),
         "shell_prompt": re.compile(r"^\$\s+(?P<cmd>.+)$", re.MULTILINE),
-        "bash_block": re.compile(
-            r"```(?:bash|sh|shell)\n(?P<cmd>.*?)```", re.DOTALL
-        ),
+        "bash_block": re.compile(r"```(?:bash|sh|shell)\n(?P<cmd>.*?)```", re.DOTALL),
         "install_instruction": re.compile(
             r"(?:Install|Add):\s*(?P<cmd>(?:npm|pip|yarn|cargo|gem|apt|brew).*?)(?:\n|$)",
             re.IGNORECASE,
@@ -397,9 +395,7 @@ class DirectiveStrategy(ParsingStrategy):
                     options["source"] = match.group("source")
 
                 # Look for content after the directive
-                content = self._extract_content_after_directive(
-                    response, match.end()
-                )
+                content = self._extract_content_after_directive(response, match.end())
 
                 actions.append(
                     Action(
@@ -481,4 +477,3 @@ class CompositeParsingStrategy(ParsingStrategy):
                     all_actions.append(action)
 
         return all_actions
-

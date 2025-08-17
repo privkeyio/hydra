@@ -4,8 +4,9 @@ import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,7 +39,7 @@ def get_database_url():
     url = os.getenv("DATABASE_URL")
     if url:
         return url
-    
+
     # Fall back to default SQLite database
     return "sqlite:///.hydra/dashboard/hydra.db"
 
@@ -75,15 +76,15 @@ def run_migrations_online() -> None:
 
     """
     configuration = config.get_section(config.config_ini_section)
-    configuration['sqlalchemy.url'] = get_database_url()
-    
+    configuration["sqlalchemy.url"] = get_database_url()
+
     # Handle SQLite specific configuration
-    if 'sqlite' in configuration['sqlalchemy.url']:
+    if "sqlite" in configuration["sqlalchemy.url"]:
         connectable = engine_from_config(
             configuration,
             prefix="sqlalchemy.",
             poolclass=pool.StaticPool,
-            connect_args={"check_same_thread": False}
+            connect_args={"check_same_thread": False},
         )
     else:
         connectable = engine_from_config(
@@ -93,10 +94,7 @@ def run_migrations_online() -> None:
         )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

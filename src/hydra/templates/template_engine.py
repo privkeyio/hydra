@@ -31,7 +31,7 @@ class Template:
 class TemplateEngine:
     def __init__(self, templates_dir: Optional[Path] = None):
         if templates_dir is None:
-            templates_dir = Path(__file__).parent / 'templates'
+            templates_dir = Path(__file__).parent / "templates"
 
         self.templates_dir = Path(templates_dir)
         self.jinja_env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
@@ -45,7 +45,7 @@ class TemplateEngine:
         if not template_dir.exists():
             raise ValueError(f"Template '{template_name}' not found")
 
-        config_path = template_dir / 'template.json'
+        config_path = template_dir / "template.json"
         if not config_path.exists():
             raise ValueError(f"Template config not found: {config_path}")
 
@@ -53,25 +53,25 @@ class TemplateEngine:
             config = json.load(f)
 
         parameters = [
-            TemplateParameter(**param) for param in config.get('parameters', [])
+            TemplateParameter(**param) for param in config.get("parameters", [])
         ]
 
         files = {}
-        files_dir = template_dir / 'files'
+        files_dir = template_dir / "files"
         if files_dir.exists():
-            for file_path in files_dir.rglob('*'):
+            for file_path in files_dir.rglob("*"):
                 if file_path.is_file():
                     rel_path = file_path.relative_to(files_dir)
-                    with open(file_path, 'r', encoding='utf-8') as f:
+                    with open(file_path, "r", encoding="utf-8") as f:
                         files[str(rel_path)] = f.read()
 
         template = Template(
-            name=config['name'],
-            description=config['description'],
+            name=config["name"],
+            description=config["description"],
             parameters=parameters,
             files=files,
-            post_generation_commands=config.get('post_generation_commands', []),
-            tags=config.get('tags', [])
+            post_generation_commands=config.get("post_generation_commands", []),
+            tags=config.get("tags", []),
         )
 
         self._templates_cache[template_name] = template
@@ -83,13 +83,14 @@ class TemplateEngine:
 
         templates = []
         for item in self.templates_dir.iterdir():
-            if item.is_dir() and (item / 'template.json').exists():
+            if item.is_dir() and (item / "template.json").exists():
                 templates.append(item.name)
 
         return sorted(templates)
 
-    def generate_project(self, template_name: str, output_dir: Path,
-                        parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_project(
+        self, template_name: str, output_dir: Path, parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
         template = self.load_template(template_name)
 
         resolved_params = self._resolve_parameters(template.parameters, parameters)
@@ -105,21 +106,22 @@ class TemplateEngine:
             full_path = output_dir / rendered_path
             full_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(full_path, 'w', encoding='utf-8') as f:
+            with open(full_path, "w", encoding="utf-8") as f:
                 f.write(rendered_content)
 
             generated_files.append(str(full_path))
 
         return {
-            'template': template_name,
-            'output_dir': str(output_dir),
-            'parameters': resolved_params,
-            'generated_files': generated_files,
-            'post_generation_commands': template.post_generation_commands
+            "template": template_name,
+            "output_dir": str(output_dir),
+            "parameters": resolved_params,
+            "generated_files": generated_files,
+            "post_generation_commands": template.post_generation_commands,
         }
 
-    def _resolve_parameters(self, template_params: List[TemplateParameter],
-                           user_params: Dict[str, Any]) -> Dict[str, Any]:
+    def _resolve_parameters(
+        self, template_params: List[TemplateParameter], user_params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         resolved = {}
 
         for param in template_params:
@@ -138,4 +140,3 @@ class TemplateEngine:
     def _render_string(self, template_str: str, context: Dict[str, Any]) -> str:
         template = self.jinja_env.from_string(template_str)
         return template.render(**context)
-

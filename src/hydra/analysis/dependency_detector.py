@@ -84,29 +84,29 @@ class DependencyDetector:
 
         # Extract file paths
         file_patterns = [
-            r'(?:src/|tests/|lib/)[a-zA-Z0-9_/]+\.(?:py|js|ts|jsx|tsx)',
-            r'[a-zA-Z0-9_]+\.(?:py|js|ts|jsx|tsx)',
+            r"(?:src/|tests/|lib/)[a-zA-Z0-9_/]+\.(?:py|js|ts|jsx|tsx)",
+            r"[a-zA-Z0-9_]+\.(?:py|js|ts|jsx|tsx)",
         ]
         for pattern in file_patterns:
             matches = re.findall(pattern, text)
             components["files"].update(matches)
 
         # Extract Python modules
-        module_pattern = r'(?:from|import)\s+([a-zA-Z0-9_.]+)'
+        module_pattern = r"(?:from|import)\s+([a-zA-Z0-9_.]+)"
         matches = re.findall(module_pattern, text)
         components["modules"].update(matches)
 
         # Extract function/class names
-        func_pattern = r'(?:def|function|class)\s+([a-zA-Z0-9_]+)'
+        func_pattern = r"(?:def|function|class)\s+([a-zA-Z0-9_]+)"
         matches = re.findall(func_pattern, text)
         components["functions"].update(matches)
 
         # Extract database operations
         db_patterns = [
-            r'(?:CREATE|ALTER|DROP|UPDATE|INSERT|DELETE)\s+(?:TABLE|INDEX|DATABASE)',
-            r'migration',
-            r'schema',
-            r'database',
+            r"(?:CREATE|ALTER|DROP|UPDATE|INSERT|DELETE)\s+(?:TABLE|INDEX|DATABASE)",
+            r"migration",
+            r"schema",
+            r"database",
         ]
         for pattern in db_patterns:
             if re.search(pattern, text, re.IGNORECASE):
@@ -114,9 +114,9 @@ class DependencyDetector:
 
         # Extract API endpoints
         api_patterns = [
-            r'(?:GET|POST|PUT|DELETE|PATCH)\s+/[a-zA-Z0-9_/]+',
-            r'@app\.(?:get|post|put|delete)',
-            r'router\.(?:get|post|put|delete)',
+            r"(?:GET|POST|PUT|DELETE|PATCH)\s+/[a-zA-Z0-9_/]+",
+            r"@app\.(?:get|post|put|delete)",
+            r"router\.(?:get|post|put|delete)",
         ]
         for pattern in api_patterns:
             matches = re.findall(pattern, text)
@@ -124,9 +124,9 @@ class DependencyDetector:
 
         # Extract configuration
         config_patterns = [
-            r'(?:config|settings|env|environment)',
-            r'\.env',
-            r'config\.(?:json|yaml|yml|toml)',
+            r"(?:config|settings|env|environment)",
+            r"\.env",
+            r"config\.(?:json|yaml|yml|toml)",
         ]
         for pattern in config_patterns:
             if re.search(pattern, text, re.IGNORECASE):
@@ -157,8 +157,14 @@ class DependencyDetector:
         # Base classes/interfaces before implementations
         if components2["classes"]:
             for cls in components2["classes"]:
-                if "base" in cls.lower() or "interface" in cls.lower() or "abstract" in cls.lower():
-                    if components1["classes"] and any(cls.lower() in c.lower() for c in components1["classes"]):
+                if (
+                    "base" in cls.lower()
+                    or "interface" in cls.lower()
+                    or "abstract" in cls.lower()
+                ):
+                    if components1["classes"] and any(
+                        cls.lower() in c.lower() for c in components1["classes"]
+                    ):
                         return True
 
         # Shared modules before dependent modules
@@ -169,7 +175,9 @@ class DependencyDetector:
                     return True
 
         # API setup before API usage
-        if "router" in str(components2["api"]) and "endpoint" in str(components1["api"]):
+        if "router" in str(components2["api"]) and "endpoint" in str(
+            components1["api"]
+        ):
             return True
 
         # File creation before file modification
@@ -182,7 +190,9 @@ class DependencyDetector:
 
         return False
 
-    def _resolve_circular_dependencies(self, dependencies: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    def _resolve_circular_dependencies(
+        self, dependencies: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
         """Resolve circular dependencies by breaking cycles.
 
         Args:
@@ -192,6 +202,7 @@ class DependencyDetector:
             Cleaned dependency map without cycles
 
         """
+
         # Detect cycles using DFS
         def has_cycle(node: str, visited: Set[str], rec_stack: Set[str]) -> bool:
             visited.add(node)
@@ -225,7 +236,9 @@ class DependencyDetector:
 
         return cleaned
 
-    def _apply_logical_ordering(self, dependencies: Dict[str, List[str]], tasks: List[Dict]) -> Dict[str, List[str]]:
+    def _apply_logical_ordering(
+        self, dependencies: Dict[str, List[str]], tasks: List[Dict]
+    ) -> Dict[str, List[str]]:
         """Apply logical ordering rules to dependencies.
 
         Args:
@@ -346,23 +359,23 @@ class DependencyDetector:
         try:
             content = full_path.read_text()
 
-            if full_path.suffix == '.py':
+            if full_path.suffix == ".py":
                 tree = ast.parse(content)
 
                 for node in ast.walk(tree):
                     if isinstance(node, ast.Import):
                         for alias in node.names:
                             # Convert module to potential file path
-                            potential_path = alias.name.replace('.', '/') + '.py'
+                            potential_path = alias.name.replace(".", "/") + ".py"
                             if (self.project_path / potential_path).exists():
                                 deps.add(potential_path)
                     elif isinstance(node, ast.ImportFrom):
                         if node.module and not node.level:  # Not relative import
-                            potential_path = node.module.replace('.', '/') + '.py'
+                            potential_path = node.module.replace(".", "/") + ".py"
                             if (self.project_path / potential_path).exists():
                                 deps.add(potential_path)
 
-            elif full_path.suffix in ['.js', '.ts', '.jsx', '.tsx']:
+            elif full_path.suffix in [".js", ".ts", ".jsx", ".tsx"]:
                 # JavaScript/TypeScript imports
                 import_patterns = [
                     r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]',
@@ -372,7 +385,7 @@ class DependencyDetector:
                 for pattern in import_patterns:
                     matches = re.findall(pattern, content)
                     for match in matches:
-                        if match.startswith('.'):
+                        if match.startswith("."):
                             # Relative import
                             resolved = (full_path.parent / match).resolve()
                             if resolved.exists():
@@ -415,8 +428,9 @@ class DependencyDetector:
                     continue
 
                 # Check if they depend on each other
-                if (other in component_deps.get(component, set()) or
-                    component in component_deps.get(other, set())):
+                if other in component_deps.get(
+                    component, set()
+                ) or component in component_deps.get(other, set()):
                     group.append(other)
                     processed.add(other)
 

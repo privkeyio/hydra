@@ -1,4 +1,5 @@
 """Abstract base class for LLM providers."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -67,13 +68,13 @@ class LLMProvider(ABC):
         """Return the current model."""
         # Handle both LLMConfig and dict configurations
         if isinstance(self.config, dict):
-            return self.config.get('model', 'unknown')
+            return self.config.get("model", "unknown")
         return self.config.model
 
     def __repr__(self):
         # Handle both LLMConfig and dict configurations
         if isinstance(self.config, dict):
-            model = self.config.get('model', 'unknown')
+            model = self.config.get("model", "unknown")
         else:
             model = self.config.model
         return f"{self.name}(model={model})"

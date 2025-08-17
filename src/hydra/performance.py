@@ -110,8 +110,10 @@ class RequestBatcher:
         batch = []
         start_time = time.time()
 
-        while (len(batch) < self.batch_size and
-               (time.time() - start_time) < self.batch_timeout):
+        while (
+            len(batch) < self.batch_size
+            and (time.time() - start_time) < self.batch_timeout
+        ):
             try:
                 timeout = self.batch_timeout - (time.time() - start_time)
                 request, future = await asyncio.wait_for(
@@ -153,7 +155,7 @@ class RequestBatcher:
             url = "https://api.anthropic.com/v1/messages"
             headers = {
                 "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
-                "anthropic-version": "2023-06-01"
+                "anthropic-version": "2023-06-01",
             }
         else:
             base_url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
@@ -217,7 +219,7 @@ class StreamingResponseHandler:
                 url = "https://api.anthropic.com/v1/messages"
                 headers = {
                     "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
-                    "anthropic-version": "2023-06-01"
+                    "anthropic-version": "2023-06-01",
                 }
             else:
                 base_url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
@@ -248,7 +250,8 @@ class QueryOptimizer:
     @staticmethod
     async def optimize_task_queries(session: AsyncSession):
         await session.execute(
-            text("""
+            text(
+                """
             CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_status_tenant_created
             ON tasks(status, tenant_id, created_at DESC);
             CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_api_key_month
@@ -257,18 +260,19 @@ class QueryOptimizer:
             CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_cost_tracking
             ON usage(provider, model, DATE_TRUNC('day', timestamp))
             WHERE cost IS NOT NULL;
-            """)
+            """
+            )
         )
         await session.commit()
 
     @staticmethod
     async def get_task_with_usage(session: AsyncSession, task_id: str):
         result = await session.execute(
-            select("tasks", "usage").join("usage", isouter=True).where(
-                text("tasks.id = :task_id")
-            ).params(task_id=task_id).options(
-                selectinload("usage_records")
-            )
+            select("tasks", "usage")
+            .join("usage", isouter=True)
+            .where(text("tasks.id = :task_id"))
+            .params(task_id=task_id)
+            .options(selectinload("usage_records"))
         )
         return result.scalars().first()
 
@@ -277,7 +281,8 @@ class QueryOptimizer:
         session: AsyncSession, tenant_id: str, month: str
     ):
         result = await session.execute(
-            text("""
+            text(
+                """
             SELECT
                 COUNT(DISTINCT t.id) as task_count,
                 SUM(u.tokens_used) as total_tokens,
@@ -287,7 +292,8 @@ class QueryOptimizer:
             LEFT JOIN usage u ON t.id = u.task_id
             WHERE t.tenant_id = :tenant_id
                 AND DATE_TRUNC('month', t.created_at) = :month
-            """).params(tenant_id=tenant_id, month=month)
+            """
+            ).params(tenant_id=tenant_id, month=month)
         )
         return result.fetchone()
 
@@ -319,4 +325,3 @@ async def initialize_performance_optimizations():
 
 async def cleanup_performance_resources():
     await pool_manager.close_all()
-

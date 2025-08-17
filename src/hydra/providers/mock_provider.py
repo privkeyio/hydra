@@ -1,4 +1,5 @@
 """Mock LLM provider for testing."""
+
 from datetime import datetime
 from typing import Any, Dict, Iterator, List
 
@@ -43,11 +44,9 @@ class MockProvider(BaseProvider):
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a mock response."""
         # Track call
-        self.call_history.append({
-            "method": "generate",
-            "prompt": prompt,
-            "kwargs": kwargs
-        })
+        self.call_history.append(
+            {"method": "generate", "prompt": prompt, "kwargs": kwargs}
+        )
 
         if self.fail_mode:
             raise RuntimeError("Mock provider configured to fail")
@@ -58,7 +57,11 @@ class MockProvider(BaseProvider):
 
         prompt_lower = prompt.lower()
         # Check for ticket generation first (more specific)
-        if "generate yaml" in prompt_lower or "yaml tickets" in prompt_lower or "development tickets" in prompt_lower:
+        if (
+            "generate yaml" in prompt_lower
+            or "yaml tickets" in prompt_lower
+            or "development tickets" in prompt_lower
+        ):
             # Check what kind of project is being requested
             if "calculator" in prompt_lower:
                 # Return proper calculator tickets with vague criteria to test validation
@@ -125,16 +128,25 @@ tickets:
     - Test normal cases
     - Test edge cases
   dependencies: ["001"]"""
-        elif ("plan" in prompt_lower and "subtask" in prompt_lower and
-            "code" not in prompt_lower):
+        elif (
+            "plan" in prompt_lower
+            and "subtask" in prompt_lower
+            and "code" not in prompt_lower
+        ):
             return (
                 '{"plan": "Mock plan", '
                 '"subtasks": ["Mock subtask 1", "Mock subtask 2"]}'
             )
-        elif ("generate python code" in prompt_lower or "code" in prompt_lower or
-              "function" in prompt_lower or "hello world" in prompt_lower):
-            return ("def hello_world():\n    print('Hello, World!')\n"
-                    "    return 'Hello, World!'")
+        elif (
+            "generate python code" in prompt_lower
+            or "code" in prompt_lower
+            or "function" in prompt_lower
+            or "hello world" in prompt_lower
+        ):
+            return (
+                "def hello_world():\n    print('Hello, World!')\n"
+                "    return 'Hello, World!'"
+            )
         elif "fibonacci" in prompt_lower:
             return """def fibonacci(n):
     if n <= 0:
@@ -174,11 +186,9 @@ tickets:
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a mock JSON response."""
-        self.call_history.append({
-            "method": "generate_json",
-            "prompt": prompt,
-            "kwargs": kwargs
-        })
+        self.call_history.append(
+            {"method": "generate_json", "prompt": prompt, "kwargs": kwargs}
+        )
 
         if self.fail_mode:
             raise RuntimeError("Mock provider configured to fail")
@@ -186,16 +196,14 @@ tickets:
         return {
             "plan": "Mock plan from JSON",
             "subtasks": ["Mock JSON subtask"],
-            "code": "def mock_json_function(): pass"
+            "code": "def mock_json_function(): pass",
         }
 
     def generate_streaming(self, prompt: str, **kwargs) -> Iterator[str]:
         """Generate streaming mock response."""
-        self.call_history.append({
-            "method": "generate_streaming",
-            "prompt": prompt,
-            "kwargs": kwargs
-        })
+        self.call_history.append(
+            {"method": "generate_streaming", "prompt": prompt, "kwargs": kwargs}
+        )
 
         if self.fail_mode:
             raise RuntimeError("Mock provider configured to fail")
@@ -206,16 +214,16 @@ tickets:
         for word in words:
             yield word + " "
 
-    def generate_code(
-        self, prompt: str, context: Dict[str, Any], **kwargs
-    ) -> str:
+    def generate_code(self, prompt: str, context: Dict[str, Any], **kwargs) -> str:
         """Generate code with context awareness."""
-        self.call_history.append({
-            "method": "generate_code",
-            "prompt": prompt,
-            "context": context,
-            "kwargs": kwargs
-        })
+        self.call_history.append(
+            {
+                "method": "generate_code",
+                "prompt": prompt,
+                "context": context,
+                "kwargs": kwargs,
+            }
+        )
 
         if self.fail_mode:
             raise RuntimeError("Mock provider configured to fail")
@@ -223,9 +231,7 @@ tickets:
         # Return basic code response
         return "def generated_function():\n    return 'Generated code'"
 
-    def create_session(
-        self, session_id: str, **kwargs
-    ) -> Session:
+    def create_session(self, session_id: str, **kwargs) -> Session:
         """Create a new provider session."""
         session = Session(
             id=session_id,
@@ -234,7 +240,7 @@ tickets:
             created_at=datetime.now(),
             last_activity=datetime.now(),
             state=SessionState.ACTIVE,
-            metadata=kwargs
+            metadata=kwargs,
         )
         self._mock_sessions[session_id] = session
         return session
@@ -249,8 +255,9 @@ tickets:
 
     def list_sessions(self) -> List[Session]:
         """List all active sessions."""
-        return [s for s in self._mock_sessions.values()
-                if s.state == SessionState.ACTIVE]
+        return [
+            s for s in self._mock_sessions.values() if s.state == SessionState.ACTIVE
+        ]
 
     def kill_session(self, session_id: str) -> bool:
         """Terminate a session."""
@@ -275,7 +282,7 @@ tickets:
                 max_output_tokens=1024,
                 supports_streaming=True,
                 supports_interactive=False,
-                cost_per_token=0.001
+                cost_per_token=0.001,
             ),
             ModelInfo(
                 identifier="mock-model-2",
@@ -285,7 +292,7 @@ tickets:
                 max_output_tokens=2048,
                 supports_streaming=True,
                 supports_interactive=True,
-                cost_per_token=0.002
+                cost_per_token=0.002,
             ),
             ModelInfo(
                 identifier="mock-fast",
@@ -295,7 +302,7 @@ tickets:
                 max_output_tokens=512,
                 supports_streaming=False,
                 supports_interactive=False,
-                cost_per_token=0.0005
+                cost_per_token=0.0005,
             ),
             ModelInfo(
                 identifier="mock-smart",
@@ -305,7 +312,7 @@ tickets:
                 max_output_tokens=4096,
                 supports_streaming=True,
                 supports_interactive=True,
-                cost_per_token=0.003
+                cost_per_token=0.003,
             ),
         ]
 
@@ -334,20 +341,20 @@ tickets:
             code_blocks=code_blocks,
             metadata={"provider": "mock"},
             tokens_used=len(response.split()),
-            execution_time=0.1
+            execution_time=0.1,
         )
 
     def extract_code_blocks(self, response: str) -> List[CodeBlock]:
         """Extract code blocks from response."""
         blocks = []
-        lines = response.split('\n')
+        lines = response.split("\n")
         in_code = False
         code_start = 0
         code_lines = []
         language = "python"
 
         for i, line in enumerate(lines):
-            if line.strip().startswith('```'):
+            if line.strip().startswith("```"):
                 if not in_code:
                     in_code = True
                     code_start = i
@@ -358,13 +365,15 @@ tickets:
                 else:
                     # End of code block
                     if code_lines:
-                        blocks.append(CodeBlock(
-                            language=language,
-                            content='\n'.join(code_lines),
-                            line_start=code_start,
-                            line_end=i,
-                            executable=True
-                        ))
+                        blocks.append(
+                            CodeBlock(
+                                language=language,
+                                content="\n".join(code_lines),
+                                line_start=code_start,
+                                line_end=i,
+                                executable=True,
+                            )
+                        )
                     in_code = False
                     code_lines = []
                     language = "python"
@@ -374,7 +383,7 @@ tickets:
         # If no markdown blocks found, check for indented code
         if not blocks:
             for i, line in enumerate(lines):
-                if line.startswith('def ') or line.startswith('class '):
+                if line.startswith("def ") or line.startswith("class "):
                     # Found a function or class definition
                     code_lines = []
                     j = i
@@ -382,13 +391,15 @@ tickets:
                         code_lines.append(lines[j])
                         j += 1
                     if code_lines:
-                        blocks.append(CodeBlock(
-                            language="python",
-                            content='\n'.join(code_lines),
-                            line_start=i,
-                            line_end=j,
-                            executable=True
-                        ))
+                        blocks.append(
+                            CodeBlock(
+                                language="python",
+                                content="\n".join(code_lines),
+                                line_start=i,
+                                line_end=j,
+                                executable=True,
+                            )
+                        )
                     break
 
         return blocks
@@ -404,14 +415,11 @@ tickets:
         # Mock implementation - always return True for testing
         return True
 
-    def intercept_file_operation(
-        self, operation: FileOperation
-    ) -> bool:
+    def intercept_file_operation(self, operation: FileOperation) -> bool:
         """Intercept and validate file operations."""
-        self.call_history.append({
-            "method": "intercept_file_operation",
-            "operation": operation
-        })
+        self.call_history.append(
+            {"method": "intercept_file_operation", "operation": operation}
+        )
         # Mock implementation - allow all operations unless in fail mode
         return not self.fail_mode
 

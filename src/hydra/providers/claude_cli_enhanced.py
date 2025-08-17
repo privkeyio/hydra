@@ -17,9 +17,9 @@ from .base import LLMProvider
 
 # Test mode detection to avoid thread creation issues
 TEST_MODE = (
-    os.getenv('TESTING') == '1' or
-    os.getenv('PYTEST_CURRENT_TEST') is not None or
-    'pytest' in str(os.getenv('_', ''))
+    os.getenv("TESTING") == "1"
+    or os.getenv("PYTEST_CURRENT_TEST") is not None
+    or "pytest" in str(os.getenv("_", ""))
 )
 
 
@@ -45,11 +45,9 @@ class FileOperationHandler:
             raise FileNotFoundError(f"File not found: {path}")
 
         content = file_path.read_text()
-        self.operations_log.append({
-            'operation': 'read',
-            'path': path,
-            'timestamp': time.time()
-        })
+        self.operations_log.append(
+            {"operation": "read", "path": path, "timestamp": time.time()}
+        )
         return content
 
     def write_file(self, path: str, content: str) -> bool:
@@ -57,11 +55,9 @@ class FileOperationHandler:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         file_path.write_text(content)
-        self.operations_log.append({
-            'operation': 'write',
-            'path': path,
-            'timestamp': time.time()
-        })
+        self.operations_log.append(
+            {"operation": "write", "path": path, "timestamp": time.time()}
+        )
         return True
 
     def list_files(self, pattern: str = "*") -> List[str]:
@@ -70,51 +66,51 @@ class FileOperationHandler:
             if item.is_file():
                 files.append(str(item.relative_to(self.base_dir)))
 
-        self.operations_log.append({
-            'operation': 'list',
-            'pattern': pattern,
-            'count': len(files),
-            'timestamp': time.time()
-        })
+        self.operations_log.append(
+            {
+                "operation": "list",
+                "pattern": pattern,
+                "count": len(files),
+                "timestamp": time.time(),
+            }
+        )
         return files
 
     def delete_file(self, path: str) -> bool:
         file_path = self.base_dir / path
         if file_path.exists():
             file_path.unlink()
-            self.operations_log.append({
-                'operation': 'delete',
-                'path': path,
-                'timestamp': time.time()
-            })
+            self.operations_log.append(
+                {"operation": "delete", "path": path, "timestamp": time.time()}
+            )
             return True
         return False
 
 
 class SlashCommandProcessor:
     SUPPORTED_COMMANDS = {
-        '/add-dir': 'Add additional working directories',
-        '/agents': 'Manage custom AI subagents',
-        '/bug': 'Report bugs to Anthropic',
-        '/clear': 'Clear conversation history',
-        '/compact': 'Compact conversation with optional focus',
-        '/config': 'View/modify configuration',
-        '/cost': 'Show token usage statistics',
-        '/doctor': 'Check Claude Code installation health',
-        '/help': 'Get usage help',
-        '/init': 'Initialize project with CLAUDE.md guide',
-        '/login': 'Switch Anthropic accounts',
-        '/logout': 'Sign out from Anthropic account',
-        '/mcp': 'Manage MCP server connections',
-        '/memory': 'Edit CLAUDE.md memory files',
-        '/model': 'Select or change AI model',
-        '/permissions': 'View or update permissions',
-        '/pr_comments': 'View pull request comments',
-        '/review': 'Request code review',
-        '/status': 'View account and system statuses',
-        '/terminal-setup': 'Install Shift+Enter key binding',
-        '/vim': 'Enter vim mode for editing',
-        '/exit': 'Exit session'
+        "/add-dir": "Add additional working directories",
+        "/agents": "Manage custom AI subagents",
+        "/bug": "Report bugs to Anthropic",
+        "/clear": "Clear conversation history",
+        "/compact": "Compact conversation with optional focus",
+        "/config": "View/modify configuration",
+        "/cost": "Show token usage statistics",
+        "/doctor": "Check Claude Code installation health",
+        "/help": "Get usage help",
+        "/init": "Initialize project with CLAUDE.md guide",
+        "/login": "Switch Anthropic accounts",
+        "/logout": "Sign out from Anthropic account",
+        "/mcp": "Manage MCP server connections",
+        "/memory": "Edit CLAUDE.md memory files",
+        "/model": "Select or change AI model",
+        "/permissions": "View or update permissions",
+        "/pr_comments": "View pull request comments",
+        "/review": "Request code review",
+        "/status": "View account and system statuses",
+        "/terminal-setup": "Install Shift+Enter key binding",
+        "/vim": "Enter vim mode for editing",
+        "/exit": "Exit session",
     }
 
     def __init__(self, file_handler: FileOperationHandler, session: SessionState):
@@ -125,28 +121,28 @@ class SlashCommandProcessor:
         command = command.lower()
 
         handlers = {
-            '/add-dir': lambda: self._handle_add_dir(args),
-            '/agents': lambda: self._handle_agents(args),
-            '/bug': lambda: self._handle_bug(args),
-            '/clear': lambda: self._handle_clear(),
-            '/compact': lambda: self._handle_compact(args),
-            '/config': lambda: self._handle_config(args),
-            '/cost': lambda: self._handle_cost(),
-            '/doctor': lambda: self._handle_doctor(),
-            '/help': lambda: (self._format_help(), False),
-            '/init': lambda: self._handle_init(args),
-            '/login': lambda: self._handle_login(args),
-            '/logout': lambda: self._handle_logout(),
-            '/mcp': lambda: self._handle_mcp(args),
-            '/memory': lambda: self._handle_memory(args),
-            '/model': lambda: self._handle_model(args),
-            '/permissions': lambda: self._handle_permissions(args),
-            '/pr_comments': lambda: self._handle_pr_comments(args),
-            '/review': lambda: self._handle_review(args),
-            '/status': lambda: self._handle_status(),
-            '/terminal-setup': lambda: self._handle_terminal_setup(),
-            '/vim': lambda: self._handle_vim(args),
-            '/exit': lambda: ("Exiting session", True)
+            "/add-dir": lambda: self._handle_add_dir(args),
+            "/agents": lambda: self._handle_agents(args),
+            "/bug": lambda: self._handle_bug(args),
+            "/clear": lambda: self._handle_clear(),
+            "/compact": lambda: self._handle_compact(args),
+            "/config": lambda: self._handle_config(args),
+            "/cost": lambda: self._handle_cost(),
+            "/doctor": lambda: self._handle_doctor(),
+            "/help": lambda: (self._format_help(), False),
+            "/init": lambda: self._handle_init(args),
+            "/login": lambda: self._handle_login(args),
+            "/logout": lambda: self._handle_logout(),
+            "/mcp": lambda: self._handle_mcp(args),
+            "/memory": lambda: self._handle_memory(args),
+            "/model": lambda: self._handle_model(args),
+            "/permissions": lambda: self._handle_permissions(args),
+            "/pr_comments": lambda: self._handle_pr_comments(args),
+            "/review": lambda: self._handle_review(args),
+            "/status": lambda: self._handle_status(),
+            "/terminal-setup": lambda: self._handle_terminal_setup(),
+            "/vim": lambda: self._handle_vim(args),
+            "/exit": lambda: ("Exiting session", True),
         }
 
         handler = handlers.get(command)
@@ -159,18 +155,17 @@ class SlashCommandProcessor:
         self.session.variables.clear()
         return "Context cleared", False
 
-
     def _handle_add_dir(self, args: str) -> Tuple[str, bool]:
         if not args:
             return "Usage: /add-dir <directory_path>", False
-        dirs = self.session.variables.get('working_dirs', [])
+        dirs = self.session.variables.get("working_dirs", [])
         dirs.append(args.strip())
-        self.session.variables['working_dirs'] = dirs
+        self.session.variables["working_dirs"] = dirs
         return f"Added working directory: {args}", False
 
     def _handle_agents(self, args: str) -> Tuple[str, bool]:
         if not args:
-            agents = self.session.variables.get('agents', {})
+            agents = self.session.variables.get("agents", {})
             if agents:
                 return f"Active agents: {list(agents.keys())}", False
             return "No custom agents configured", False
@@ -179,10 +174,9 @@ class SlashCommandProcessor:
     def _handle_bug(self, args: str) -> Tuple[str, bool]:
         if not args:
             return "Usage: /bug <description of issue>", False
-        self.session.variables.setdefault('bug_reports', []).append({
-            'description': args,
-            'timestamp': time.time()
-        })
+        self.session.variables.setdefault("bug_reports", []).append(
+            {"description": args, "timestamp": time.time()}
+        )
         return "Bug report recorded. Thank you for your feedback!", False
 
     def _handle_compact(self, args: str) -> Tuple[str, bool]:
@@ -193,21 +187,22 @@ class SlashCommandProcessor:
         kept_count = len(self.session.history)
         return (
             f"Compacted conversation (kept {kept_count}/{old_count} items, "
-            f"focus: {focus})", False
+            f"focus: {focus})",
+            False,
         )
 
     def _handle_config(self, args: str) -> Tuple[str, bool]:
         if not args:
             config = {
-                'model': self.session.variables.get(
-                    'model', 'claude-opus-4-1-20250805'
+                "model": self.session.variables.get(
+                    "model", "claude-opus-4-1-20250805"
                 ),
-                'temperature': self.session.variables.get('temperature', 0.7),
-                'max_tokens': self.session.variables.get('max_tokens', 4096)
+                "temperature": self.session.variables.get("temperature", 0.7),
+                "max_tokens": self.session.variables.get("max_tokens", 4096),
             }
             return orjson.dumps(config, option=orjson.OPT_INDENT_2).decode(), False
 
-        parts = args.split('=', 1)
+        parts = args.split("=", 1)
         if len(parts) == 2:
             key, value = parts
             self.session.variables[key.strip()] = value.strip()
@@ -215,15 +210,14 @@ class SlashCommandProcessor:
         return "Usage: /config or /config <key>=<value>", False
 
     def _handle_cost(self) -> Tuple[str, bool]:
-        stats = self.session.variables.get('token_stats', {
-            'input_tokens': 0,
-            'output_tokens': 0,
-            'total_cost': 0.0
-        })
+        stats = self.session.variables.get(
+            "token_stats", {"input_tokens": 0, "output_tokens": 0, "total_cost": 0.0}
+        )
         return (
             f"Token usage:\n  Input: {stats['input_tokens']}\n  "
             f"Output: {stats['output_tokens']}\n  "
-            f"Est. cost: ${stats['total_cost']:.4f}", False
+            f"Est. cost: ${stats['total_cost']:.4f}",
+            False,
         )
 
     def _handle_doctor(self) -> Tuple[str, bool]:
@@ -264,16 +258,16 @@ Describe your project here...
     def _handle_login(self, args: str) -> Tuple[str, bool]:
         if not args:
             return "Usage: /login <account_email>", False
-        self.session.variables['account'] = args.strip()
+        self.session.variables["account"] = args.strip()
         return f"Switched to account: {args}", False
 
     def _handle_logout(self) -> Tuple[str, bool]:
-        self.session.variables.pop('account', None)
+        self.session.variables.pop("account", None)
         return "Logged out successfully", False
 
     def _handle_mcp(self, args: str) -> Tuple[str, bool]:
         if not args:
-            servers = self.session.variables.get('mcp_servers', [])
+            servers = self.session.variables.get("mcp_servers", [])
             if servers:
                 return f"Connected MCP servers: {servers}", False
             return "No MCP servers connected", False
@@ -281,7 +275,7 @@ Describe your project here...
         cmd = args.split()[0] if args else ""
         if cmd == "connect":
             server = args[8:].strip()
-            self.session.variables.setdefault('mcp_servers', []).append(server)
+            self.session.variables.setdefault("mcp_servers", []).append(server)
             return f"Connected to MCP server: {server}", False
         elif cmd == "disconnect":
             return "MCP server disconnected", False
@@ -293,7 +287,7 @@ Describe your project here...
         if args == "edit":
             if claude_md.exists():
                 content = claude_md.read_text()
-                self.session.context_files['CLAUDE.md'] = content
+                self.session.context_files["CLAUDE.md"] = content
                 return f"Loaded CLAUDE.md into context ({len(content)} bytes)", False
             return "CLAUDE.md not found. Use /init to create it", False
 
@@ -306,32 +300,35 @@ Describe your project here...
 
     def _handle_model(self, args: str) -> Tuple[str, bool]:
         available_models = [
-            'claude-opus-4-1-20250805',
-            'claude-opus-4-20250514',
-            'claude-sonnet-4-20250514',
-            'claude-3-7-sonnet-20250220',
-            'claude-3-5-sonnet-20241022',
-            'claude-3-sonnet-20240229'
+            "claude-opus-4-1-20250805",
+            "claude-opus-4-20250514",
+            "claude-sonnet-4-20250514",
+            "claude-3-7-sonnet-20250220",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-sonnet-20240229",
         ]
 
         if not args:
-            current = self.session.variables.get('model', 'claude-opus-4-1-20250805')
-            available = ', '.join(available_models)
+            current = self.session.variables.get("model", "claude-opus-4-1-20250805")
+            available = ", ".join(available_models)
             return f"Current model: {current}\nAvailable: {available}", False
 
         model = args.strip()
-        if model in available_models or 'claude' in model:
-            self.session.variables['model'] = model
+        if model in available_models or "claude" in model:
+            self.session.variables["model"] = model
             return f"Switched to model: {model}", False
         return f"Unknown model. Available: {', '.join(available_models)}", False
 
     def _handle_permissions(self, args: str) -> Tuple[str, bool]:
-        perms = self.session.variables.get('permissions', {
-            'file_read': True,
-            'file_write': True,
-            'command_execute': True,
-            'network_access': False
-        })
+        perms = self.session.variables.get(
+            "permissions",
+            {
+                "file_read": True,
+                "file_write": True,
+                "command_execute": True,
+                "network_access": False,
+            },
+        )
 
         if not args:
             lines = ["Current permissions:"]
@@ -340,11 +337,11 @@ Describe your project here...
                 lines.append(f"  {status} {perm}")
             return "\n".join(lines), False
 
-        parts = args.split('=', 1)
+        parts = args.split("=", 1)
         if len(parts) == 2:
             perm, value = parts
-            perms[perm.strip()] = value.strip().lower() in ('true', 'yes', '1')
-            self.session.variables['permissions'] = perms
+            perms[perm.strip()] = value.strip().lower() in ("true", "yes", "1")
+            self.session.variables["permissions"] = perms
             return f"Updated permission: {perm}", False
         return "Usage: /permissions or /permissions <perm>=<true|false>", False
 
@@ -356,8 +353,11 @@ Describe your project here...
         try:
             result = subprocess.run(
                 f"gh pr view {pr_number} --comments",
-                shell=True, capture_output=True, text=True,
-                timeout=10, cwd=self.session.working_dir
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                cwd=self.session.working_dir,
             )
             if result.returncode == 0:
                 return result.stdout, False
@@ -380,15 +380,14 @@ Describe your project here...
             review_notes.append("  - Assess error handling")
             review_notes.append("  - Verify test coverage")
 
-        self.session.variables.setdefault('reviews', []).append({
-            'files': files,
-            'timestamp': time.time()
-        })
+        self.session.variables.setdefault("reviews", []).append(
+            {"files": files, "timestamp": time.time()}
+        )
 
         return "\n".join(review_notes), False
 
     def _handle_status(self) -> Tuple[str, bool]:
-        model = self.session.variables.get('model', 'claude-opus-4-1-20250805')
+        model = self.session.variables.get("model", "claude-opus-4-1-20250805")
         status_info = [
             "Claude Code Status:",
             f"  Session: {self.session.session_id}",
@@ -397,7 +396,7 @@ Describe your project here...
             f"  Working dir: {self.session.working_dir}",
             f"  Files loaded: {len(self.session.context_files)}",
             f"  History items: {len(self.session.history)}",
-            f"  Session age: {int(time.time() - self.session.created_at)}s"
+            f"  Session age: {int(time.time() - self.session.created_at)}s",
         ]
         return "\n".join(status_info), False
 
@@ -419,11 +418,11 @@ bind -x '"\\e[13;2u": claude_shift_enter'
 
     def _handle_vim(self, args: str) -> Tuple[str, bool]:
         if not args:
-            self.session.variables['vim_mode'] = True
+            self.session.variables["vim_mode"] = True
             return "Vim mode enabled. Use :q to exit, :w to save", False
 
         if args == "off":
-            self.session.variables['vim_mode'] = False
+            self.session.variables["vim_mode"] = False
             return "Vim mode disabled", False
 
         return "Usage: /vim or /vim off", False
@@ -462,10 +461,10 @@ class ErrorRecoveryManager:
 
     def handle_error(self, error: Exception, context: Dict[str, Any]) -> Optional[str]:
         error_info = {
-            'error': str(error),
-            'type': type(error).__name__,
-            'context': context,
-            'timestamp': time.time()
+            "error": str(error),
+            "type": type(error).__name__,
+            "context": context,
+            "timestamp": time.time(),
         }
         self.error_history.append(error_info)
 
@@ -482,7 +481,7 @@ class ErrorRecoveryManager:
         return attempt < self.max_retries
 
     def get_retry_delay(self, attempt: int) -> float:
-        return min(2 ** attempt, 30)
+        return min(2**attempt, 30)
 
 
 class ClaudeCLIEnhancedProvider(LLMProvider):
@@ -497,13 +496,11 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
         self._process_lock = threading.Lock()
 
     def validate_config(self):
-        claude_path = self.config.extra_params.get('claude_path', 'claude')
+        claude_path = self.config.extra_params.get("claude_path", "claude")
 
         try:
             result = subprocess.run(
-                ["which", claude_path],
-                capture_output=True,
-                timeout=5
+                ["which", claude_path], capture_output=True, timeout=5
             )
             if result.returncode != 0:
                 raise ValueError(f"Claude CLI not found at: {claude_path}")
@@ -524,8 +521,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
             session_id = str(uuid.uuid4())
 
         session = SessionState(
-            session_id=session_id,
-            working_dir=self.temp_dir / session_id
+            session_id=session_id, working_dir=self.temp_dir / session_id
         )
         session.working_dir.mkdir(parents=True, exist_ok=True)
 
@@ -554,7 +550,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
                     stderr=subprocess.PIPE,
                     text=True,
                     bufsize=1,
-                    cwd=self.temp_dir
+                    cwd=self.temp_dir,
                 )
 
     def _send_command(self, command: str, timeout: int = 30) -> str:
@@ -585,8 +581,8 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
         session = self.get_session(session_id)
         command_processor = SlashCommandProcessor(self.file_handler, session)
 
-        if prompt.startswith('/'):
-            parts = prompt.split(' ', 1)
+        if prompt.startswith("/"):
+            parts = prompt.split(" ", 1)
             command = parts[0]
             args = parts[1] if len(parts) > 1 else ""
 
@@ -604,24 +600,25 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
             try:
                 response = self._execute_prompt(context_prompt, **kwargs)
 
-                session.history.append({
-                    'prompt': prompt,
-                    'response': response,
-                    'timestamp': time.time()
-                })
+                session.history.append(
+                    {"prompt": prompt, "response": response, "timestamp": time.time()}
+                )
 
                 return response
 
             except Exception as e:
                 last_error = e
-                recovery_action = self.error_manager.handle_error(e, {
-                    'prompt': prompt,
-                    'session_id': session.session_id,
-                    'attempt': attempt
-                })
+                recovery_action = self.error_manager.handle_error(
+                    e,
+                    {
+                        "prompt": prompt,
+                        "session_id": session.session_id,
+                        "attempt": attempt,
+                    },
+                )
 
                 if recovery_action == "retry_with_longer_timeout":
-                    kwargs['timeout'] = kwargs.get('timeout', 30) * 2
+                    kwargs["timeout"] = kwargs.get("timeout", 30) * 2
                 elif recovery_action == "retry_after_delay":
                     time.sleep(self.error_manager.get_retry_delay(attempt))
 
@@ -652,7 +649,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
 
     def _execute_prompt(self, prompt: str, timeout: int = 30, **kwargs) -> str:
         try:
-            if kwargs.get('stream', False):
+            if kwargs.get("stream", False):
                 return self._execute_streaming(prompt, timeout)
             else:
                 return self._execute_regular(prompt, timeout)
@@ -671,7 +668,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
             text=True,
             timeout=timeout,
             env=os.environ.copy(),
-            cwd=self.temp_dir
+            cwd=self.temp_dir,
         )
 
         if result.returncode == 0:
@@ -687,7 +684,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
         handler = StreamingResponseHandler()
 
         def stream_output(proc, handler):
-            for line in iter(proc.stdout.readline, ''):
+            for line in iter(proc.stdout.readline, ""):
                 if line:
                     cleaned = self._clean_line(line)
                     if cleaned:
@@ -700,7 +697,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=self.temp_dir
+            cwd=self.temp_dir,
         )
 
         thread = threading.Thread(target=stream_output, args=(proc, handler))
@@ -720,37 +717,38 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
         return handler.get_response()
 
     def _clean_output(self, output: str) -> str:
-        lines = output.split('\n')
+        lines = output.split("\n")
         response_lines = []
         in_response = False
 
         for line in lines:
-            if '┃' in line or '╭' in line or '╰' in line or '│' in line:
+            if "┃" in line or "╭" in line or "╰" in line or "│" in line:
                 continue
-            if line.strip().startswith('cwd:'):
+            if line.strip().startswith("cwd:"):
                 continue
-            if line.strip() == '':
+            if line.strip() == "":
                 if in_response:
                     response_lines.append(line)
                 continue
 
-            if not in_response and not line.startswith('Welcome'):
+            if not in_response and not line.startswith("Welcome"):
                 in_response = True
 
             if in_response:
                 response_lines.append(line)
 
-        return '\n'.join(response_lines).strip()
+        return "\n".join(response_lines).strip()
 
     def _clean_line(self, line: str) -> str:
-        if '┃' in line or '╭' in line or '╰' in line or '│' in line:
+        if "┃" in line or "╭" in line or "╰" in line or "│" in line:
             return ""
-        if line.strip().startswith('cwd:'):
+        if line.strip().startswith("cwd:"):
             return ""
         return line.rstrip()
 
-    def generate_json(self, prompt: str, session_id: Optional[str] = None,
-                      **kwargs) -> Dict[str, Any]:
+    def generate_json(
+        self, prompt: str, session_id: Optional[str] = None, **kwargs
+    ) -> Dict[str, Any]:
         json_prompt = f"{prompt}\n\nRespond with ONLY valid JSON, no other text."
 
         response = self.generate(json_prompt, session_id, **kwargs)
@@ -766,7 +764,7 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
 
             return orjson.loads(response.strip())
         except orjson.JSONDecodeError as e:
-            json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+            json_match = re.search(r"\{[^}]+\}", response, re.DOTALL)
             if json_match:
                 try:
                     return orjson.loads(json_match.group())
@@ -775,9 +773,10 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
 
             raise ValueError(f"Failed to parse JSON response: {e}") from e
 
-    def generate_stream(self, prompt: str, session_id: Optional[str] = None,
-                        **kwargs) -> Generator[str, None, None]:
-        kwargs['stream'] = True
+    def generate_stream(
+        self, prompt: str, session_id: Optional[str] = None, **kwargs
+    ) -> Generator[str, None, None]:
+        kwargs["stream"] = True
         response = self.generate(prompt, session_id, **kwargs)
 
         for char in response:
@@ -792,13 +791,13 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
             path = Path(path)
 
         session_data = {
-            'session_id': session.session_id,
-            'working_dir': str(session.working_dir),
-            'context_files': session.context_files,
-            'variables': session.variables,
-            'history': session.history,
-            'created_at': session.created_at,
-            'last_accessed': session.last_accessed
+            "session_id": session.session_id,
+            "working_dir": str(session.working_dir),
+            "context_files": session.context_files,
+            "variables": session.variables,
+            "history": session.history,
+            "created_at": session.created_at,
+            "last_accessed": session.last_accessed,
         }
 
         path.write_text(orjson.dumps(session_data, option=orjson.OPT_INDENT_2).decode())
@@ -812,13 +811,13 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
         session_data = orjson.loads(path.read_text())
 
         session = SessionState(
-            session_id=session_data['session_id'],
-            working_dir=Path(session_data['working_dir']),
-            context_files=session_data['context_files'],
-            variables=session_data['variables'],
-            history=session_data['history'],
-            created_at=session_data['created_at'],
-            last_accessed=time.time()
+            session_id=session_data["session_id"],
+            working_dir=Path(session_data["working_dir"]),
+            context_files=session_data["context_files"],
+            variables=session_data["variables"],
+            history=session_data["history"],
+            created_at=session_data["created_at"],
+            last_accessed=time.time(),
         )
 
         session.working_dir.mkdir(parents=True, exist_ok=True)
@@ -842,9 +841,9 @@ class ClaudeCLIEnhancedProvider(LLMProvider):
             self.close_session(session_id)
 
         import shutil
+
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
 
     def list_models(self) -> List[str]:
         return ["claude-cli-enhanced"]
-

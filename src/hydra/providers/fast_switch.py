@@ -55,7 +55,7 @@ class FastProviderSwitch:
                     provider_type,
                     cache=True,
                     lazy=False,  # Don't use lazy for immediate switch
-                    **kwargs
+                    **kwargs,
                 )
 
             # Update current provider
@@ -76,7 +76,9 @@ class FastProviderSwitch:
         with self._lock:
             if self._provider_stack:
                 self._current_provider = self._provider_stack.pop()
-                logger.debug(f"Switched back to provider: {self._current_provider.name}")
+                logger.debug(
+                    f"Switched back to provider: {self._current_provider.name}"
+                )
                 return self._current_provider
             return None
 
@@ -99,7 +101,9 @@ class FastProviderSwitch:
         finally:
             with self._lock:
                 self._current_provider = previous
-                logger.debug(f"Restored provider: {previous.name if previous else 'None'}")
+                logger.debug(
+                    f"Restored provider: {previous.name if previous else 'None'}"
+                )
 
     def preload_providers(self, provider_types: list[str]) -> None:
         """Preload providers into pool for fast switching.
@@ -111,11 +115,7 @@ class FastProviderSwitch:
         for provider_type in provider_types:
             try:
                 # This will initialize and cache the provider
-                self._registry.get_or_create(
-                    provider_type,
-                    cache=True,
-                    lazy=False
-                )
+                self._registry.get_or_create(provider_type, cache=True, lazy=False)
                 logger.info(f"Preloaded provider: {provider_type}")
             except Exception as e:
                 logger.warning(f"Failed to preload provider {provider_type}: {e}")
@@ -143,7 +143,7 @@ class FastProviderSwitch:
                     if provider_metrics:
                         avg_time = provider_metrics.average_response_time
                     else:
-                        avg_time = float('inf')
+                        avg_time = float("inf")
                     candidates.append((provider_type, avg_time))
             except Exception:
                 continue

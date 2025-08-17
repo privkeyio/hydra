@@ -160,7 +160,7 @@ class FileGuard:
             except ValueError:
                 # Paths might be on different drives on Windows
                 continue
-        
+
         # Also check for protected directory names in the path
         for part in path.parts:
             if part in self.protected_dirs:
@@ -268,6 +268,7 @@ class FileGuard:
 
         # Create a session-specific subdirectory
         import uuid
+
         session_dir = temp_base / str(uuid.uuid4())
         session_dir.mkdir(mode=0o700)
 

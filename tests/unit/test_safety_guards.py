@@ -86,7 +86,9 @@ class TestGitGuard:
         assert "file URLs are not allowed" in error
 
         # Allow standard URLs
-        allowed, error = self.guard.validate_remote_url("https://github.com/user/repo.git")
+        allowed, error = self.guard.validate_remote_url(
+            "https://github.com/user/repo.git"
+        )
         assert allowed
         assert error is None
 
@@ -102,6 +104,7 @@ class TestFileGuard:
     def teardown_method(self):
         """Clean up test fixtures."""
         import shutil
+
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
 
@@ -265,9 +268,15 @@ class TestRateLimiter:
     def test_command_categorization(self):
         """Test command categorization."""
         assert self.limiter.categorize_command("ls -la") == CommandCategory.SAFE
-        assert self.limiter.categorize_command("rm file.txt") == CommandCategory.DESTRUCTIVE
+        assert (
+            self.limiter.categorize_command("rm file.txt")
+            == CommandCategory.DESTRUCTIVE
+        )
         assert self.limiter.categorize_command("rm -rf /") == CommandCategory.CRITICAL
-        assert self.limiter.categorize_command("git commit -m 'test'") == CommandCategory.MODERATE
+        assert (
+            self.limiter.categorize_command("git commit -m 'test'")
+            == CommandCategory.MODERATE
+        )
 
     def test_rate_limiting(self):
         """Test rate limiting enforcement."""
@@ -312,6 +321,7 @@ class TestRateLimiter:
     def test_cooldown_period(self):
         """Test cooldown period after rate limit."""
         import time
+
         identifier = "cooldown_test"
         category = CommandCategory.CRITICAL
         config = self.limiter.configs[category]
@@ -319,21 +329,25 @@ class TestRateLimiter:
         # First request should be allowed
         allowed, _, _ = self.limiter.check_rate_limit(identifier, category)
         assert allowed
-        
+
         # Wait a tiny bit to avoid burst window
         time.sleep(0.5)
-        
+
         # More requests within rate limit window
         for i in range(config.max_operations - 1):
             allowed, _, _ = self.limiter.check_rate_limit(identifier, category)
             # Some may fail due to burst limit, that's ok
-        
+
         # Now exceed the rate limit to trigger cooldown
         allowed, reason, _ = self.limiter.check_rate_limit(identifier, category)
         assert not allowed
-        
+
         # Future requests should mention rate limit or cooldown
-        assert "limit" in reason.lower() or "cooldown" in reason.lower() or "burst" in reason.lower()
+        assert (
+            "limit" in reason.lower()
+            or "cooldown" in reason.lower()
+            or "burst" in reason.lower()
+        )
 
     def test_reset_limits(self):
         """Test resetting rate limits."""
@@ -347,7 +361,9 @@ class TestRateLimiter:
         self.limiter.reset_limits(identifier)
 
         # Check capacity is restored
-        capacity = self.limiter.get_remaining_capacity(identifier, CommandCategory.MODERATE)
+        capacity = self.limiter.get_remaining_capacity(
+            identifier, CommandCategory.MODERATE
+        )
         assert capacity["operations_used"] == 0
 
 
@@ -357,13 +373,14 @@ class TestFileSandbox:
     def setup_method(self):
         """Set up test fixtures."""
         from hydra.safety.operation_validator import OperationValidator
+
         self.temp_dir = Path(tempfile.mkdtemp())
         # Create a permissive validator for testing
         test_validator = OperationValidator(default_allow=True)
         self.sandbox = FileSandbox(
-            sandbox_root=self.temp_dir, 
+            sandbox_root=self.temp_dir,
             enable_backups=True,
-            operation_validator=test_validator
+            operation_validator=test_validator,
         )
 
     def teardown_method(self):

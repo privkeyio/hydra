@@ -10,12 +10,12 @@ from .ticket_integration import TicketContextManager
 from .ticket_updater import TicketUpdater
 
 __all__ = [
-    'ArtifactTracker',
-    'TicketArtifact',
-    'TicketContext',
-    'ContextStore',
-    'ExecutionPattern',
-    'SessionState',
-    'TicketContextManager',
-    'TicketUpdater',
+    "ArtifactTracker",
+    "TicketArtifact",
+    "TicketContext",
+    "ContextStore",
+    "ExecutionPattern",
+    "SessionState",
+    "TicketContextManager",
+    "TicketUpdater",
 ]

@@ -13,8 +13,7 @@ async def main():
         return
 
     async with HydraAsyncClient(
-        api_key=api_key,
-        base_url=os.getenv("HYDRA_BASE_URL", "http://localhost:8000")
+        api_key=api_key, base_url=os.getenv("HYDRA_BASE_URL", "http://localhost:8000")
     ) as client:
         try:
             print("Checking API health...")
@@ -26,13 +25,13 @@ async def main():
 
             code_task = await client.generate_code(
                 prompt="Create a Python class for a binary search tree with insert and search methods",
-                language="python"
+                language="python",
             )
 
             workflow_task = await client.execute_workflow(
                 task="Create a simple REST API with user authentication and CRUD operations",
                 agents=2,
-                max_iterations=5
+                max_iterations=5,
             )
 
             print(f"Code task: {code_task.task_id}")
@@ -40,7 +39,7 @@ async def main():
 
             code_status, workflow_status = await asyncio.gather(
                 client.wait_for_completion(code_task.task_id, timeout=120),
-                client.wait_for_completion(workflow_task.task_id, timeout=300)
+                client.wait_for_completion(workflow_task.task_id, timeout=300),
             )
 
             print("\nCode generation result:")
@@ -59,6 +58,7 @@ async def main():
 
         except Exception as e:
             print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

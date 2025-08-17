@@ -12,23 +12,59 @@ class CodeValidator:
 
     # Dangerous imports that should be blocked
     DANGEROUS_IMPORTS = {
-        'os', 'subprocess', 'shutil', 'tempfile', 'socket',
-        'urllib', 'requests', 'http', 'ftplib', 'smtplib',
-        'eval', 'exec', 'compile', '__import__',
-        'open', 'file', 'input', 'raw_input'
+        "os",
+        "subprocess",
+        "shutil",
+        "tempfile",
+        "socket",
+        "urllib",
+        "requests",
+        "http",
+        "ftplib",
+        "smtplib",
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+        "open",
+        "file",
+        "input",
+        "raw_input",
     }
 
     # Dangerous built-in functions
     DANGEROUS_BUILTINS = {
-        'eval', 'exec', 'compile', '__import__', 'globals', 'locals',
-        'vars', 'dir', 'getattr', 'setattr', 'delattr', 'hasattr'
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+        "globals",
+        "locals",
+        "vars",
+        "dir",
+        "getattr",
+        "setattr",
+        "delattr",
+        "hasattr",
     }
 
     # Allowed safe modules
     SAFE_MODULES = {
-        'math', 'random', 'datetime', 'json', 'collections',
-        'itertools', 'functools', 're', 'string', 'typing',
-        'dataclasses', 'enum', 'abc', 'copy', 'decimal'
+        "math",
+        "random",
+        "datetime",
+        "json",
+        "collections",
+        "itertools",
+        "functools",
+        "re",
+        "string",
+        "typing",
+        "dataclasses",
+        "enum",
+        "abc",
+        "copy",
+        "decimal",
     }
 
     @classmethod
@@ -39,7 +75,7 @@ class CodeValidator:
             "errors": [],
             "warnings": [],
             "imports": [],
-            "dangerous_patterns": []
+            "dangerous_patterns": [],
         }
 
         try:
@@ -74,9 +110,7 @@ class CodeValidator:
         for alias in node.names:
             result["imports"].append(alias.name)
             if alias.name in cls.DANGEROUS_IMPORTS:
-                result["dangerous_patterns"].append(
-                    f"Dangerous import: {alias.name}"
-                )
+                result["dangerous_patterns"].append(f"Dangerous import: {alias.name}")
 
     @classmethod
     def _check_import_from_node(cls, node: ast.ImportFrom, result: Dict[str, Any]):
@@ -84,9 +118,7 @@ class CodeValidator:
         if node.module:
             result["imports"].append(node.module)
             if node.module in cls.DANGEROUS_IMPORTS:
-                result["dangerous_patterns"].append(
-                    f"Dangerous import: {node.module}"
-                )
+                result["dangerous_patterns"].append(f"Dangerous import: {node.module}")
 
     @classmethod
     def _check_call_node(cls, node: ast.Call, result: Dict[str, Any]):
@@ -100,7 +132,7 @@ class CodeValidator:
     @classmethod
     def _check_attribute_node(cls, node: ast.Attribute, result: Dict[str, Any]):
         """Check attribute node for dangerous methods."""
-        dangerous_attrs = ['system', 'popen', 'spawn']
+        dangerous_attrs = ["system", "popen", "spawn"]
         if isinstance(node.value, ast.Name) and node.attr in dangerous_attrs:
             result["dangerous_patterns"].append(f"Dangerous method: {node.attr}")
 
@@ -120,15 +152,15 @@ class CodeValidator:
     def _check_string_patterns(cls, code: str, result: Dict[str, Any]):
         """Check for dangerous string patterns."""
         dangerous_patterns = [
-            r'__.*__',  # Dunder methods
-            r'\.system\(',
-            r'\.popen\(',
-            r'\.spawn\(',
-            r'subprocess\.',
-            r'os\.',
-            r'eval\(',
-            r'exec\(',
-            r'open\(',
+            r"__.*__",  # Dunder methods
+            r"\.system\(",
+            r"\.popen\(",
+            r"\.spawn\(",
+            r"subprocess\.",
+            r"os\.",
+            r"eval\(",
+            r"exec\(",
+            r"open\(",
         ]
 
         for pattern in dangerous_patterns:
@@ -144,13 +176,24 @@ class TaskValidator:
 
     # Patterns that might indicate malicious intent
     SUSPICIOUS_PATTERNS = [
-        r'delete.*file', r'remove.*file', r'rm\s+', r'del\s+',
-        r'format.*drive', r'format.*disk',
-        r'kill.*process', r'terminate.*process',
-        r'access.*password', r'steal.*data', r'hack.*',
-        r'ddos', r'dos\s+attack', r'brute.*force',
-        r'sql.*injection', r'xss.*attack',
-        r'download.*executable', r'install.*malware'
+        r"delete.*file",
+        r"remove.*file",
+        r"rm\s+",
+        r"del\s+",
+        r"format.*drive",
+        r"format.*disk",
+        r"kill.*process",
+        r"terminate.*process",
+        r"access.*password",
+        r"steal.*data",
+        r"hack.*",
+        r"ddos",
+        r"dos\s+attack",
+        r"brute.*force",
+        r"sql.*injection",
+        r"xss.*attack",
+        r"download.*executable",
+        r"install.*malware",
     ]
 
     @classmethod
@@ -160,7 +203,7 @@ class TaskValidator:
             "valid": True,
             "errors": [],
             "warnings": [],
-            "sanitized_task": task.strip()
+            "sanitized_task": task.strip(),
         }
 
         # Length checks
@@ -178,8 +221,8 @@ class TaskValidator:
                 result["warnings"].append(f"Suspicious pattern detected: {pattern}")
 
         # Basic sanitization - more aggressive for security
-        sanitized = re.sub(r'[<>"\';{}()\/]', ' ', task.strip())
-        sanitized = re.sub(r'\s+', ' ', sanitized)  # Collapse multiple spaces
+        sanitized = re.sub(r'[<>"\';{}()\/]', " ", task.strip())
+        sanitized = re.sub(r"\s+", " ", sanitized)  # Collapse multiple spaces
         result["sanitized_task"] = sanitized.strip()
 
         return result
@@ -192,13 +235,13 @@ class InputSanitizer:
     def sanitize_agent_name(name: str) -> str:
         """Sanitize agent name to prevent injection."""
         # First remove dangerous words completely
-        dangerous_words = ['script', 'eval', 'exec', 'import', 'system']
+        dangerous_words = ["script", "eval", "exec", "import", "system"]
         name.lower()
         for word in dangerous_words:
-            name = re.sub(re.escape(word), '', name, flags=re.IGNORECASE)
+            name = re.sub(re.escape(word), "", name, flags=re.IGNORECASE)
 
         # Keep only alphanumeric, underscore, hyphen
-        sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', name.strip())
+        sanitized = re.sub(r"[^a-zA-Z0-9_-]", "", name.strip())
         return sanitized[:50]  # Max length
 
     @staticmethod
@@ -208,22 +251,27 @@ class InputSanitizer:
             return None
 
         # Remove dangerous patterns
-        dangerous = ['../', '..\\', '~/', '/etc/', '/var/', '/usr/']
+        dangerous = ["../", "..\\", "~/", "/etc/", "/var/", "/usr/"]
         for pattern in dangerous:
             if pattern in path:
                 raise SecurityError(f"Dangerous path pattern: {pattern}")
 
         # Allow only safe characters
-        sanitized = re.sub(r'[^a-zA-Z0-9._/-]', '', path)
+        sanitized = re.sub(r"[^a-zA-Z0-9._/-]", "", path)
         return sanitized
 
     @staticmethod
     def sanitize_model_name(model: str) -> str:
         """Sanitize model name."""
         allowed_models = {
-            'sonnet', 'opus', 'claude-3-5-sonnet-20241022',
-            'claude-opus-4-1-20250805', 'claude-sonnet-4-20250514',
-            'gpt-4', 'gpt-3.5-turbo', 'qwen-2.5-coder-32b'
+            "sonnet",
+            "opus",
+            "claude-3-5-sonnet-20241022",
+            "claude-opus-4-1-20250805",
+            "claude-sonnet-4-20250514",
+            "gpt-4",
+            "gpt-3.5-turbo",
+            "qwen-2.5-coder-32b",
         }
 
         model = model.lower().strip()

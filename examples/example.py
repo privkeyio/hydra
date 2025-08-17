@@ -9,13 +9,14 @@ import sys
 from dotenv import load_dotenv
 
 # Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from hydra import execute_workflow
 from hydra.config import get_config
 
 # Load environment variables
 load_dotenv()
+
 
 def showcase_hydra():
     """Demonstrate various Hydra capabilities."""
@@ -43,7 +44,7 @@ def showcase_hydra():
         print("\n✅ Task completed!")
         print(f"Agents created: {len(result1['agents'])}")
         print(f"Plan: {result1['plan'][:100]}...")
-        if result1.get('subtasks'):
+        if result1.get("subtasks"):
             print(f"Subtasks: {len(result1['subtasks'])}")
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -70,15 +71,18 @@ def showcase_hydra():
 
         # Show agent hierarchy
         print("\nAgent Hierarchy:")
-        for agent in result2['agents']:
+        for agent in result2["agents"]:
             if agent == "architect":
                 print(f"  👔 {agent} (Boss)")
             else:
                 print(f"  👷 {agent}")
 
-        if 'results' in result2:
-            successful = sum(1 for r in result2['results'].values()
-                           if isinstance(r, dict) and r.get('success'))
+        if "results" in result2:
+            successful = sum(
+                1
+                for r in result2["results"].values()
+                if isinstance(r, dict) and r.get("success")
+            )
             print(f"\nSuccessful subtasks: {successful}/{len(result2['results'])}")
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -99,9 +103,9 @@ def showcase_hydra():
         print(f"Total agents involved: {len(result3['agents'])}")
 
         # Show task decomposition
-        if result3.get('subtasks'):
+        if result3.get("subtasks"):
             print("\nTask Decomposition:")
-            for i, subtask in enumerate(result3['subtasks'], 1):
+            for i, subtask in enumerate(result3["subtasks"], 1):
                 print(f"  {i}. {subtask[:60]}...")
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -151,7 +155,7 @@ def simple_example():
 
 if __name__ == "__main__":
     # Check if Venice API key is set
-    if not os.getenv('VENICE_API_KEY'):
+    if not os.getenv("VENICE_API_KEY"):
         print("⚠️  Warning: VENICE_API_KEY not found in environment")
         print("   Please set it in your .env file or environment")
         sys.exit(1)

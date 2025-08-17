@@ -87,7 +87,7 @@ def test():
             model="llama-3.2-3b",  # Use small model for test
             api_key=api_key,
             base_url="https://api.venice.ai/api/v1",
-            max_tokens=100
+            max_tokens=100,
         )
 
         provider = VeniceProvider(config)
@@ -104,9 +104,9 @@ def test():
 
 
 @venice.command()
-@click.option('--model', default='qwen-2.5-coder-32b', help='Model to use')
-@click.option('--output', '-o', type=click.Path(), help='Output directory')
-@click.argument('prompt')
+@click.option("--model", default="qwen-2.5-coder-32b", help="Model to use")
+@click.option("--output", "-o", type=click.Path(), help="Output directory")
+@click.argument("prompt")
 def generate(model, output, prompt):
     """Generate code using Venice AI."""
     api_key = os.getenv("VENICE_API_KEY")
@@ -131,7 +131,7 @@ def generate(model, output, prompt):
             api_key=api_key,
             base_url="https://api.venice.ai/api/v1",
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=2000,
         )
 
         provider = VeniceProvider(config)
@@ -142,11 +142,10 @@ def generate(model, output, prompt):
             output_dir.mkdir(exist_ok=True, parents=True)
 
             result = provider.execute_ticket(
-                ticket_content=prompt,
-                working_directory=output_dir
+                ticket_content=prompt, working_directory=output_dir
             )
 
-            if result['success']:
+            if result["success"]:
                 click.echo(
                     f"✅ Generated {result['actions_executed']} files in {output}"
                 )
@@ -200,7 +199,7 @@ def setup():
         click.echo(f"\n4. Updating {env_file}")
         # Read existing content
         content = env_file.read_text()
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Update or add Venice config
         updated = False
@@ -219,7 +218,7 @@ def setup():
             new_lines.insert(0, f"VENICE_API_KEY={api_key}")
             new_lines.insert(0, "LLM_PROVIDER=venice")
 
-        env_file.write_text('\n'.join(new_lines))
+        env_file.write_text("\n".join(new_lines))
     else:
         click.echo(f"\n4. Creating {env_file}")
         env_file.write_text(f"LLM_PROVIDER=venice\nVENICE_API_KEY={api_key}\n")

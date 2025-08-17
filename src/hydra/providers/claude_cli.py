@@ -1,4 +1,5 @@
 """Claude CLI provider implementation."""
+
 import os
 import subprocess
 from typing import Any, Dict, List
@@ -14,15 +15,13 @@ class ClaudeCLIProvider(LLMProvider):
     def validate_config(self):
         """Validate Claude CLI configuration."""
         # Check if claude_path is provided or claude is in PATH
-        claude_path = self.config.extra_params.get('claude_path', 'claude')
+        claude_path = self.config.extra_params.get("claude_path", "claude")
 
         # Test if claude is accessible by checking if it exists
         try:
             # For Claude Code CLI, we just check if the command exists
             result = subprocess.run(
-                ["which", claude_path],
-                capture_output=True,
-                timeout=5
+                ["which", claude_path], capture_output=True, timeout=5
             )
             if result.returncode != 0:
                 raise ValueError(f"Claude CLI not found at: {claude_path}")
@@ -40,31 +39,33 @@ class ClaudeCLIProvider(LLMProvider):
 
     def _clean_claude_output(self, output: str) -> str:
         """Clean Claude CLI output by removing interface artifacts."""
-        lines = output.split('\n')
+        lines = output.split("\n")
         response_lines = []
         in_response = False
 
         for line in lines:
             # Skip welcome box and prompts
-            if any(char in line for char in ['┃', '╭', '╰', '│']):
+            if any(char in line for char in ["┃", "╭", "╰", "│"]):
                 continue
-            if line.strip().startswith('cwd:'):
+            if line.strip().startswith("cwd:"):
                 continue
-            if line.strip() == '':
+            if line.strip() == "":
                 if in_response:
                     response_lines.append(line)
                 continue
 
             # Start collecting response after welcome
-            if not in_response and not line.startswith('Welcome'):
+            if not in_response and not line.startswith("Welcome"):
                 in_response = True
 
             if in_response:
                 response_lines.append(line)
 
-        return '\n'.join(response_lines).strip()
+        return "\n".join(response_lines).strip()
 
-    def _execute_claude_command(self, prompt: str, non_interactive: bool = False) -> subprocess.CompletedProcess:
+    def _execute_claude_command(
+        self, prompt: str, non_interactive: bool = False
+    ) -> subprocess.CompletedProcess:
         """Execute Claude CLI command and let it actually work with files."""
         # Get the current working directory for context
         cwd = os.getcwd()
@@ -78,7 +79,7 @@ class ClaudeCLIProvider(LLMProvider):
                 text=True,
                 timeout=self.config.timeout,
                 env=os.environ.copy(),
-                cwd=cwd
+                cwd=cwd,
             )
         else:
             # For file operations, we need to let Claude run interactively
@@ -97,19 +98,21 @@ please say "{completion_msg}" at the end.
                 text=True,
                 timeout=self.config.timeout,
                 env=os.environ.copy(),
-                cwd=cwd  # Run in the project directory
+                cwd=cwd,  # Run in the project directory
             )
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response using Claude CLI."""
         # Check if we should use non-interactive mode (for generating text/markdown)
-        non_interactive = kwargs.get('non_interactive', False)
+        non_interactive = kwargs.get("non_interactive", False)
         # Auto-detect: if prompt mentions tickets.md or markdown, use non-interactive
-        if 'tickets.md' in prompt.lower() or 'markdown' in prompt.lower():
+        if "tickets.md" in prompt.lower() or "markdown" in prompt.lower():
             non_interactive = True
 
         try:
-            result = self._execute_claude_command(prompt, non_interactive=non_interactive)
+            result = self._execute_claude_command(
+                prompt, non_interactive=non_interactive
+            )
 
             if result.returncode == 0:
                 return self._clean_claude_output(result.stdout)
@@ -143,7 +146,8 @@ please say "{completion_msg}" at the end.
         except orjson.JSONDecodeError as e:
             # Try to find JSON in response
             import re
-            json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+
+            json_match = re.search(r"\{[^}]+\}", response, re.DOTALL)
             if json_match:
                 try:
                     return orjson.loads(json_match.group())

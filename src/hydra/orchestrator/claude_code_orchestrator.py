@@ -57,7 +57,7 @@ class ClaudeCodeOrchestrator:
 
         """
         self.claude_path = claude_path or os.environ.get(
-            'CLAUDE_CLI_PATH', get_claude_cli_path()
+            "CLAUDE_CLI_PATH", get_claude_cli_path()
         )
         self.default_timeout = default_timeout
         self.active_sessions = {}
@@ -75,8 +75,10 @@ class ClaudeCodeOrchestrator:
         try:
             subprocess.run(["tmux", "-V"], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
-            msg = ("tmux is required for Claude Code orchestration. "
-                   "Install with: sudo apt-get install tmux")
+            msg = (
+                "tmux is required for Claude Code orchestration. "
+                "Install with: sudo apt-get install tmux"
+            )
             raise ValueError(msg) from None
 
     def create_task(
@@ -85,7 +87,7 @@ class ClaudeCodeOrchestrator:
         prompt: str,
         working_directory: Optional[str] = None,
         timeout: Optional[int] = None,
-        task_id: Optional[str] = None
+        task_id: Optional[str] = None,
     ) -> ClaudeCodeTask:
         """Create a new task for Claude Code to execute.
 
@@ -105,7 +107,7 @@ class ClaudeCodeOrchestrator:
             description=description,
             prompt=prompt,
             working_directory=working_directory or os.getcwd(),
-            timeout=timeout or self.default_timeout
+            timeout=timeout or self.default_timeout,
         )
         return task
 
@@ -126,9 +128,9 @@ class ClaudeCodeOrchestrator:
         try:
             # Create tmux provider config
             config = LLMConfig(
-                provider_type='claude_tmux',
+                provider_type="claude_tmux",
                 timeout=task.timeout,
-                extra_params={'claude_path': self.claude_path}
+                extra_params={"claude_path": self.claude_path},
             )
 
             # Create provider instance
@@ -136,9 +138,7 @@ class ClaudeCodeOrchestrator:
 
             # Execute the task
             result = provider.generate(
-                task.prompt,
-                cwd=task.working_directory,
-                ticket_id=task.task_id
+                task.prompt, cwd=task.working_directory, ticket_id=task.task_id
             )
 
             # Get files changed
@@ -146,23 +146,26 @@ class ClaudeCodeOrchestrator:
                 ["git", "status", "--short"],
                 capture_output=True,
                 text=True,
-                cwd=task.working_directory
+                cwd=task.working_directory,
             )
 
             if git_status.stdout:
                 task.files_changed = [
-                    line.split()[-1] for line in git_status.stdout.strip().split('\n')
+                    line.split()[-1]
+                    for line in git_status.stdout.strip().split("\n")
                     if line
                 ]
-                
+
                 # Check for system file modifications
                 system_files_modified = []
                 for file_path in task.files_changed:
-                    if file_path.startswith('src/hydra/') or file_path.startswith('tests/'):
+                    if file_path.startswith("src/hydra/") or file_path.startswith(
+                        "tests/"
+                    ):
                         system_files_modified.append(file_path)
-                
+
                 if system_files_modified:
-                    print(f"\n⚠️  WARNING: Agent modified Hydra system files:")
+                    print("\n⚠️  WARNING: Agent modified Hydra system files:")
                     for file in system_files_modified:
                         print(f"   ❌ {file}")
                     print("   These changes will be flagged in validation!")
@@ -185,10 +188,7 @@ class ClaudeCodeOrchestrator:
         return task
 
     def execute_batch(
-        self,
-        tasks: List[ClaudeCodeTask],
-        parallel: bool = False,
-        max_parallel: int = 2
+        self, tasks: List[ClaudeCodeTask], parallel: bool = False, max_parallel: int = 2
     ) -> List[ClaudeCodeTask]:
         """Execute multiple tasks in sequence or parallel.
 
@@ -207,13 +207,13 @@ class ClaudeCodeOrchestrator:
             for task in tasks:
                 print(f"\n{'='*60}")
                 print(f"Task {len(results)+1}/{len(tasks)}: {task.description}")
-                print('='*60)
+                print("=" * 60)
                 result = self.execute_task(task)
                 results.append(result)
 
                 if result.status == TaskStatus.FAILED:
                     print(f"⚠️  Task failed: {result.error}")
-                    if input("Continue with next task? (y/n): ").lower() != 'y':
+                    if input("Continue with next task? (y/n): ").lower() != "y":
                         break
 
             return results
@@ -224,8 +224,7 @@ class ClaudeCodeOrchestrator:
             results = []
             with ThreadPoolExecutor(max_workers=max_parallel) as executor:
                 future_to_task = {
-                    executor.submit(self.execute_task, task): task
-                    for task in tasks
+                    executor.submit(self.execute_task, task): task for task in tasks
                 }
 
                 for future in as_completed(future_to_task):
@@ -235,9 +234,7 @@ class ClaudeCodeOrchestrator:
             return results
 
     def create_development_session(
-        self,
-        project_path: str,
-        session_name: Optional[str] = None
+        self, project_path: str, session_name: Optional[str] = None
     ) -> str:
         """Create a persistent Claude Code development session.
 
@@ -253,8 +250,7 @@ class ClaudeCodeOrchestrator:
 
         # Check if session already exists
         result = subprocess.run(
-            ["tmux", "has-session", "-t", session_name],
-            capture_output=True
+            ["tmux", "has-session", "-t", session_name], capture_output=True
         )
 
         if result.returncode == 0:
@@ -264,16 +260,21 @@ class ClaudeCodeOrchestrator:
         # Create new tmux session with Claude Code
         subprocess.run(
             [
-                "tmux", "new-session", "-d", "-s", session_name,
-                "-c", project_path,
-                self.claude_path
+                "tmux",
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                project_path,
+                self.claude_path,
             ],
-            check=True
+            check=True,
         )
 
         self.active_sessions[session_name] = {
-            'project_path': project_path,
-            'created_at': time.time()
+            "project_path": project_path,
+            "created_at": time.time(),
         }
 
         print(f"✅ Created development session: {session_name}")
@@ -301,21 +302,23 @@ class ClaudeCodeOrchestrator:
         result = subprocess.run(
             ["tmux", "list-sessions", "-F", "#{session_name}"],
             capture_output=True,
-            text=True
+            text=True,
         )
 
         sessions = []
         if result.returncode == 0:
-            for session_name in result.stdout.strip().split('\n'):
-                is_claude_session = session_name.startswith('claude_')
-                is_hydra_session = session_name.startswith('hydra_')
+            for session_name in result.stdout.strip().split("\n"):
+                is_claude_session = session_name.startswith("claude_")
+                is_hydra_session = session_name.startswith("hydra_")
                 if is_claude_session or is_hydra_session:
                     session_info = self.active_sessions.get(session_name, {})
-                    sessions.append({
-                        'name': session_name,
-                        'project_path': session_info.get('project_path', 'Unknown'),
-                        'created_at': session_info.get('created_at', None)
-                    })
+                    sessions.append(
+                        {
+                            "name": session_name,
+                            "project_path": session_info.get("project_path", "Unknown"),
+                            "created_at": session_info.get("created_at", None),
+                        }
+                    )
 
         return sessions
 
@@ -346,16 +349,17 @@ class ClaudeCodeOrchestrator:
         timeout = sum(1 for t in self.task_history if t.status == TaskStatus.TIMEOUT)
 
         total_time = sum(
-            (t.end_time - t.start_time) for t in self.task_history
+            (t.end_time - t.start_time)
+            for t in self.task_history
             if t.start_time and t.end_time
         )
 
         return {
-            'total_tasks': total,
-            'completed': completed,
-            'failed': failed,
-            'timeout': timeout,
-            'success_rate': (completed / total * 100) if total > 0 else 0,
-            'total_execution_time': total_time,
-            'average_execution_time': (total_time / total) if total > 0 else 0
+            "total_tasks": total,
+            "completed": completed,
+            "failed": failed,
+            "timeout": timeout,
+            "success_rate": (completed / total * 100) if total > 0 else 0,
+            "total_execution_time": total_time,
+            "average_execution_time": (total_time / total) if total > 0 else 0,
         }

@@ -63,15 +63,18 @@ class ExecutionPlan:
 class ParallelExecutor:
     """Executes tickets in parallel respecting dependencies."""
 
-    def __init__(self, max_workers: int = 3, project_root: str = ".",
-                 dashboard_state=None):
+    def __init__(
+        self, max_workers: int = 3, project_root: str = ".", dashboard_state=None
+    ):
         self.max_workers = max_workers
         self.project_root = Path(project_root).resolve()
         self.tickets: Dict[str, TicketNode] = {}
         self.lock = threading.Lock()
         self.completed_tickets: Set[str] = set()
         self.failed_tickets: Set[str] = set()
-        self.quality_failed_tickets: Set[str] = set()  # Track quality failures separately
+        self.quality_failed_tickets: Set[str] = (
+            set()
+        )  # Track quality failures separately
         self.running_tickets: Set[str] = set()
         self.orchestrators: Dict[str, ClaudeCodeOrchestrator] = {}
         self.dashboard_state = dashboard_state
@@ -83,9 +86,10 @@ class ParallelExecutor:
         # Initialize file lock manager and smart interceptor
         self.file_lock_manager = get_file_lock_manager()
         from hydra.safety.claude_file_interceptor import SmartFileLockManager
+
         self.smart_lock_manager = SmartFileLockManager()
         # Start deadlock monitoring for production use
-        if not os.environ.get('TESTING'):
+        if not os.environ.get("TESTING"):
             self.smart_lock_manager.start_deadlock_monitoring()
 
         # Initialize artifact tracker for context passing
@@ -97,55 +101,63 @@ class ParallelExecutor:
         self.shutdown_manager.register_shutdown_handler(self._cleanup_resources)
 
         # Register background threads
-        if hasattr(self.agent_pool, '_cleanup_thread') and self.agent_pool._cleanup_thread:
-            self.shutdown_manager.register_background_thread(self.agent_pool._cleanup_thread)
-        if hasattr(self.smart_lock_manager, '_deadlock_monitor_thread'):
-            deadlock_thread = getattr(self.smart_lock_manager, '_deadlock_monitor_thread', None)
+        if (
+            hasattr(self.agent_pool, "_cleanup_thread")
+            and self.agent_pool._cleanup_thread
+        ):
+            self.shutdown_manager.register_background_thread(
+                self.agent_pool._cleanup_thread
+            )
+        if hasattr(self.smart_lock_manager, "_deadlock_monitor_thread"):
+            deadlock_thread = getattr(
+                self.smart_lock_manager, "_deadlock_monitor_thread", None
+            )
             if deadlock_thread:
                 self.shutdown_manager.register_background_thread(deadlock_thread)
 
         # Register state saving
-        if hasattr(self, 'dashboard_state') and self.dashboard_state:
+        if hasattr(self, "dashboard_state") and self.dashboard_state:
             self.shutdown_manager.register_state_saver(
-                lambda: getattr(self.dashboard_state, 'save_state', lambda: None)()
+                lambda: getattr(self.dashboard_state, "save_state", lambda: None)()
             )
 
     def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
         """Load all tickets from YAML or MD file."""
         self.tickets_path = tickets_path  # Store for smart scheduling
         tickets = {}
-        
+
         # Use the unified TicketFormatHandler
         from hydra.tickets.compatibility import TicketFormatHandler
+
         handler = TicketFormatHandler()
-        
+
         # Get all ticket IDs from the file
         ticket_ids = handler.get_ticket_ids(tickets_path)
-        
+
         # Parse each ticket
         for ticket_id in ticket_ids:
             ticket_data = handler.parse_ticket(tickets_path, ticket_id)
             if ticket_data:
                 # Check status field
-                ticket_status = ticket_data.get('status', 'TODO').upper()
-                if ticket_data.get('completed') or ticket_status == 'DONE':
+                ticket_status = ticket_data.get("status", "TODO").upper()
+                if ticket_data.get("completed") or ticket_status == "DONE":
                     # Track completed tickets but mark them as already done
                     node = TicketNode(
                         ticket_id=ticket_id,
-                        title=ticket_data['title'],
-                        model=ticket_data['model'],
-                        dependencies=ticket_data.get('dependencies', []),
-                        status=ExecutionStatus.COMPLETED
+                        title=ticket_data["title"],
+                        model=ticket_data["model"],
+                        dependencies=ticket_data.get("dependencies", []),
+                        status=ExecutionStatus.COMPLETED,
                     )
                     tickets[ticket_id] = node
                     self.completed_tickets.add(ticket_id)
                 else:
                     node = TicketNode(
                         ticket_id=ticket_id,
-                        title=ticket_data['title'],
-                        model=ticket_data['model'],
-                        dependencies=ticket_data.get('dependencies', []),
-                        status=ExecutionStatus.PENDING
+                        title=ticket_data["title"],
+                        model=ticket_data["model"],
+                        dependencies=ticket_data.get("dependencies", []),
+                        status=ExecutionStatus.PENDING,
                     )
                     tickets[ticket_id] = node
 
@@ -153,9 +165,9 @@ class ParallelExecutor:
                     if self.dashboard_state:
                         self.dashboard_state.add_ticket(
                             ticket_id,
-                            ticket_data['title'],
-                            ticket_data['model'],
-                            ticket_data.get('dependencies', [])
+                            ticket_data["title"],
+                            ticket_data["model"],
+                            ticket_data.get("dependencies", []),
                         )
 
         self.tickets = tickets
@@ -163,7 +175,9 @@ class ParallelExecutor:
 
     def _build_smart_execution_plan(self) -> ExecutionPlan:
         """Build execution plan using smart conflict detection AND dependency resolution."""
-        print("🧠 Using smart scheduling to minimize file conflicts while respecting dependencies...")
+        print(
+            "🧠 Using smart scheduling to minimize file conflicts while respecting dependencies..."
+        )
 
         # First, build dependency-aware waves using standard logic
         dependency_graph = {}
@@ -213,12 +227,13 @@ class ParallelExecutor:
         # Now apply smart conflict detection within each dependency wave
         # Read ticket contents for analysis
         tickets_content = {}
-        with open(self.tickets_path, 'r') as f:
+        with open(self.tickets_path, "r") as f:
             content = f.read()
             for ticket_id in self.tickets:
                 # Extract ticket content
                 import re
-                pattern = rf'## Ticket {ticket_id}:.*?(?=## Ticket \d+:|$)'
+
+                pattern = rf"## Ticket {ticket_id}:.*?(?=## Ticket \d+:|$)"
                 match = re.search(pattern, content, re.DOTALL)
                 if match:
                     tickets_content[ticket_id] = match.group(0)
@@ -231,18 +246,24 @@ class ParallelExecutor:
                 final_waves.append(dep_wave)
             else:
                 # Use smart scheduler to split wave if there are conflicts
-                wave_content = {tid: tickets_content.get(tid, '') for tid in dep_wave}
-                conflict_free_subwaves = self.smart_lock_manager.schedule_tickets_smartly(wave_content)
+                wave_content = {tid: tickets_content.get(tid, "") for tid in dep_wave}
+                conflict_free_subwaves = (
+                    self.smart_lock_manager.schedule_tickets_smartly(wave_content)
+                )
 
                 # Merge subwaves back if they're small
                 if len(conflict_free_subwaves) == 1:
                     final_waves.append(conflict_free_subwaves[0])
                 else:
                     # Multiple subwaves means conflicts were detected
-                    print(f"   ⚠️  Detected file conflicts in dependency wave {dep_wave}, splitting into {len(conflict_free_subwaves)} subwaves")
+                    print(
+                        f"   ⚠️  Detected file conflicts in dependency wave {dep_wave}, splitting into {len(conflict_free_subwaves)} subwaves"
+                    )
                     final_waves.extend(conflict_free_subwaves)
 
-        print(f"📊 Smart scheduling created {len(final_waves)} execution waves (respecting both dependencies and file conflicts)")
+        print(
+            f"📊 Smart scheduling created {len(final_waves)} execution waves (respecting both dependencies and file conflicts)"
+        )
         for i, wave in enumerate(final_waves, 1):
             print(f"   Wave {i}: {', '.join(wave)}")
 
@@ -250,7 +271,7 @@ class ParallelExecutor:
             waves=final_waves,
             dependency_graph=dependency_graph,
             total_tickets=len(self.tickets),
-            max_parallel=self.max_workers
+            max_parallel=self.max_workers,
         )
 
     def build_execution_plan(self) -> ExecutionPlan:
@@ -258,9 +279,9 @@ class ParallelExecutor:
         import os
 
         # Check if smart scheduling is enabled
-        use_smart_scheduling = os.environ.get('HYDRA_SMART_SCHEDULING', '0') == '1'
+        use_smart_scheduling = os.environ.get("HYDRA_SMART_SCHEDULING", "0") == "1"
 
-        if use_smart_scheduling and hasattr(self, 'smart_lock_manager'):
+        if use_smart_scheduling and hasattr(self, "smart_lock_manager"):
             # Use smart scheduling to minimize conflicts
             return self._build_smart_execution_plan()
 
@@ -313,7 +334,7 @@ class ParallelExecutor:
             waves=waves,
             dependency_graph=dependency_graph,
             total_tickets=len(self.tickets),
-            max_parallel=self.max_workers
+            max_parallel=self.max_workers,
         )
 
     def execute_ticket(self, ticket_id: str, tickets_path: str) -> bool:
@@ -324,8 +345,11 @@ class ParallelExecutor:
 
         # Add staggered start to prevent Claude Code session collisions
         import random
+
         start_delay = random.uniform(0.5, 5.0)  # Random delay between 0.5-5 seconds
-        print(f"⏱️  Ticket {ticket_id} starting in {start_delay:.1f}s to prevent session collision...")
+        print(
+            f"⏱️  Ticket {ticket_id} starting in {start_delay:.1f}s to prevent session collision..."
+        )
         time.sleep(start_delay)
 
         # Spawn an agent for this ticket
@@ -353,6 +377,7 @@ class ParallelExecutor:
             # Update dashboard
             if self.dashboard_state:
                 from hydra.dashboard.state import TicketStatus
+
                 self.dashboard_state.update_ticket_status(
                     ticket_id, TicketStatus.RUNNING
                 )
@@ -361,7 +386,7 @@ class ParallelExecutor:
         print(f"🎫 Starting Ticket {ticket_id}: {node.title}")
         print(f"🤖 Model: {node.model}")
         print(f"⏰ Started at: {time.strftime('%H:%M:%S')}")
-        print('='*60)
+        print("=" * 60)
 
         # Mark ticket as IN_PROGRESS in tickets.md
         mark_ticket_in_progress(tickets_path, ticket_id)
@@ -369,20 +394,24 @@ class ParallelExecutor:
         try:
             # Parse ticket for full details
             from hydra.tickets.compatibility import TicketFormatHandler
+
             handler = TicketFormatHandler()
             ticket_data = handler.parse_ticket(tickets_path, ticket_id)
 
             # Create model-specific orchestrator for this ticket
-            ticket_model = ticket_data.get('model', 'balanced').lower()  # Default to balanced
+            ticket_model = ticket_data.get(
+                "model", "balanced"
+            ).lower()  # Default to balanced
             print(f"🧠 Ticket {ticket_id} requires model: {ticket_model.upper()}")
 
             # Set the model environment for this agent
             import os
-            original_model = os.environ.get('CLAUDE_MODEL')
+
+            original_model = os.environ.get("CLAUDE_MODEL")
 
             # Set the model category for Claude to use
             # The claude_tmux provider will map these to actual Claude models
-            os.environ['CLAUDE_MODEL'] = ticket_model
+            os.environ["CLAUDE_MODEL"] = ticket_model
 
             orchestrator = ClaudeCodeOrchestrator()
             self.orchestrators[ticket_id] = orchestrator
@@ -391,10 +420,12 @@ class ParallelExecutor:
             before_snapshot = self.artifact_tracker.get_file_snapshot()
 
             # Get context from dependent tickets
-            dependencies = ticket_data.get('dependencies', [])
+            dependencies = ticket_data.get("dependencies", [])
             dependency_context = ""
             if dependencies:
-                print(f"📚 Loading context from dependencies: {', '.join(dependencies)}")
+                print(
+                    f"📚 Loading context from dependencies: {', '.join(dependencies)}"
+                )
                 dependency_context = self.artifact_tracker.get_dependency_context(
                     ticket_id, dependencies
                 )
@@ -458,7 +489,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 prompt=prompt,
                 working_directory=str(self.project_root),
                 timeout=900,
-                task_id=ticket_id  # Pass ticket ID for unique tmux session
+                task_id=ticket_id,  # Pass ticket ID for unique tmux session
             )
 
             # Execute task
@@ -468,18 +499,23 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 # Validate acceptance criteria before marking complete
                 from hydra.ticket_workflow import validate_acceptance_criteria
 
-                validation_passed = validate_acceptance_criteria(ticket_data, str(self.project_root))
+                validation_passed = validate_acceptance_criteria(
+                    ticket_data, str(self.project_root)
+                )
 
                 if validation_passed:
                     print("✅ Acceptance criteria validated")
                 else:
-                    print("❌ Acceptance criteria validation failed - ticket remains incomplete")
+                    print(
+                        "❌ Acceptance criteria validation failed - ticket remains incomplete"
+                    )
                     # Treat as failure if validation fails
                     raise Exception("Acceptance criteria not met")
 
                 # Try to auto-fix common issues before running quality gates
                 print(f"\n🔧 Running automatic quality fixes for ticket {ticket_id}...")
                 from hydra.quality.auto_fixer import QualityAutoFixer
+
                 fixer = QualityAutoFixer(self.project_root)
                 fixes = fixer.fix_common_issues()
 
@@ -499,11 +535,15 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 # Print quality gate details for debugging
                 print("📋 Quality Gate Results:")
                 for check in quality_report.results:
-                    status_icon = "✅" if check.status.value == "passed" else "❌" if check.status.value == "failed" else "⚠️"
+                    status_icon = (
+                        "✅"
+                        if check.status.value == "passed"
+                        else "❌" if check.status.value == "failed" else "⚠️"
+                    )
                     print(f"   {status_icon} {check.name}: {check.status.value}")
                     if check.status.value == "failed" and check.error:
                         # Show first few lines of error
-                        error_lines = check.error.split('\n')[:3]
+                        error_lines = check.error.split("\n")[:3]
                         for line in error_lines:
                             if line.strip():
                                 print(f"      → {line[:100]}")
@@ -518,56 +558,68 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     if quality_passed:
                         print("✅ Ticket completed with all quality gates passed")
                     else:
-                        print("⚠️  Ticket completed but has quality issues (agent should have fixed these)")
+                        print(
+                            "⚠️  Ticket completed but has quality issues (agent should have fixed these)"
+                        )
                         # Log quality issues for information (without failing)
                         # Note: Quality issues don't block completion
 
                     # Discover and record artifacts created by this ticket
                     print(f"📦 Discovering artifacts created by ticket {ticket_id}...")
-                    artifacts = self.artifact_tracker.discover_artifacts(ticket_id, before_snapshot)
+                    artifacts = self.artifact_tracker.discover_artifacts(
+                        ticket_id, before_snapshot
+                    )
 
                     if artifacts:
                         print(f"   Found {len(artifacts)} artifact(s):")
                         for artifact in artifacts[:5]:  # Show first 5
                             op_symbol = {
-                                'created': '➕',
-                                'modified': '✏️',
-                                'deleted': '➖'
-                            }.get(artifact.operation, '📄')
+                                "created": "➕",
+                                "modified": "✏️",
+                                "deleted": "➖",
+                            }.get(artifact.operation, "📄")
                             print(f"     {op_symbol} {artifact.file_path}")
                         if len(artifacts) > 5:
                             print(f"     ... and {len(artifacts) - 5} more")
 
                     # Extract acceptance criteria met
                     criteria_met = []
-                    if 'acceptance_criteria' in ticket_data:
-                        for criterion in ticket_data['acceptance_criteria']:
+                    if "acceptance_criteria" in ticket_data:
+                        for criterion in ticket_data["acceptance_criteria"]:
                             # Handle both string and dict formats
                             if isinstance(criterion, str):
                                 # String format - check if it starts with ✅
-                                if criterion.startswith('✅'):
-                                    criteria_met.append(criterion.replace('✅', '').strip())
+                                if criterion.startswith("✅"):
+                                    criteria_met.append(
+                                        criterion.replace("✅", "").strip()
+                                    )
                             elif isinstance(criterion, dict):
                                 # Dict format - check completed flag
-                                if criterion.get('completed', False):
-                                    criteria_met.append(criterion.get('description', ''))
+                                if criterion.get("completed", False):
+                                    criteria_met.append(
+                                        criterion.get("description", "")
+                                    )
 
                     # Record ticket completion and artifacts
                     self.artifact_tracker.record_ticket_completion(
                         ticket_id=ticket_id,
                         title=node.title,
                         artifacts=artifacts,
-                        acceptance_criteria_met=criteria_met
+                        acceptance_criteria_met=criteria_met,
                     )
 
                     # Update future tickets with actual file references
                     if artifacts:
-                        print("🔄 Updating future tickets with specific file references...")
+                        print(
+                            "🔄 Updating future tickets with specific file references..."
+                        )
                         updates_made = self.ticket_updater.update_future_tickets(
                             ticket_id, artifacts
                         )
                         if updates_made > 0:
-                            print(f"   ✏️ Updated {updates_made} future ticket(s) with actual filenames")
+                            print(
+                                f"   ✏️ Updated {updates_made} future ticket(s) with actual filenames"
+                            )
 
                 with self.lock:
                     # Ticket is completed regardless of quality status
@@ -576,7 +628,9 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     node.quality_passed = quality_passed
                     self.completed_tickets.add(ticket_id)
                     if not quality_passed:
-                        self.quality_failed_tickets.add(ticket_id)  # Track for reporting
+                        self.quality_failed_tickets.add(
+                            ticket_id
+                        )  # Track for reporting
                     self.running_tickets.remove(ticket_id)
 
                     # Unregister task from shutdown manager
@@ -585,7 +639,12 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     # Update dashboard
                     if self.dashboard_state:
                         from hydra.dashboard.state import TicketStatus
-                        status = TicketStatus.COMPLETED if quality_passed else TicketStatus.FAILED
+
+                        status = (
+                            TicketStatus.COMPLETED
+                            if quality_passed
+                            else TicketStatus.FAILED
+                        )
                         self.dashboard_state.update_ticket_status(ticket_id, status)
 
                 duration = node.end_time - node.start_time
@@ -622,6 +681,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 # Update dashboard
                 if self.dashboard_state:
                     from hydra.dashboard.state import TicketStatus
+
                     self.dashboard_state.update_ticket_status(
                         ticket_id, TicketStatus.FAILED, str(e)
                     )
@@ -633,11 +693,11 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
             return False
         finally:
             # Restore original model setting for other agents
-            if 'original_model' in locals():
+            if "original_model" in locals():
                 if original_model:
-                    os.environ['CLAUDE_MODEL'] = original_model
-                elif 'CLAUDE_MODEL' in os.environ:
-                    del os.environ['CLAUDE_MODEL']
+                    os.environ["CLAUDE_MODEL"] = original_model
+                elif "CLAUDE_MODEL" in os.environ:
+                    del os.environ["CLAUDE_MODEL"]
 
     def execute_wave(self, wave: List[str], tickets_path: str) -> Dict[str, bool]:
         """Execute a wave of tickets in parallel."""
@@ -656,7 +716,9 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     pass
 
         max_workers = min(len(wave), self.max_workers)
-        print(f"🚀 Submitting {len(wave)} tickets to ThreadPoolExecutor with {max_workers} workers")
+        print(
+            f"🚀 Submitting {len(wave)} tickets to ThreadPoolExecutor with {max_workers} workers"
+        )
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self.execute_ticket, ticket_id, tickets_path): ticket_id
@@ -684,13 +746,14 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
         # Initialize dashboard session
         if self.dashboard_state:
             import uuid
+
             session_id = str(uuid.uuid4())[:8]
             self.dashboard_state.start_session(
                 session_id=session_id,
                 tickets_path=tickets_path,
                 total_tickets=plan.total_tickets,
                 total_waves=len(plan.waves),
-                workers=self.max_workers
+                workers=self.max_workers,
             )
 
         print("\n📋 Execution Plan")
@@ -715,7 +778,8 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
 
             # Filter out already completed tickets
             wave_to_execute = [
-                t for t in wave
+                t
+                for t in wave
                 if t not in self.completed_tickets and t not in self.failed_tickets
             ]
 
@@ -736,14 +800,15 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
 
                 # Also check if dependencies were blocked (transitive failure from earlier deps)
                 deps_blocked = any(
-                    self.tickets.get(dep) and self.tickets[dep].status == ExecutionStatus.BLOCKED
+                    self.tickets.get(dep)
+                    and self.tickets[dep].status == ExecutionStatus.BLOCKED
                     for dep in node.dependencies
                 )
 
                 # Check if dependencies are missing (not completed when they should be)
                 deps_missing = any(
-                    dep not in self.completed_tickets and
-                    dep not in self.quality_failed_tickets
+                    dep not in self.completed_tickets
+                    and dep not in self.quality_failed_tickets
                     for dep in node.dependencies
                 )
 
@@ -761,7 +826,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     ready_tickets.append(ticket_id)
 
             if blocked_tickets:
-                blocked_list = ', '.join(blocked_tickets)
+                blocked_list = ", ".join(blocked_tickets)
                 print(f"⛔ Blocked tickets due to failed dependencies: {blocked_list}")
 
             if ready_tickets:
@@ -773,21 +838,27 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
 
         summary = {
             "total_tickets": plan.total_tickets,
-            "functionally_completed": len(self.completed_tickets),  # All tickets that ran to completion
-            "quality_passed": len(self.completed_tickets) - len(self.quality_failed_tickets),  # Tickets that passed quality gates
-            "completed": len(self.completed_tickets) - len(self.quality_failed_tickets),  # For backwards compatibility
+            "functionally_completed": len(
+                self.completed_tickets
+            ),  # All tickets that ran to completion
+            "quality_passed": len(self.completed_tickets)
+            - len(self.quality_failed_tickets),  # Tickets that passed quality gates
+            "completed": len(self.completed_tickets)
+            - len(self.quality_failed_tickets),  # For backwards compatibility
             "failed": len(self.failed_tickets),  # Tickets that failed to execute
-            "quality_failed": len(self.quality_failed_tickets),  # Tickets that completed but failed quality
+            "quality_failed": len(
+                self.quality_failed_tickets
+            ),  # Tickets that completed but failed quality
             "blocked": sum(
-                1 for n in self.tickets.values()
-                if n.status == ExecutionStatus.BLOCKED
+                1 for n in self.tickets.values() if n.status == ExecutionStatus.BLOCKED
             ),
             "duration": duration,
             "success_rate": (
                 len(self.completed_tickets) / plan.total_tickets * 100
-                if plan.total_tickets > 0 else 0
+                if plan.total_tickets > 0
+                else 0
             ),
-            "results": all_results
+            "results": all_results,
         }
 
         return summary
@@ -796,7 +867,12 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
         """Generate execution report."""
         # Get quality summary from tickets.md
         from hydra.ticket_workflow import get_quality_summary
-        quality_summary = get_quality_summary(self.tickets_path) if hasattr(self, 'tickets_path') else None
+
+        quality_summary = (
+            get_quality_summary(self.tickets_path)
+            if hasattr(self, "tickets_path")
+            else None
+        )
 
         lines = [
             f"\n{'='*60}",
@@ -813,13 +889,15 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
             "",
         ]
 
-        if quality_summary and quality_summary['quality_failed'] > 0:
-            lines.extend([
-                "⚠️  QUALITY ISSUES DETECTED:",
-                f"   {quality_summary['quality_failed']} ticket(s) have failing quality gates",
-                "   Check tickets.md for detailed Quality Gate Results",
-                "",
-            ])
+        if quality_summary and quality_summary["quality_failed"] > 0:
+            lines.extend(
+                [
+                    "⚠️  QUALITY ISSUES DETECTED:",
+                    f"   {quality_summary['quality_failed']} ticket(s) have failing quality gates",
+                    "   Check tickets.md for detailed Quality Gate Results",
+                    "",
+                ]
+            )
 
         lines.append("📋 Ticket Details:")
 
@@ -833,7 +911,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                     ExecutionStatus.FAILED: "❌",
                     ExecutionStatus.BLOCKED: "⛔",
                     ExecutionStatus.PENDING: "⏳",
-                    ExecutionStatus.RUNNING: "🔄"
+                    ExecutionStatus.RUNNING: "🔄",
                 }.get(node.status, "❓")
 
             line = f"  {status_icon} {ticket_id}: {node.title}"
@@ -886,7 +964,7 @@ Check your project directory for all the generated calculator files.
 ## ✅ All Tickets Completed!
 """
 
-        with open(report_file, 'w') as f:
+        with open(report_file, "w") as f:
             f.write(full_report)
 
         # Save dashboard HTML snapshot if available
@@ -1013,7 +1091,7 @@ Check your project directory for all the generated calculator files.
 </body>
 </html>"""
 
-        with open(snapshot_file, 'w') as f:
+        with open(snapshot_file, "w") as f:
             f.write(html_content)
 
     def save_execution_log(
@@ -1041,13 +1119,13 @@ Check your project directory for all the generated calculator files.
                     "start_time": node.start_time,
                     "end_time": node.end_time,
                     "error": node.error,
-                    "quality_passed": node.quality_passed
+                    "quality_passed": node.quality_passed,
                 }
                 for ticket_id, node in self.tickets.items()
-            }
+            },
         }
 
-        with open(log_file, 'w') as f:
+        with open(log_file, "w") as f:
             json.dump(log_data, f, indent=2)
 
         return str(log_file)
@@ -1055,19 +1133,19 @@ Check your project directory for all the generated calculator files.
     def _cleanup_resources(self):
         """Clean up resources when called by shutdown manager."""
         # Stop the agent pool
-        if hasattr(self, 'agent_pool'):
+        if hasattr(self, "agent_pool"):
             self.agent_pool.stop()
 
         # Stop smart lock manager deadlock monitoring
-        if hasattr(self, 'smart_lock_manager'):
+        if hasattr(self, "smart_lock_manager"):
             try:
-                if hasattr(self.smart_lock_manager, 'stop_deadlock_monitoring'):
+                if hasattr(self.smart_lock_manager, "stop_deadlock_monitoring"):
                     self.smart_lock_manager.stop_deadlock_monitoring()
             except Exception as e:
                 print(f"⚠️  Warning: Error stopping deadlock monitoring: {e}")
 
         # Close any open file handles
-        if hasattr(self, 'file_lock_manager'):
+        if hasattr(self, "file_lock_manager"):
             try:
                 # Release any remaining locks
                 for agent_id in list(self.running_tickets):
@@ -1078,7 +1156,7 @@ Check your project directory for all the generated calculator files.
     def shutdown(self):
         """Shutdown the executor and clean up resources."""
         # Use the shutdown manager for coordinated shutdown
-        if hasattr(self, 'shutdown_manager'):
+        if hasattr(self, "shutdown_manager"):
             self.shutdown_manager.shutdown()
         else:
             # Fallback to direct cleanup

@@ -3,6 +3,7 @@
 This module defines generic interfaces for ANY interactive AI tool, not just Claude Code.
 It provides session management, task execution, and state persistence without tool-specific assumptions.
 """
+
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
@@ -53,14 +54,16 @@ class ProviderConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
         result = asdict(self)
-        result['capabilities'] = [cap.value for cap in self.capabilities]
+        result["capabilities"] = [cap.value for cap in self.capabilities]
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ProviderConfig':
+    def from_dict(cls, data: Dict[str, Any]) -> "ProviderConfig":
         """Create config from dictionary."""
-        if 'capabilities' in data:
-            data['capabilities'] = {ProviderCapability(cap) for cap in data['capabilities']}
+        if "capabilities" in data:
+            data["capabilities"] = {
+                ProviderCapability(cap) for cap in data["capabilities"]
+            }
         return cls(**data)
 
 
@@ -78,14 +81,14 @@ class SessionInfo:
     def to_dict(self) -> Dict[str, Any]:
         """Convert session info to dictionary."""
         result = asdict(self)
-        result['state'] = self.state.value
+        result["state"] = self.state.value
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SessionInfo':
+    def from_dict(cls, data: Dict[str, Any]) -> "SessionInfo":
         """Create session info from dictionary."""
-        if 'state' in data:
-            data['state'] = SessionState(data['state'])
+        if "state" in data:
+            data["state"] = SessionState(data["state"])
         return cls(**data)
 
 
@@ -105,7 +108,7 @@ class TaskResult:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TaskResult':
+    def from_dict(cls, data: Dict[str, Any]) -> "TaskResult":
         """Create task result from dictionary."""
         return cls(**data)
 
@@ -156,8 +159,9 @@ class InteractiveAIProvider(ABC):
         pass
 
     @abstractmethod
-    def start_session(self, session_id: Optional[str] = None,
-                     working_directory: Optional[str] = None) -> str:
+    def start_session(
+        self, session_id: Optional[str] = None, working_directory: Optional[str] = None
+    ) -> str:
         """Start a new interactive session.
 
         Args:
@@ -187,8 +191,9 @@ class InteractiveAIProvider(ABC):
         pass
 
     @abstractmethod
-    def execute_task(self, session_id: str, task_prompt: str,
-                    timeout: Optional[int] = None) -> TaskResult:
+    def execute_task(
+        self, session_id: str, task_prompt: str, timeout: Optional[int] = None
+    ) -> TaskResult:
         """Execute a task in the specified session.
 
         Args:
@@ -207,8 +212,9 @@ class InteractiveAIProvider(ABC):
         pass
 
     @abstractmethod
-    def handle_prompt(self, session_id: str, prompt: str,
-                     auto_respond: bool = False) -> str:
+    def handle_prompt(
+        self, session_id: str, prompt: str, auto_respond: bool = False
+    ) -> str:
         """Handle an interactive prompt from the AI tool.
 
         Args:
@@ -322,12 +328,12 @@ class InteractiveAIProvider(ABC):
 
         """
         return {
-            'provider_name': self.config.provider_name,
-            'config': self.config.to_dict(),
-            'sessions': {
+            "provider_name": self.config.provider_name,
+            "config": self.config.to_dict(),
+            "sessions": {
                 sid: session.to_dict() for sid, session in self._sessions.items()
             },
-            'capabilities': [cap.value for cap in self.get_capabilities()]
+            "capabilities": [cap.value for cap in self.get_capabilities()],
         }
 
     def deserialize_state(self, state: Dict[str, Any]) -> None:
@@ -340,15 +346,15 @@ class InteractiveAIProvider(ABC):
             ValueError: If state format is invalid.
 
         """
-        if 'sessions' in state:
+        if "sessions" in state:
             self._sessions = {
                 sid: SessionInfo.from_dict(session_data)
-                for sid, session_data in state['sessions'].items()
+                for sid, session_data in state["sessions"].items()
             }
 
-        if 'capabilities' in state:
+        if "capabilities" in state:
             self._capabilities = {
-                ProviderCapability(cap) for cap in state['capabilities']
+                ProviderCapability(cap) for cap in state["capabilities"]
             }
 
     @property
@@ -363,7 +369,8 @@ class InteractiveAIProvider(ABC):
 
     def __repr__(self) -> str:
         """Get string representation of the provider."""
-        active_sessions = len([s for s in self._sessions.values()
-                              if s.state == SessionState.ACTIVE])
+        active_sessions = len(
+            [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]
+        )
         capabilities_count = len(self.get_capabilities())
         return f"{self.name}(sessions={active_sessions}, capabilities={capabilities_count})"

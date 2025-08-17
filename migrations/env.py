@@ -1,7 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
@@ -16,10 +15,12 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 from hydra.models.db import Base
+
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -63,8 +64,10 @@ def run_migrations_online() -> None:
     """
     configuration = config.get_section(config.config_ini_section, {})
     if "sqlalchemy.url" not in configuration:
-        configuration["sqlalchemy.url"] = os.getenv("DATABASE_URL", "postgresql://hydra:hydra@localhost/hydra")
-    
+        configuration["sqlalchemy.url"] = os.getenv(
+            "DATABASE_URL", "postgresql://hydra:hydra@localhost/hydra"
+        )
+
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
@@ -72,9 +75,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

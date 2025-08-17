@@ -3,6 +3,7 @@
 This module provides utilities for automatically discovering available AI tools
 in the system PATH and creating appropriate provider configurations.
 """
+
 import shutil
 import subprocess
 from pathlib import Path
@@ -16,50 +17,50 @@ class ProviderDiscovery:
 
     # Known AI tools and their typical command names
     KNOWN_TOOLS = {
-        'claude': {
-            'commands': ['claude', 'claude-cli'],
-            'provider_name': 'claude_cli',
-            'capabilities': {
+        "claude": {
+            "commands": ["claude", "claude-cli"],
+            "provider_name": "claude_cli",
+            "capabilities": {
                 ProviderCapability.FILE_OPERATIONS,
                 ProviderCapability.SHELL_EXECUTION,
                 ProviderCapability.TASK_EXECUTION,
                 ProviderCapability.PROMPT_HANDLING,
                 ProviderCapability.SESSION_PERSISTENCE,
-            }
+            },
         },
-        'aider': {
-            'commands': ['aider'],
-            'provider_name': 'aider',
-            'capabilities': {
+        "aider": {
+            "commands": ["aider"],
+            "provider_name": "aider",
+            "capabilities": {
                 ProviderCapability.FILE_OPERATIONS,
                 ProviderCapability.TASK_EXECUTION,
                 ProviderCapability.TOOL_INTEGRATION,
-            }
+            },
         },
-        'cursor': {
-            'commands': ['cursor'],
-            'provider_name': 'cursor',
-            'capabilities': {
+        "cursor": {
+            "commands": ["cursor"],
+            "provider_name": "cursor",
+            "capabilities": {
                 ProviderCapability.FILE_OPERATIONS,
                 ProviderCapability.TASK_EXECUTION,
-            }
+            },
         },
-        'codeium': {
-            'commands': ['codeium'],
-            'provider_name': 'codeium',
-            'capabilities': {
+        "codeium": {
+            "commands": ["codeium"],
+            "provider_name": "codeium",
+            "capabilities": {
                 ProviderCapability.FILE_OPERATIONS,
                 ProviderCapability.TASK_EXECUTION,
-            }
+            },
         },
-        'copilot': {
-            'commands': ['gh', 'github-copilot-cli'],
-            'provider_name': 'github_copilot',
-            'capabilities': {
+        "copilot": {
+            "commands": ["gh", "github-copilot-cli"],
+            "provider_name": "github_copilot",
+            "capabilities": {
                 ProviderCapability.TASK_EXECUTION,
                 ProviderCapability.SHELL_EXECUTION,
-            }
-        }
+            },
+        },
     }
 
     @classmethod
@@ -73,13 +74,13 @@ class ProviderDiscovery:
         discovered = []
 
         for _tool_name, tool_info in cls.KNOWN_TOOLS.items():
-            for command in tool_info['commands']:
+            for command in tool_info["commands"]:
                 if cls._is_command_available(command):
                     config = ProviderConfig(
-                        provider_name=tool_info['provider_name'],
+                        provider_name=tool_info["provider_name"],
                         tool_executable=command,
                         auto_discover=True,
-                        capabilities=tool_info['capabilities']
+                        capabilities=tool_info["capabilities"],
                     )
                     discovered.append(config)
                     break  # Only add one config per tool
@@ -102,13 +103,13 @@ class ProviderDiscovery:
 
         tool_info = cls.KNOWN_TOOLS[tool_name]
 
-        for command in tool_info['commands']:
+        for command in tool_info["commands"]:
             if cls._is_command_available(command):
                 return ProviderConfig(
-                    provider_name=tool_info['provider_name'],
+                    provider_name=tool_info["provider_name"],
                     tool_executable=command,
                     auto_discover=True,
-                    capabilities=tool_info['capabilities']
+                    capabilities=tool_info["capabilities"],
                 )
 
         return None
@@ -155,10 +156,7 @@ class ProviderDiscovery:
         try:
             # Test basic execution
             result = subprocess.run(
-                [executable_path, '--help'],
-                capture_output=True,
-                text=True,
-                timeout=10
+                [executable_path, "--help"], capture_output=True, text=True, timeout=10
             )
 
             if result.returncode == 0:
@@ -167,29 +165,43 @@ class ProviderDiscovery:
                 help_text = result.stdout.lower()
 
                 # Check for file operation capabilities
-                if any(keyword in help_text for keyword in ['file', 'edit', 'write', 'read']):
+                if any(
+                    keyword in help_text
+                    for keyword in ["file", "edit", "write", "read"]
+                ):
                     capabilities.add(ProviderCapability.FILE_OPERATIONS)
 
                 # Check for shell execution capabilities
-                if any(keyword in help_text for keyword in ['shell', 'bash', 'command', 'execute']):
+                if any(
+                    keyword in help_text
+                    for keyword in ["shell", "bash", "command", "execute"]
+                ):
                     capabilities.add(ProviderCapability.SHELL_EXECUTION)
 
                 # Check for interactive capabilities
-                if any(keyword in help_text for keyword in ['interactive', 'prompt', 'chat']):
+                if any(
+                    keyword in help_text
+                    for keyword in ["interactive", "prompt", "chat"]
+                ):
                     capabilities.add(ProviderCapability.PROMPT_HANDLING)
 
                 # Check for streaming capabilities
-                if any(keyword in help_text for keyword in ['stream', 'streaming']):
+                if any(keyword in help_text for keyword in ["stream", "streaming"]):
                     capabilities.add(ProviderCapability.STREAMING_RESPONSE)
 
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+        except (
+            subprocess.TimeoutExpired,
+            subprocess.CalledProcessError,
+            FileNotFoundError,
+        ):
             pass  # Tool doesn't support --help or isn't accessible
 
         return capabilities
 
     @classmethod
-    def create_config_from_path(cls, executable_path: str,
-                              provider_name: Optional[str] = None) -> ProviderConfig:
+    def create_config_from_path(
+        cls, executable_path: str, provider_name: Optional[str] = None
+    ) -> ProviderConfig:
         """Create a provider configuration from an executable path.
 
         Args:
@@ -209,7 +221,7 @@ class ProviderDiscovery:
             provider_name=provider_name,
             tool_executable=executable_path,
             auto_discover=False,
-            capabilities=capabilities
+            capabilities=capabilities,
         )
 
     @classmethod
@@ -231,14 +243,14 @@ class ProviderDiscovery:
 
         # Look for known command patterns
         for _tool_name, tool_info in cls.KNOWN_TOOLS.items():
-            for command in tool_info['commands']:
+            for command in tool_info["commands"]:
                 executable_path = directory_path / command
                 if executable_path.exists() and executable_path.is_file():
                     config = ProviderConfig(
-                        provider_name=tool_info['provider_name'],
+                        provider_name=tool_info["provider_name"],
                         tool_executable=str(executable_path),
                         auto_discover=False,
-                        capabilities=tool_info['capabilities']
+                        capabilities=tool_info["capabilities"],
                     )
                     configs.append(config)
 
@@ -255,8 +267,13 @@ class ProviderDiscovery:
         return list(cls.KNOWN_TOOLS.keys())
 
     @classmethod
-    def add_tool_definition(cls, tool_name: str, commands: List[str],
-                          provider_name: str, capabilities: Set[ProviderCapability]) -> None:
+    def add_tool_definition(
+        cls,
+        tool_name: str,
+        commands: List[str],
+        provider_name: str,
+        capabilities: Set[ProviderCapability],
+    ) -> None:
         """Add a new tool definition for discovery.
 
         Args:
@@ -267,7 +284,7 @@ class ProviderDiscovery:
 
         """
         cls.KNOWN_TOOLS[tool_name] = {
-            'commands': commands,
-            'provider_name': provider_name,
-            'capabilities': capabilities
+            "commands": commands,
+            "provider_name": provider_name,
+            "capabilities": capabilities,
         }

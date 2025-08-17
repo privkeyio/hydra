@@ -68,7 +68,7 @@ class ClaudeCodeAgent:
         name: str,
         project_root: Optional[str] = None,
         max_context_size: int = 50000,
-        memory_limit: int = 1000
+        memory_limit: int = 1000,
     ):
         self.name = name
         self.agent_id = f"{name}_{uuid.uuid4().hex[:8]}"
@@ -80,8 +80,7 @@ class ClaudeCodeAgent:
             self.project_root = Path.cwd()
 
         self.session = SessionContext(
-            project_root=self.project_root,
-            working_directory=self.project_root
+            project_root=self.project_root, working_directory=self.project_root
         )
 
         self.max_context_size = max_context_size
@@ -122,8 +121,15 @@ class ClaudeCodeAgent:
     def _should_ignore_file(self, path: Path) -> bool:
         """Check if file should be ignored based on common patterns."""
         ignore_patterns = {
-            '.git', '__pycache__', '.pytest_cache', 'node_modules',
-            '.venv', 'venv', '.env', 'logs', '.DS_Store'
+            ".git",
+            "__pycache__",
+            ".pytest_cache",
+            "node_modules",
+            ".venv",
+            "venv",
+            ".env",
+            "logs",
+            ".DS_Store",
         }
 
         return any(pattern in str(path) for pattern in ignore_patterns)
@@ -133,19 +139,19 @@ class ClaudeCodeAgent:
         event_type: str,
         message: str,
         task_id: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
     ):
         """Log a progress event."""
         event = ProgressEvent(
             event_type=event_type,
             message=message,
             task_id=task_id,
-            details=details or {}
+            details=details or {},
         )
         self.progress_events.append(event)
 
         # Also log to standard logger if available
-        if hasattr(self, 'logger'):
+        if hasattr(self, "logger"):
             self.logger.info(f"[{event_type}] {message}")
 
     def _record_decision(
@@ -154,7 +160,7 @@ class ClaudeCodeAgent:
         decision: str,
         reasoning: str,
         confidence: float = 0.8,
-        task_id: Optional[str] = None
+        task_id: Optional[str] = None,
     ):
         """Record a decision for future reference."""
         decision_record = Decision(
@@ -162,7 +168,7 @@ class ClaudeCodeAgent:
             decision=decision,
             reasoning=reasoning,
             confidence=confidence,
-            task_id=task_id
+            task_id=task_id,
         )
         self.decisions.append(decision_record)
 
@@ -172,15 +178,11 @@ class ClaudeCodeAgent:
         path: str,
         content: Optional[str] = None,
         success: bool = True,
-        error: Optional[str] = None
+        error: Optional[str] = None,
     ):
         """Record a file operation for tracking."""
         operation = FileOperation(
-            action=action,
-            path=path,
-            content=content,
-            success=success,
-            error=error
+            action=action, path=path, content=content, success=success, error=error
         )
         self.file_operations.append(operation)
 
@@ -195,11 +197,10 @@ class ClaudeCodeAgent:
 
             if not file_path.exists():
                 error = f"File not found: {path}"
-                self._record_file_operation("read", path, success=False,
-                                            error=error)
+                self._record_file_operation("read", path, success=False, error=error)
                 return False, error
 
-            content = file_path.read_text(encoding='utf-8')
+            content = file_path.read_text(encoding="utf-8")
 
             # Cache content for context
             self.session.file_contents_cache[path] = content
@@ -223,15 +224,14 @@ class ClaudeCodeAgent:
             # Create directories if needed
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            file_path.write_text(content, encoding='utf-8')
+            file_path.write_text(content, encoding="utf-8")
 
             # Update cache and tracking
             self.session.file_contents_cache[path] = content
             self.session.known_files.add(path)
 
             self._record_file_operation("write", path, content, success=True)
-            self._log_progress("FILE_WRITE",
-                               f"Wrote {path} ({len(content)} chars)")
+            self._log_progress("FILE_WRITE", f"Wrote {path} ({len(content)} chars)")
 
             return True, "File written successfully"
 
@@ -253,8 +253,7 @@ class ClaudeCodeAgent:
 
             if old_content not in current_content:
                 error = "Old content not found in file"
-                self._record_file_operation("edit", path, success=False,
-                                            error=error)
+                self._record_file_operation("edit", path, success=False, error=error)
                 return False, error
 
             updated_content = current_content.replace(old_content, new_content)
@@ -267,15 +266,11 @@ class ClaudeCodeAgent:
 
         except Exception as e:
             error = f"Failed to edit {path}: {e}"
-            self._record_file_operation("edit", path, success=False,
-                                        error=error)
+            self._record_file_operation("edit", path, success=False, error=error)
             return False, error
 
     def execute_command(
-        self,
-        command: str,
-        timeout: int = 30,
-        working_dir: Optional[str] = None
+        self, command: str, timeout: int = 30, working_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """Execute a shell command with proper error handling."""
         try:
@@ -289,7 +284,7 @@ class ClaudeCodeAgent:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                cwd=work_dir
+                cwd=work_dir,
             )
 
             execution_result = {
@@ -298,14 +293,14 @@ class ClaudeCodeAgent:
                 "stderr": result.stderr,
                 "returncode": result.returncode,
                 "command": command,
-                "working_dir": work_dir
+                "working_dir": work_dir,
             }
 
             status = "SUCCESS" if execution_result["success"] else "ERROR"
             self._log_progress(
                 f"COMMAND_{status}",
                 f"Command completed with code {result.returncode}",
-                details={"command": command, "output_length": len(result.stdout)}
+                details={"command": command, "output_length": len(result.stdout)},
             )
 
             return execution_result
@@ -317,10 +312,9 @@ class ClaudeCodeAgent:
                 "stderr": f"Command timed out after {timeout}s",
                 "returncode": -1,
                 "command": command,
-                "working_dir": work_dir
+                "working_dir": work_dir,
             }
-            self._log_progress("COMMAND_TIMEOUT",
-                               f"Command timed out: {command}")
+            self._log_progress("COMMAND_TIMEOUT", f"Command timed out: {command}")
             return error_result
 
         except Exception as e:
@@ -330,7 +324,7 @@ class ClaudeCodeAgent:
                 "stderr": str(e),
                 "returncode": -1,
                 "command": command,
-                "working_dir": work_dir
+                "working_dir": work_dir,
             }
             self._log_progress("COMMAND_ERROR", f"Command failed: {e}")
             return error_result
@@ -373,7 +367,7 @@ Respond with valid JSON containing these fields:
                 context=f"Task analysis: {task[:200]}",
                 decision=result.get("approach", "Unknown"),
                 reasoning=f"Complexity: {result.get('complexity', 'unknown')}",
-                confidence=0.8
+                confidence=0.8,
             )
 
             return result
@@ -387,7 +381,7 @@ Respond with valid JSON containing these fields:
                 "dependencies": [],
                 "estimated_time_minutes": 30,
                 "risks": [str(e)],
-                "approach": "Fallback approach due to analysis failure"
+                "approach": "Fallback approach due to analysis failure",
             }
 
     def _build_context_prompt(self) -> str:
@@ -395,7 +389,7 @@ Respond with valid JSON containing these fields:
         context_parts = [
             f"Project root: {self.project_root}",
             f"Working directory: {self.session.working_directory}",
-            f"Known files: {len(self.session.known_files)}"
+            f"Known files: {len(self.session.known_files)}",
         ]
 
         # Add recent file operations
@@ -410,8 +404,9 @@ Respond with valid JSON containing these fields:
         if recent_decisions:
             context_parts.append("Recent decisions:")
             for decision in recent_decisions:
-                context_parts.append(f"  - {decision.decision}: "
-                                     f"{decision.reasoning}")
+                context_parts.append(
+                    f"  - {decision.decision}: " f"{decision.reasoning}"
+                )
 
         return "\n".join(context_parts)
 
@@ -421,12 +416,11 @@ Respond with valid JSON containing these fields:
         """Execute a long-running task with progress tracking."""
         task_id = str(uuid.uuid4())[:8]
 
-        self._log_progress("TASK_START", f"Starting task: {task[:100]}...",
-                           task_id)
+        self._log_progress("TASK_START", f"Starting task: {task[:100]}...", task_id)
         self.active_tasks[task_id] = {
             "task": task,
             "start_time": time.time(),
-            "status": "running"
+            "status": "running",
         }
 
         try:
@@ -471,7 +465,7 @@ you're doing.
                 "result": result,
                 "execution_time": (
                     time.time() - self.active_tasks[task_id]["start_time"]
-                )
+                ),
             }
 
         except Exception as e:
@@ -487,7 +481,7 @@ you're doing.
                 "error": str(e),
                 "execution_time": (
                     time.time() - self.active_tasks[task_id]["start_time"]
-                )
+                ),
             }
 
     def get_progress_report(self) -> Dict[str, Any]:
@@ -501,7 +495,8 @@ you're doing.
             "successful_operations": self.successful_operations,
             "success_rate": (
                 self.successful_operations / self.total_operations
-                if self.total_operations > 0 else 0
+                if self.total_operations > 0
+                else 0
             ),
             "active_tasks": len(self.active_tasks),
             "completed_tasks": len(self.completed_tasks),
@@ -512,19 +507,21 @@ you're doing.
                 {
                     "type": event.event_type,
                     "message": event.message,
-                    "timestamp": event.timestamp
+                    "timestamp": event.timestamp,
                 }
                 for event in list(self.progress_events)[-10:]
-            ]
+            ],
         }
 
     def maintain_context_across_interactions(self, interaction: str) -> str:
         """Maintain context across multiple interactions."""
-        self.conversation_history.append({
-            "timestamp": time.time(),
-            "interaction": interaction,
-            "context_size": len(self._build_context_prompt())
-        })
+        self.conversation_history.append(
+            {
+                "timestamp": time.time(),
+                "interaction": interaction,
+                "context_size": len(self._build_context_prompt()),
+            }
+        )
 
         # Clean up old context if getting too large
         if len(self._build_context_prompt()) > self.max_context_size:
@@ -538,7 +535,7 @@ you're doing.
         if len(self.session.file_contents_cache) > 50:
             old_files = sorted(
                 self.session.file_contents_cache.keys(),
-                key=lambda f: len(self.session.file_contents_cache[f])
+                key=lambda f: len(self.session.file_contents_cache[f]),
             )[:10]
 
             for file_path in old_files:
@@ -555,5 +552,5 @@ you're doing.
             "conversation_history": len(self.conversation_history),
             "cached_files": len(self.session.file_contents_cache),
             "known_files": len(self.session.known_files),
-            "active_tasks": len(self.active_tasks)
+            "active_tasks": len(self.active_tasks),
         }

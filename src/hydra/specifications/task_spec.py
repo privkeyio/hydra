@@ -102,10 +102,7 @@ class TaskSpecValidator:
                         "description": {"type": "string"},
                         "inputs": {"type": "object"},
                         "outputs": {"type": "object"},
-                        "dependencies": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
+                        "dependencies": {"type": "array", "items": {"type": "string"}},
                         "conditions": {
                             "type": "array",
                             "items": {
@@ -113,10 +110,10 @@ class TaskSpecValidator:
                                 "properties": {
                                     "type": {"type": "string"},
                                     "expression": {"type": "string"},
-                                    "variables": {"type": "object"}
+                                    "variables": {"type": "object"},
                                 },
-                                "required": ["type", "expression"]
-                            }
+                                "required": ["type", "expression"],
+                            },
                         },
                         "retry_policy": {
                             "type": "object",
@@ -125,18 +122,18 @@ class TaskSpecValidator:
                                 "backoff_factor": {"type": "number", "minimum": 0},
                                 "retry_on": {
                                     "type": "array",
-                                    "items": {"type": "string"}
-                                }
-                            }
+                                    "items": {"type": "string"},
+                                },
+                            },
                         },
                         "timeout": {"type": "integer", "minimum": 1},
-                        "model_preference": {"type": "string"}
+                        "model_preference": {"type": "string"},
                     },
-                    "required": ["id", "type", "name"]
-                }
-            }
+                    "required": ["id", "type", "name"],
+                },
+            },
         },
-        "required": ["name", "version", "tasks"]
+        "required": ["name", "version", "tasks"],
     }
 
     def __init__(self):
@@ -224,17 +221,19 @@ class TaskSpecParser:
             tasks=tasks,
             execution_mode=ExecutionMode(spec_dict.get("execution_mode", "strict")),
             max_parallel=spec_dict.get("max_parallel", 10),
-            timeout=spec_dict.get("timeout")
+            timeout=spec_dict.get("timeout"),
         )
 
     def _parse_task(self, task_dict: Dict[str, Any]) -> TaskSpec:
         conditions = []
         for cond_dict in task_dict.get("conditions", []):
-            conditions.append(TaskCondition(
-                type=cond_dict["type"],
-                expression=cond_dict["expression"],
-                variables=cond_dict.get("variables", {})
-            ))
+            conditions.append(
+                TaskCondition(
+                    type=cond_dict["type"],
+                    expression=cond_dict["expression"],
+                    variables=cond_dict.get("variables", {}),
+                )
+            )
 
         inputs = self._resolve_variables(task_dict.get("inputs", {}))
         name = self._substitute_variables(task_dict["name"])
@@ -251,7 +250,7 @@ class TaskSpecParser:
             conditions=conditions,
             retry_policy=task_dict.get("retry_policy", {}),
             timeout=task_dict.get("timeout"),
-            model_preference=task_dict.get("model_preference")
+            model_preference=task_dict.get("model_preference"),
         )
 
     def _resolve_variables(self, obj: Any) -> Any:
@@ -265,7 +264,7 @@ class TaskSpecParser:
             return obj
 
     def _substitute_variables(self, text: str) -> str:
-        pattern = r'\{\{\s*(\w+)\s*\}\}'
+        pattern = r"\{\{\s*(\w+)\s*\}\}"
 
         def replace_var(match):
             var_name = match.group(1)
@@ -285,16 +284,14 @@ class ConditionEvaluator:
             parts = condition.expression.split("==")
             if len(parts) != 2:
                 return False
-            var_name, expected = parts[0].strip(), parts[1].strip().strip('"\'')
+            var_name, expected = parts[0].strip(), parts[1].strip().strip("\"'")
             return str(variables.get(var_name, "")) == expected
         elif condition.type == "command_success":
             import subprocess
+
             try:
                 result = subprocess.run(
-                    condition.expression,
-                    shell=True,
-                    capture_output=True,
-                    timeout=30
+                    condition.expression, shell=True, capture_output=True, timeout=30
                 )
                 return result.returncode == 0
             except Exception:
@@ -358,46 +355,46 @@ class TaskTemplateManager:
             "inputs": {
                 "filename": "{{ filename }}",
                 "function_name": "{{ function_name }}",
-                "requirements": "{{ requirements }}"
+                "requirements": "{{ requirements }}",
             },
-            "description": "Generate a Python script with specified function"
+            "description": "Generate a Python script with specified function",
         },
         "test_suite": {
             "type": "test",
             "inputs": {
                 "test_framework": "pytest",
                 "target_files": "{{ target_files }}",
-                "coverage_threshold": 80
+                "coverage_threshold": 80,
             },
-            "description": "Create comprehensive test suite"
+            "description": "Create comprehensive test suite",
         },
         "web_api": {
             "type": "sequential",
             "inputs": {
                 "framework": "{{ framework | default('fastapi') }}",
                 "endpoints": "{{ endpoints }}",
-                "database": "{{ database | default('sqlite') }}"
+                "database": "{{ database | default('sqlite') }}",
             },
-            "description": "Generate web API with specified endpoints"
+            "description": "Generate web API with specified endpoints",
         },
         "docker_setup": {
             "type": "file_create",
             "inputs": {
                 "base_image": "{{ base_image }}",
                 "port": "{{ port | default(8000) }}",
-                "dependencies": "{{ dependencies }}"
+                "dependencies": "{{ dependencies }}",
             },
-            "description": "Create Docker configuration files"
+            "description": "Create Docker configuration files",
         },
         "ci_pipeline": {
             "type": "file_create",
             "inputs": {
                 "platform": "{{ platform | default('github') }}",
                 "languages": "{{ languages }}",
-                "test_commands": "{{ test_commands }}"
+                "test_commands": "{{ test_commands }}",
             },
-            "description": "Generate CI/CD pipeline configuration"
-        }
+            "description": "Generate CI/CD pipeline configuration",
+        },
     }
 
     def get_template(self, name: str) -> Dict[str, Any]:
@@ -434,5 +431,5 @@ class TaskTemplateManager:
             description=template_dict.get("description", ""),
             inputs=template_dict.get("inputs", {}),
             outputs=template_dict.get("outputs", {}),
-            dependencies=template_dict.get("dependencies", [])
+            dependencies=template_dict.get("dependencies", []),
         )

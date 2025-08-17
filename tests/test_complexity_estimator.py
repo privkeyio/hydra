@@ -3,7 +3,6 @@
 Comprehensive tests for effort estimation, time prediction, and accuracy validation.
 """
 
-
 import pytest
 
 from src.hydra.estimation.complexity_estimator import (
@@ -28,11 +27,11 @@ class TestComplexityEstimator:
             "description": "Update README.md to fix a spelling error",
             "acceptance_criteria": [
                 "Fix spelling error in line 23",
-                "Verify documentation renders correctly"
+                "Verify documentation renders correctly",
             ],
             "output_files": ["README.md"],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         result = self.estimator.estimate_ticket(ticket)
@@ -54,15 +53,15 @@ class TestComplexityEstimator:
                 "Implement JWT token generation",
                 "Add logout endpoint that invalidates tokens",
                 "Include proper error handling",
-                "Add integration tests for auth flow"
+                "Add integration tests for auth flow",
             ],
             "output_files": [
                 "src/api/auth.py",
                 "src/middleware/jwt_validator.py",
-                "tests/test_auth_integration.py"
+                "tests/test_auth_integration.py",
             ],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         result = self.estimator.estimate_ticket(ticket)
@@ -95,7 +94,7 @@ class TestComplexityEstimator:
                 "Update all API endpoints to use new services",
                 "Create rollback procedures",
                 "Add comprehensive integration tests",
-                "Update documentation and deployment scripts"
+                "Update documentation and deployment scripts",
             ],
             "output_files": [
                 "services/user/database/migration.sql",
@@ -105,11 +104,11 @@ class TestComplexityEstimator:
                 "src/events/event_handler.py",
                 "src/consistency/checker.py",
                 "tests/test_migration_integration.py",
-                "docs/migration_guide.md"
+                "docs/migration_guide.md",
             ],
             "input_files": [],
             "dependencies": [],
-            "has_breaking_changes": True
+            "has_breaking_changes": True,
         }
 
         result = self.estimator.estimate_ticket(ticket)
@@ -125,7 +124,7 @@ class TestComplexityEstimator:
             "description": "Update application configuration files",
             "acceptance_criteria": ["Update config", "Test changes"],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         # Test with few files
@@ -135,9 +134,7 @@ class TestComplexityEstimator:
         # Test with many files
         ticket_many_files = {
             **base_ticket,
-            "output_files": [
-                f"config_{i}.yaml" for i in range(10)
-            ]
+            "output_files": [f"config_{i}.yaml" for i in range(10)],
         }
         result_many = self.estimator.estimate_ticket(ticket_many_files)
 
@@ -162,13 +159,13 @@ class TestComplexityEstimator:
             "description": "Add new feature to the application",
             "output_files": ["src/feature.py"],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         # Test with few criteria
         ticket_few_criteria = {
             **base_ticket,
-            "acceptance_criteria": ["Implement basic functionality"]
+            "acceptance_criteria": ["Implement basic functionality"],
         }
         result_few = self.estimator.estimate_ticket(ticket_few_criteria)
 
@@ -176,9 +173,8 @@ class TestComplexityEstimator:
         ticket_many_criteria = {
             **base_ticket,
             "acceptance_criteria": [
-                f"Requirement {i}: Implement functionality {i}"
-                for i in range(12)
-            ]
+                f"Requirement {i}: Implement functionality {i}" for i in range(12)
+            ],
         }
         result_many = self.estimator.estimate_ticket(ticket_many_criteria)
 
@@ -192,20 +188,17 @@ class TestComplexityEstimator:
             "description": "Update application files",
             "acceptance_criteria": ["Update files", "Test changes"],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         # Test with simple file types
-        simple_ticket = {
-            **base_ticket,
-            "output_files": ["README.md", "config.yaml"]
-        }
+        simple_ticket = {**base_ticket, "output_files": ["README.md", "config.yaml"]}
         simple_result = self.estimator.estimate_ticket(simple_ticket)
 
         # Test with complex file types
         complex_ticket = {
             **base_ticket,
-            "output_files": ["migration_001.sql", "schema.proto"]
+            "output_files": ["migration_001.sql", "schema.proto"],
         }
         complex_result = self.estimator.estimate_ticket(complex_ticket)
 
@@ -223,7 +216,7 @@ class TestComplexityEstimator:
             "acceptance_criteria": ["Update endpoints", "Update tests"],
             "output_files": ["src/api.py"],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         # Test without breaking changes
@@ -233,7 +226,7 @@ class TestComplexityEstimator:
         # Test with breaking changes
         breaking_ticket = {
             **base_ticket,
-            "description": "Refactor API with breaking changes to endpoint structure"
+            "description": "Refactor API with breaking changes to endpoint structure",
         }
         breaking_result = self.estimator.estimate_ticket(breaking_ticket)
 
@@ -256,11 +249,11 @@ class TestComplexityEstimator:
                 "Return user data in JSON format",
                 "Add authentication middleware",
                 "Add input validation",
-                "Add comprehensive tests"
+                "Add comprehensive tests",
             ],
             "output_files": ["src/api/user.py", "tests/test_user_api.py"],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         # Poorly defined ticket
@@ -270,7 +263,7 @@ class TestComplexityEstimator:
             "acceptance_criteria": ["Fix it"],
             "output_files": [],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         well_defined_result = self.estimator.estimate_ticket(well_defined_ticket)
@@ -293,7 +286,7 @@ class TestComplexityEstimator:
                 "acceptance_criteria": ["Fix bug"],
                 "output_files": ["src/fix.py"],
                 "input_files": [],
-                "dependencies": []
+                "dependencies": [],
             },
             {
                 "id": "002",
@@ -306,17 +299,17 @@ class TestComplexityEstimator:
                     "Implement core logic",
                     "Add optimization",
                     "Extensive testing",
-                    "Performance benchmarks"
+                    "Performance benchmarks",
                 ],
                 "output_files": [
                     "src/algorithm.py",
                     "src/optimizer.py",
                     "tests/test_algorithm.py",
-                    "benchmarks/performance_test.py"
+                    "benchmarks/performance_test.py",
                 ],
                 "input_files": [],
-                "dependencies": []
-            }
+                "dependencies": [],
+            },
         ]
 
         results = self.estimator.batch_estimate_tickets(tickets)
@@ -343,11 +336,11 @@ class TestComplexityEstimator:
             "acceptance_criteria": [
                 "Implement feature",
                 "Add tests",
-                "Update documentation"
+                "Update documentation",
             ],
             "output_files": ["src/feature.py", "tests/test_feature.py"],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         result = self.estimator.estimate_ticket(ticket)
@@ -370,7 +363,7 @@ class TestComplexityEstimator:
                 "acceptance_criteria": ["Update docs"],
                 "output_files": ["README.md"],
                 "input_files": [],
-                "dependencies": []
+                "dependencies": [],
             },
             {
                 "title": "Simple task 2",
@@ -378,7 +371,7 @@ class TestComplexityEstimator:
                 "acceptance_criteria": ["Update more docs"],
                 "output_files": ["CHANGELOG.md"],
                 "input_files": [],
-                "dependencies": []
+                "dependencies": [],
             },
             {
                 "title": "Complex task",
@@ -390,16 +383,16 @@ class TestComplexityEstimator:
                     "Implement new design",
                     "Migration scripts",
                     "Extensive testing",
-                    "Documentation updates"
+                    "Documentation updates",
                 ],
                 "output_files": [
                     "src/architecture/new_design.py",
                     "migrations/001_restructure.sql",
-                    "tests/test_architecture.py"
+                    "tests/test_architecture.py",
                 ],
                 "input_files": [],
-                "dependencies": []
-            }
+                "dependencies": [],
+            },
         ]
 
         for ticket in tickets:
@@ -430,7 +423,7 @@ class TestComplexityEstimator:
             "acceptance_criteria": [],
             "output_files": [],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         result = self.estimator.estimate_ticket(empty_ticket)
@@ -445,7 +438,7 @@ class TestComplexityEstimator:
             "acceptance_criteria": None,
             "output_files": None,
             "input_files": None,
-            "dependencies": None
+            "dependencies": None,
         }
 
         result = self.estimator.estimate_ticket(none_ticket)
@@ -461,7 +454,7 @@ class TestComplexityEstimator:
                 "acceptance_criteria": ["Fix docs"],
                 "output_files": ["README.md"],
                 "input_files": [],
-                "dependencies": []
+                "dependencies": [],
             },
             {
                 "id": "quick_2",
@@ -470,8 +463,8 @@ class TestComplexityEstimator:
                 "acceptance_criteria": ["Fix more docs"],
                 "output_files": ["CHANGELOG.md"],
                 "input_files": [],
-                "dependencies": []
-            }
+                "dependencies": [],
+            },
         ]
 
         results = self.estimator.batch_estimate_tickets(tickets)
@@ -497,16 +490,16 @@ class TestComplexityEstimator:
                 "Handle rate limiting",
                 "Add comprehensive error handling",
                 "Write integration tests",
-                "Add monitoring and logging"
+                "Add monitoring and logging",
             ],
             "output_files": [
                 "src/integrations/external_api.py",
                 "src/auth/api_auth.py",
                 "src/errors/api_errors.py",
-                "tests/test_integration.py"
+                "tests/test_integration.py",
             ],
             "input_files": [],
-            "dependencies": []
+            "dependencies": [],
         }
 
         result = self.estimator.estimate_ticket(ticket)
@@ -559,7 +552,7 @@ class TestEstimationResult:
             time_estimate=TimeEstimate.TWO_HOURS,
             confidence_score=0.8,
             complexity_factors=factors,
-            reasoning=["Test reasoning"]
+            reasoning=["Test reasoning"],
         )
 
         assert result.effort_category == EffortCategory.MEDIUM

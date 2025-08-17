@@ -93,8 +93,7 @@ class ConfigCache:
         with self._lock:
             now = datetime.now()
             expired_keys = [
-                k for k, (_, ts) in self._cache.items()
-                if now - ts >= self._ttl
+                k for k, (_, ts) in self._cache.items() if now - ts >= self._ttl
             ]
             for key in expired_keys:
                 del self._cache[key]
@@ -108,10 +107,8 @@ class ConfigCache:
                 "size": len(self._cache),
                 "total_accesses": sum(self._access_count.values()),
                 "top_accessed": sorted(
-                    self._access_count.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:5]
+                    self._access_count.items(), key=lambda x: x[1], reverse=True
+                )[:5],
             }
 
 
@@ -135,7 +132,9 @@ class ProviderPool:
         """Register a callback for lazy provider initialization."""
         self._initialization_callbacks[provider_type] = callback
 
-    def get(self, provider_type: str, config: Optional[LLMConfig] = None) -> Optional[BaseProvider]:
+    def get(
+        self, provider_type: str, config: Optional[LLMConfig] = None
+    ) -> Optional[BaseProvider]:
         """Get a provider from the pool, initializing if necessary."""
         with self._lock:
             # Check if provider exists and is healthy
@@ -154,13 +153,19 @@ class ProviderPool:
             provider = self._initialize_provider(provider_type, config)
             if provider:
                 self._pool[provider_type] = provider
-                self._metrics[provider_type].initialization_time = time.time() - start_time
+                self._metrics[provider_type].initialization_time = (
+                    time.time() - start_time
+                )
                 self._metrics[provider_type].last_used = datetime.now()
-                logger.info(f"Initialized provider {provider_type} in {time.time() - start_time:.2f}s")
+                logger.info(
+                    f"Initialized provider {provider_type} in {time.time() - start_time:.2f}s"
+                )
 
             return provider
 
-    def _initialize_provider(self, provider_type: str, config: Optional[LLMConfig]) -> Optional[BaseProvider]:
+    def _initialize_provider(
+        self, provider_type: str, config: Optional[LLMConfig]
+    ) -> Optional[BaseProvider]:
         """Initialize a provider using registered callback or config."""
         if provider_type in self._initialization_callbacks:
             try:
@@ -173,6 +178,7 @@ class ProviderPool:
         # Fallback to factory if no callback registered
         try:
             from hydra.providers.factory import LLMProviderFactory
+
             factory = LLMProviderFactory()
             if not config:
                 config = LLMConfig(provider_type=provider_type)
@@ -188,15 +194,14 @@ class ProviderPool:
             return
 
         lru_type = min(
-            self._pool.keys(),
-            key=lambda k: self._metrics[k].last_used or datetime.min
+            self._pool.keys(), key=lambda k: self._metrics[k].last_used or datetime.min
         )
 
         provider = self._pool.pop(lru_type)
         logger.info(f"Evicted provider {lru_type} from pool")
 
         # Clean up provider resources if needed
-        if hasattr(provider, 'cleanup'):
+        if hasattr(provider, "cleanup"):
             try:
                 provider.cleanup()
             except Exception as e:
@@ -211,11 +216,13 @@ class ProviderPool:
         """Clear the pool and cleanup all providers."""
         with self._lock:
             for provider_type, provider in self._pool.items():
-                if hasattr(provider, 'cleanup'):
+                if hasattr(provider, "cleanup"):
                     try:
                         provider.cleanup()
                     except Exception as e:
-                        logger.warning(f"Error cleaning up provider {provider_type}: {e}")
+                        logger.warning(
+                            f"Error cleaning up provider {provider_type}: {e}"
+                        )
             self._pool.clear()
             self._metrics.clear()
 
@@ -242,6 +249,7 @@ class LazyProviderProxy:
             with self._lock:
                 if self._provider is None:  # Double-check
                     from hydra.providers.factory import LLMProviderFactory
+
                     factory = LLMProviderFactory()
                     if not self._config:
                         self._config = LLMConfig(provider_type=self._provider_type)
@@ -272,10 +280,7 @@ def memoize_provider_config(ttl_seconds: int = 300):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Create cache key from args and kwargs
-            cache_data = {
-                "args": args,
-                "kwargs": kwargs
-            }
+            cache_data = {"args": args, "kwargs": kwargs}
             key = cache._make_key(cache_data)
 
             # Check cache
@@ -335,11 +340,15 @@ class PerformanceMonitor:
         with self._lock:
             self._metrics[provider_type].errors += 1
 
-    def get_metrics(self, provider_type: Optional[str] = None) -> Dict[str, ProviderMetrics]:
+    def get_metrics(
+        self, provider_type: Optional[str] = None
+    ) -> Dict[str, ProviderMetrics]:
         """Get metrics for provider(s)."""
         with self._lock:
             if provider_type:
-                return {provider_type: self._metrics.get(provider_type, ProviderMetrics())}
+                return {
+                    provider_type: self._metrics.get(provider_type, ProviderMetrics())
+                }
             return dict(self._metrics)
 
     def get_recommendations(self) -> List[str]:
@@ -356,7 +365,10 @@ class PerformanceMonitor:
                     )
 
                 # Check cache hit rate
-                if metrics.cache_hit_rate < 0.5 and metrics.cache_hits + metrics.cache_misses > 10:
+                if (
+                    metrics.cache_hit_rate < 0.5
+                    and metrics.cache_hits + metrics.cache_misses > 10
+                ):
                     recommendations.append(
                         f"Provider {provider_type} has low cache hit rate ({metrics.cache_hit_rate:.1%}). "
                         "Consider increasing cache TTL or improving cache key generation."
@@ -410,12 +422,13 @@ def optimize_provider_switching(func: Callable) -> Callable:
     2. Monitors performance
     3. Provides metrics
     """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
 
         # Extract provider type if available
-        provider_type = kwargs.get('provider_type') or (args[0] if args else None)
+        provider_type = kwargs.get("provider_type") or (args[0] if args else None)
 
         try:
             result = func(*args, **kwargs)

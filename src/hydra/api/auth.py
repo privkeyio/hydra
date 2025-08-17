@@ -17,6 +17,7 @@ from hydra.security import audit_logger, request_signer
 
 logger = logging.getLogger(__name__)
 
+
 class RateLimiter:
     """In-memory rate limiter with sliding window."""
 
@@ -41,18 +42,22 @@ class RateLimiter:
 
     def log_usage(self, api_key: str, endpoint: str, tokens_used: int = 0):
         """Log API usage for tracking."""
-        self.usage_log.append({
-            'api_key': api_key,
-            'endpoint': endpoint,
-            'timestamp': datetime.utcnow().isoformat(),
-            'tokens_used': tokens_used
-        })
+        self.usage_log.append(
+            {
+                "api_key": api_key,
+                "endpoint": endpoint,
+                "timestamp": datetime.utcnow().isoformat(),
+                "tokens_used": tokens_used,
+            }
+        )
 
         # Keep only last 10000 entries to prevent memory bloat
         if len(self.usage_log) > 10000:
             self.usage_log = self.usage_log[-5000:]
 
+
 rate_limiter = RateLimiter()
+
 
 class APIKeyValidator:
     """Validates API keys using environment-based configuration."""
@@ -65,12 +70,12 @@ class APIKeyValidator:
         # For production, this would come from database
         # For now, using environment variables and defaults
         default_keys = {
-            'hydra-dev-key': {'name': 'Development Key', 'rate_limit': 100},
-            'hydra-prod-key': {'name': 'Production Key', 'rate_limit': 1000}
+            "hydra-dev-key": {"name": "Development Key", "rate_limit": 100},
+            "hydra-prod-key": {"name": "Production Key", "rate_limit": 1000},
         }
 
         # Allow custom keys via environment
-        custom_keys_json = os.getenv('HYDRA_API_KEYS')
+        custom_keys_json = os.getenv("HYDRA_API_KEYS")
         if custom_keys_json:
             try:
                 custom_keys = json.loads(custom_keys_json)
@@ -94,25 +99,24 @@ class APIKeyValidator:
 
         return None
 
+
 api_key_validator = APIKeyValidator()
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Authentication and rate limiting middleware."""
 
     def __init__(
-        self,
-        app,
-        rate_limit_requests: int = None,
-        rate_limit_window: int = None
+        self, app, rate_limit_requests: int = None, rate_limit_window: int = None
     ):
         super().__init__(app)
-        self.rate_limit_requests = (
-            rate_limit_requests or int(os.getenv('RATE_LIMIT_REQUESTS', '100'))
+        self.rate_limit_requests = rate_limit_requests or int(
+            os.getenv("RATE_LIMIT_REQUESTS", "100")
         )
-        self.rate_limit_window = (
-            rate_limit_window or int(os.getenv('RATE_LIMIT_WINDOW', '3600'))
+        self.rate_limit_window = rate_limit_window or int(
+            os.getenv("RATE_LIMIT_WINDOW", "3600")
         )
-        self.excluded_paths = {'/health', '/docs', '/redoc', '/openapi.json'}
+        self.excluded_paths = {"/health", "/docs", "/redoc", "/openapi.json"}
 
     async def dispatch(self, request: Request, call_next):
         """Process request through auth and rate limiting."""
@@ -123,13 +127,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Check for request signature if provided
-        signature = request.headers.get('X-Signature')
+        signature = request.headers.get("X-Signature")
         if signature:
-            timestamp = request.headers.get('X-Timestamp')
+            timestamp = request.headers.get("X-Timestamp")
             if not timestamp:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Timestamp required with signature"
+                    detail="Timestamp required with signature",
                 )
 
             try:
@@ -139,24 +143,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 if not request_signer.verify_signature(
                     request.method,
                     path,
-                    body.decode('utf-8'),
+                    body.decode("utf-8"),
                     int(timestamp),
-                    signature
+                    signature,
                 ):
                     audit_logger.log_security_event(
                         "SIGNATURE_VERIFICATION_FAILED",
                         "HIGH",
                         "Invalid request signature",
-                        {"path": path, "method": request.method}
+                        {"path": path, "method": request.method},
                     )
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Invalid request signature"
+                        detail="Invalid request signature",
                     )
             except ValueError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid timestamp format"
+                    detail="Invalid timestamp format",
                 ) from e
 
         # Extract API key
@@ -165,19 +169,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="API key required",
-                headers={"WWW-Authenticate": "Bearer"}
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Validate API key
         key_info = api_key_validator.validate_key(api_key)
         if not key_info:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid API key"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
             )
 
         # Apply rate limiting
-        key_limit = key_info.get('rate_limit', self.rate_limit_requests)
+        key_limit = key_info.get("rate_limit", self.rate_limit_requests)
         allowed, current_count = rate_limiter.is_allowed(
             api_key, key_limit, self.rate_limit_window
         )
@@ -192,8 +195,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 headers={
                     "X-RateLimit-Limit": str(key_limit),
                     "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": str(int(time.time() + self.rate_limit_window))
-                }
+                    "X-RateLimit-Reset": str(int(time.time() + self.rate_limit_window)),
+                },
             )
 
         # Add rate limit headers
@@ -222,8 +225,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             {
                 "method": request.method,
                 "status_code": response.status_code,
-                "ip_address": request.client.host if request.client else None
-            }
+                "ip_address": request.client.host if request.client else None,
+            },
         )
 
         return response
@@ -231,45 +234,46 @@ class AuthMiddleware(BaseHTTPMiddleware):
     def _extract_api_key(self, request: Request) -> Optional[str]:
         """Extract API key from request headers."""
         # Try Authorization header first
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
             return auth_header[7:]  # Remove 'Bearer ' prefix
 
         # Try X-API-Key header
-        api_key_header = request.headers.get('X-API-Key')
+        api_key_header = request.headers.get("X-API-Key")
         if api_key_header:
             return api_key_header
 
         return None
 
+
 security = HTTPBearer(auto_error=False)
+
 
 async def get_current_api_key(request: Request) -> Tuple[str, bool]:
     """Dependency to get current API key and priority status from request state."""
-    if not hasattr(request.state, 'api_key'):
+    if not hasattr(request.state, "api_key"):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
         )
 
     key_info = request.state.key_info
-    is_priority = key_info.get('priority', False) or key_info.get('rate_limit', 0) > 500
+    is_priority = key_info.get("priority", False) or key_info.get("rate_limit", 0) > 500
 
     return request.state.api_key, is_priority
+
 
 def get_usage_stats(api_key: Optional[str] = None) -> Dict:
     """Get usage statistics."""
     if api_key:
-        key_usage = [log for log in rate_limiter.usage_log if log['api_key'] == api_key]
+        key_usage = [log for log in rate_limiter.usage_log if log["api_key"] == api_key]
         return {
-            'total_requests': len(key_usage),
-            'endpoints': list(set(log['endpoint'] for log in key_usage)),
-            'recent_usage': key_usage[-10:]  # Last 10 requests
+            "total_requests": len(key_usage),
+            "endpoints": list(set(log["endpoint"] for log in key_usage)),
+            "recent_usage": key_usage[-10:],  # Last 10 requests
         }
 
     return {
-        'total_requests': len(rate_limiter.usage_log),
-        'unique_keys': len(set(log['api_key'] for log in rate_limiter.usage_log)),
-        'recent_usage': rate_limiter.usage_log[-10:]
+        "total_requests": len(rate_limiter.usage_log),
+        "unique_keys": len(set(log["api_key"] for log in rate_limiter.usage_log)),
+        "recent_usage": rate_limiter.usage_log[-10:],
     }
-

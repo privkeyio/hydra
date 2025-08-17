@@ -12,9 +12,9 @@ from uuid import uuid4
 
 # Global test mode detection - disable threading in test environment
 TEST_MODE = (
-    os.getenv('TESTING') == '1' or
-    os.getenv('PYTEST_CURRENT_TEST') is not None or
-    'pytest' in str(os.getenv('_', ''))
+    os.getenv("TESTING") == "1"
+    or os.getenv("PYTEST_CURRENT_TEST") is not None
+    or "pytest" in str(os.getenv("_", ""))
 )
 
 try:
@@ -225,7 +225,7 @@ class ResourcePool:
                 "total_agents": len(self._agents),
                 "available": len(self._available),
                 "busy": len(self._busy),
-                "max_agents": self.max_agents
+                "max_agents": self.max_agents,
             }
 
 
@@ -295,7 +295,7 @@ class ParallelExecutionEngine:
         max_agents: int = 10,
         enable_scaling: bool = True,
         deadlock_check_interval: float = 5.0,
-        test_mode: bool = None
+        test_mode: bool = None,
     ):
         # Auto-detect test mode if not explicitly set
         if test_mode is None:
@@ -339,7 +339,7 @@ class ParallelExecutionEngine:
         kwargs: dict = None,
         dependencies: Set[str] = None,
         priority: int = 0,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
     ) -> str:
         task_id = str(uuid4())
         task = Task(
@@ -350,7 +350,7 @@ class ParallelExecutionEngine:
             kwargs=kwargs or {},
             dependencies=dependencies or set(),
             priority=priority,
-            timeout=timeout
+            timeout=timeout,
         )
 
         self.task_queue.put(task)
@@ -497,8 +497,7 @@ class ParallelExecutionEngine:
 
         while True:
             with self._lock:
-                if (self.task_queue.size() == 0 and
-                    len(self._running_tasks) == 0):
+                if self.task_queue.size() == 0 and len(self._running_tasks) == 0:
                     return True
 
             if timeout and (time.time() - start_time) > timeout:

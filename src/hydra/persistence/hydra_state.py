@@ -56,7 +56,7 @@ class HydraStateManager:
             active_sessions={},
             global_config={},
             recent_tasks=[],
-            performance_metrics={}
+            performance_metrics={},
         )
 
         self._lock = threading.RLock()
@@ -71,12 +71,19 @@ class HydraStateManager:
 
     def _initialize_directories(self) -> None:
         """Create all required directories."""
-        for directory in [self.hydra_dir, self.sessions_dir, self.state_dir,
-                         self.recovery_dir, self.logs_dir, self.backup_dir]:
+        for directory in [
+            self.hydra_dir,
+            self.sessions_dir,
+            self.state_dir,
+            self.recovery_dir,
+            self.logs_dir,
+            self.backup_dir,
+        ]:
             directory.mkdir(parents=True, exist_ok=True)
 
     def _setup_signal_handlers(self) -> None:
         """Set up signal handlers for graceful shutdown."""
+
         def signal_handler(signum, frame):
             self.shutdown()
 
@@ -102,7 +109,9 @@ class HydraStateManager:
                         self._log_error(f"Auto-save failed: {e}")
 
         try:
-            self._auto_save_thread = threading.Thread(target=auto_save_worker, daemon=True)
+            self._auto_save_thread = threading.Thread(
+                target=auto_save_worker, daemon=True
+            )
             self._auto_save_thread.start()
         except RuntimeError as e:
             # Handle thread creation failure gracefully in test environments
@@ -125,22 +134,22 @@ class HydraStateManager:
         with self._lock:
             if self.state_file.exists():
                 try:
-                    with open(self.state_file, 'r') as f:
+                    with open(self.state_file, "r") as f:
                         data = json.load(f)
 
                     # Convert session data back to SessionInfo objects
                     sessions = {}
-                    active_sessions_data = data.get('active_sessions', {})
+                    active_sessions_data = data.get("active_sessions", {})
                     for session_id, session_data in active_sessions_data.items():
                         sessions[session_id] = SessionInfo(**session_data)
 
                     self._state = AppState(
-                        version=data.get('version', '1.0.0'),
-                        last_update=data.get('last_update', ''),
+                        version=data.get("version", "1.0.0"),
+                        last_update=data.get("last_update", ""),
                         active_sessions=sessions,
-                        global_config=data.get('global_config', {}),
-                        recent_tasks=data.get('recent_tasks', []),
-                        performance_metrics=data.get('performance_metrics', {})
+                        global_config=data.get("global_config", {}),
+                        recent_tasks=data.get("recent_tasks", []),
+                        performance_metrics=data.get("performance_metrics", {}),
                     )
 
                     # Migrate state if needed
@@ -167,19 +176,19 @@ class HydraStateManager:
 
             # Prepare data for JSON serialization
             data = {
-                'version': self._state.version,
-                'last_update': self._get_timestamp(),
-                'active_sessions': {
+                "version": self._state.version,
+                "last_update": self._get_timestamp(),
+                "active_sessions": {
                     k: asdict(v) for k, v in self._state.active_sessions.items()
                 },
-                'global_config': self._state.global_config,
-                'recent_tasks': self._state.recent_tasks,
-                'performance_metrics': self._state.performance_metrics
+                "global_config": self._state.global_config,
+                "recent_tasks": self._state.recent_tasks,
+                "performance_metrics": self._state.performance_metrics,
             }
 
             # Write to temporary file first, then rename (atomic operation)
-            temp_file = self.state_file.with_suffix('.tmp')
-            with open(temp_file, 'w') as f:
+            temp_file = self.state_file.with_suffix(".tmp")
+            with open(temp_file, "w") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
             temp_file.rename(self.state_file)
@@ -216,21 +225,21 @@ class HydraStateManager:
             checkpoint_file = self.recovery_dir / filename
 
             checkpoint_data = {
-                'name': checkpoint_name,
-                'timestamp': timestamp,
-                'metadata': metadata or {},
-                'state': {
-                    'version': self._state.version,
-                    'active_sessions': {
+                "name": checkpoint_name,
+                "timestamp": timestamp,
+                "metadata": metadata or {},
+                "state": {
+                    "version": self._state.version,
+                    "active_sessions": {
                         k: asdict(v) for k, v in self._state.active_sessions.items()
                     },
-                    'global_config': self._state.global_config,
-                    'recent_tasks': self._state.recent_tasks,
-                    'performance_metrics': self._state.performance_metrics
-                }
+                    "global_config": self._state.global_config,
+                    "recent_tasks": self._state.recent_tasks,
+                    "performance_metrics": self._state.performance_metrics,
+                },
             }
 
-            with open(checkpoint_file, 'w') as f:
+            with open(checkpoint_file, "w") as f:
                 json.dump(checkpoint_data, f, indent=2, ensure_ascii=False)
 
             return str(checkpoint_file)
@@ -239,24 +248,24 @@ class HydraStateManager:
         """Restore state from a checkpoint."""
         with self._lock:
             try:
-                with open(checkpoint_file, 'r') as f:
+                with open(checkpoint_file, "r") as f:
                     checkpoint_data = json.load(f)
 
-                state_data = checkpoint_data['state']
+                state_data = checkpoint_data["state"]
 
                 # Convert session data back to SessionInfo objects
                 sessions = {}
-                sessions_data = state_data.get('active_sessions', {})
+                sessions_data = state_data.get("active_sessions", {})
                 for session_id, session_data in sessions_data.items():
                     sessions[session_id] = SessionInfo(**session_data)
 
                 self._state = AppState(
-                    version=state_data.get('version', '1.0.0'),
+                    version=state_data.get("version", "1.0.0"),
                     last_update=self._get_timestamp(),
                     active_sessions=sessions,
-                    global_config=state_data.get('global_config', {}),
-                    recent_tasks=state_data.get('recent_tasks', []),
-                    performance_metrics=state_data.get('performance_metrics', {})
+                    global_config=state_data.get("global_config", {}),
+                    recent_tasks=state_data.get("recent_tasks", []),
+                    performance_metrics=state_data.get("performance_metrics", {}),
                 )
 
                 self._save_state_internal()
@@ -271,20 +280,27 @@ class HydraStateManager:
         checkpoints = []
         for checkpoint_file in self.recovery_dir.glob("checkpoint_*.json"):
             try:
-                with open(checkpoint_file, 'r') as f:
+                with open(checkpoint_file, "r") as f:
                     data = json.load(f)
-                checkpoints.append({
-                    'file': str(checkpoint_file),
-                    'name': data.get('name', 'unknown'),
-                    'timestamp': data.get('timestamp', ''),
-                    'metadata': data.get('metadata', {})
-                })
+                checkpoints.append(
+                    {
+                        "file": str(checkpoint_file),
+                        "name": data.get("name", "unknown"),
+                        "timestamp": data.get("timestamp", ""),
+                        "metadata": data.get("metadata", {}),
+                    }
+                )
             except Exception:
                 continue
-        return sorted(checkpoints, key=lambda x: x['timestamp'], reverse=True)
+        return sorted(checkpoints, key=lambda x: x["timestamp"], reverse=True)
 
-    def register_session(self, session_id: str, provider: str, working_directory: str,
-                        metadata: Optional[Dict[str, Any]] = None) -> None:
+    def register_session(
+        self,
+        session_id: str,
+        provider: str,
+        working_directory: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Register a new active session."""
         with self._lock:
             session = SessionInfo(
@@ -295,7 +311,7 @@ class HydraStateManager:
                 status="active",
                 working_directory=working_directory,
                 task_history=[],
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
             self._state.active_sessions[session_id] = session
             self._save_state_internal()
@@ -310,10 +326,9 @@ class HydraStateManager:
                 session.last_activity = self._get_timestamp()
 
                 if task_info:
-                    session.task_history.append({
-                        **task_info,
-                        'timestamp': self._get_timestamp()
-                    })
+                    session.task_history.append(
+                        {**task_info, "timestamp": self._get_timestamp()}
+                    )
                     # Keep only last 50 tasks per session
                     session.task_history = session.task_history[-50:]
 
@@ -355,10 +370,7 @@ class HydraStateManager:
     def add_recent_task(self, task_info: Dict[str, Any]) -> None:
         """Add task to recent tasks list."""
         with self._lock:
-            task_entry = {
-                **task_info,
-                'timestamp': self._get_timestamp()
-            }
+            task_entry = {**task_info, "timestamp": self._get_timestamp()}
             self._state.recent_tasks.append(task_entry)
             # Keep only last 100 tasks
             self._state.recent_tasks = self._state.recent_tasks[-100:]
@@ -401,19 +413,19 @@ class HydraStateManager:
         """Get summary of current state for debugging."""
         with self._lock:
             return {
-                'version': self._state.version,
-                'last_update': self._state.last_update,
-                'active_sessions_count': len(self._state.active_sessions),
-                'recent_tasks_count': len(self._state.recent_tasks),
-                'config_keys': list(self._state.global_config.keys()),
-                'metrics_keys': list(self._state.performance_metrics.keys()),
-                'directories': {
-                    'hydra_dir': str(self.hydra_dir),
-                    'sessions_dir': str(self.sessions_dir),
-                    'state_dir': str(self.state_dir),
-                    'recovery_dir': str(self.recovery_dir),
-                    'logs_dir': str(self.logs_dir)
-                }
+                "version": self._state.version,
+                "last_update": self._state.last_update,
+                "active_sessions_count": len(self._state.active_sessions),
+                "recent_tasks_count": len(self._state.recent_tasks),
+                "config_keys": list(self._state.global_config.keys()),
+                "metrics_keys": list(self._state.performance_metrics.keys()),
+                "directories": {
+                    "hydra_dir": str(self.hydra_dir),
+                    "sessions_dir": str(self.sessions_dir),
+                    "state_dir": str(self.state_dir),
+                    "recovery_dir": str(self.recovery_dir),
+                    "logs_dir": str(self.logs_dir),
+                },
             }
 
 
@@ -422,7 +434,7 @@ _state_manager: Optional[HydraStateManager] = None
 
 
 def get_state_manager(
-    hydra_dir: Optional[Union[str, Path]] = None
+    hydra_dir: Optional[Union[str, Path]] = None,
 ) -> HydraStateManager:
     """Get or create global state manager instance."""
     global _state_manager

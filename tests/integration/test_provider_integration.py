@@ -5,19 +5,15 @@ implementations to ensure the abstraction layer works correctly and
 maintains backward compatibility.
 """
 
-import json
 import os
 import subprocess
-import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from hydra.agents.base import CodeAgent
-from hydra.cli import main as cli_main
 from hydra.providers.base import LLMConfig
 from hydra.providers.base_provider import BaseProvider
 from hydra.providers.claude_tmux import ClaudeTmuxProvider
@@ -27,7 +23,6 @@ from hydra.providers.output_handler import OutputHandlerFactory
 from hydra.providers.provider_factory import ProviderFactory
 from hydra.providers.provider_registry import ProviderRegistry
 from hydra.providers.venice import VeniceProvider
-from hydra.ticket_workflow import execute_single_ticket
 from hydra.utils.claude_path import get_claude_cli_path
 
 
@@ -41,18 +36,15 @@ class TestClaudeProviderIntegration:
             provider_type="claude_tmux",
             model="claude-3-sonnet-20240229",
             api_key=None,  # Claude uses CLI
-            extra_params={
-                "claude_path": get_claude_cli_path(),
-                "timeout": 30
-            }
+            extra_params={"claude_path": get_claude_cli_path(), "timeout": 30},
         )
 
     def test_claude_provider_initialization(self, claude_config):
         """Test Claude provider initializes correctly."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
-            
+
         # Check if Claude CLI is available
         claude_path = get_claude_cli_path()
         if not Path(claude_path).exists():
@@ -65,9 +57,9 @@ class TestClaudeProviderIntegration:
     def test_claude_session_management(self, claude_config):
         """Test Claude tmux session management."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
-            
+
         if not Path(get_claude_cli_path()).exists():
             pytest.skip("Claude CLI not installed")
 
@@ -96,9 +88,9 @@ class TestClaudeProviderIntegration:
     def test_claude_model_selection(self, claude_config):
         """Test Claude model selection."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
-            
+
         if not Path(get_claude_cli_path()).exists():
             pytest.skip("Claude CLI not installed")
 
@@ -118,13 +110,13 @@ class TestClaudeProviderIntegration:
             success = provider.select_model(models[0].identifier)
             assert success
 
-    @patch('pathlib.Path.exists')
-    @patch('subprocess.run')
+    @patch("pathlib.Path.exists")
+    @patch("subprocess.run")
     @pytest.mark.external
     def test_claude_code_generation(self, mock_run, mock_path_exists, claude_config):
         """Test Claude code generation functionality."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
         mock_path_exists.return_value = True  # Mock Claude CLI exists
         mock_run.return_value.returncode = 0  # Mock tmux check success
@@ -135,19 +127,20 @@ class TestClaudeProviderIntegration:
         mock_run.return_value.stdout = b"def hello():\n    print('Hello')"
 
         response = provider.generate("Create a hello function")
-        
+
         # Verify tmux commands were called
         assert mock_run.called
-        tmux_calls = [call for call in mock_run.call_args_list 
-                      if call[0][0][0] == 'tmux']
+        tmux_calls = [
+            call for call in mock_run.call_args_list if call[0][0][0] == "tmux"
+        ]
         assert len(tmux_calls) > 0
 
     def test_claude_output_parsing(self, claude_config):
         """Test Claude output parsing."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
-            
+
         if not Path(get_claude_cli_path()).exists():
             pytest.skip("Claude CLI not installed")
 
@@ -180,10 +173,7 @@ class TestVeniceProviderIntegration:
             model="llama-3.3-70b",
             api_key=os.environ.get("VENICE_API_KEY", "test-key"),
             base_url="https://api.venice.ai/api/v1",
-            extra_params={
-                "temperature": 0.1,
-                "max_tokens": 4096
-            }
+            extra_params={"temperature": 0.1, "max_tokens": 4096},
         )
 
     def test_venice_provider_initialization(self, venice_config):
@@ -206,19 +196,23 @@ class TestVeniceProviderIntegration:
         assert "llama" in mapping["sonnet"].lower()
 
     @pytest.mark.external
-    @patch('openai.OpenAI')
-    @pytest.mark.skipif(not os.getenv("VENICE_API_KEY"), reason="Venice API key required")
+    @patch("openai.OpenAI")
+    @pytest.mark.skipif(
+        not os.getenv("VENICE_API_KEY"), reason="Venice API key required"
+    )
     def test_venice_api_call(self, mock_openai_class, venice_config):
         """Test Venice API call structure."""
         # Mock the OpenAI client and response
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
-        
+
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "def hello():\n    print('Hello from Venice')"
+        mock_response.choices[0].message.content = (
+            "def hello():\n    print('Hello from Venice')"
+        )
         mock_client.chat.completions.create.return_value = mock_response
-        
+
         provider = VeniceProvider(venice_config)
         response = provider.generate("Create a hello function")
 
@@ -289,7 +283,7 @@ class TestProviderSwitching:
         # Create fallback provider (wraps multiple providers)
         fallback_config = {
             "fallback_providers": ["mock_provider"],
-            "model": "mock-fast"
+            "model": "mock-fast",
         }
         fallback_provider = factory.create("fallback", fallback_config)
         assert isinstance(fallback_provider, FallbackProvider)
@@ -316,11 +310,13 @@ class TestProviderSwitching:
         factory.registry.register("failing", FailingProvider)
 
         # Create fallback with failing primary
-        fallback = FallbackProvider({
-            "provider": "fallback",
-            "primary": "failing",
-            "fallbacks": ["mock_provider"]
-        })
+        fallback = FallbackProvider(
+            {
+                "provider": "fallback",
+                "primary": "failing",
+                "fallbacks": ["mock_provider"],
+            }
+        )
 
         # Should fall back to mock
         response = fallback.generate("Test prompt")
@@ -363,8 +359,7 @@ class TestParallelTicketExecution:
     @patch.dict(os.environ, {"LLM_PROVIDER": "mock"})
     def test_parallel_ticket_execution(self, test_tickets_file):
         """Test parallel execution of tickets."""
-        from hydra.cli import handle_ticket_command
-        
+
         # Create mock args
         class Args:
             ticket_action = "parallel"
@@ -375,7 +370,7 @@ class TestParallelTicketExecution:
 
         args = Args()
 
-        with patch('hydra.ticket_workflow.execute_single_ticket') as mock_execute:
+        with patch("hydra.ticket_workflow.execute_single_ticket") as mock_execute:
             mock_execute.return_value = True
 
             # Would normally call handle_ticket_command(args)
@@ -393,7 +388,7 @@ class TestParallelTicketExecution:
 
             # Test selecting "fast" model
             success = provider.select_model("fast")
-            if hasattr(provider, 'select_model'):
+            if hasattr(provider, "select_model"):
                 assert success or provider.name == "mock"
 
 
@@ -403,7 +398,7 @@ class TestCLICommandIntegration:
     def test_cli_with_provider_env(self):
         """Test CLI respects LLM_PROVIDER environment."""
         with patch.dict(os.environ, {"LLM_PROVIDER": "mock"}):
-            with patch('hydra.cli.main') as mock_main:
+            with patch("hydra.cli.main") as mock_main:
                 # Simulate CLI call
                 mock_main(["generate", "Create a function"])
                 assert mock_main.called
@@ -413,7 +408,8 @@ class TestCLICommandIntegration:
         tickets_file = tmp_path / "tickets.md"
 
         with patch.dict(os.environ, {"LLM_PROVIDER": "mock"}):
-            with patch('hydra.cli.handle_ticket_command') as mock_handler:
+            with patch("hydra.cli.handle_ticket_command") as mock_handler:
+
                 class Args:
                     ticket_action = "create"
                     tickets = str(tickets_file)
@@ -427,7 +423,8 @@ class TestCLICommandIntegration:
     def test_claude_execute_command(self):
         """Test claude execute command with provider."""
         with patch.dict(os.environ, {"LLM_PROVIDER": "mock"}):
-            with patch('hydra.cli.handle_claude_command') as mock_handler:
+            with patch("hydra.cli.handle_claude_command") as mock_handler:
+
                 class Args:
                     claude_action = "execute"
                     prompt = "Create a test function"
@@ -494,7 +491,7 @@ function processData(data) {
             "def test():\n",
             "    return True\n",
             "```\n\nThis function",
-            " returns True."
+            " returns True.",
         ]
 
         for chunk in chunks:
@@ -525,13 +522,12 @@ class TestProviderCapabilities:
     def test_interactive_capability(self):
         """Test interactive capability detection."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
-            
+
         # Claude should support interactive
         claude_config = LLMConfig(
-            provider_type="claude_tmux",
-            model="claude-3-sonnet-20240229"
+            provider_type="claude_tmux", model="claude-3-sonnet-20240229"
         )
 
         if Path(get_claude_cli_path()).exists():
@@ -552,7 +548,7 @@ class TestProviderCapabilities:
         mock_provider = factory.create("mock_provider", {"model": "mock-fast"})
 
         # Test streaming if supported
-        if hasattr(mock_provider, 'generate_streaming'):
+        if hasattr(mock_provider, "generate_streaming"):
             chunks = []
             for chunk in mock_provider.generate_streaming("Test"):
                 chunks.append(chunk)
@@ -576,12 +572,12 @@ class TestProviderErrorHandling:
             provider_type="venice",
             model="llama-3.3-70b",
             api_key="invalid-key",
-            base_url="https://invalid.url"
+            base_url="https://invalid.url",
         )
 
         provider = VeniceProvider(venice_config)
 
-        with patch('requests.post') as mock_post:
+        with patch("requests.post") as mock_post:
             mock_post.side_effect = Exception("API Error")
 
             with pytest.raises(Exception):
@@ -590,15 +586,14 @@ class TestProviderErrorHandling:
     def test_session_error_recovery(self):
         """Test session error recovery."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
-            
+
         if not Path(get_claude_cli_path()).exists():
             pytest.skip("Claude CLI not installed")
 
         claude_config = LLMConfig(
-            provider_type="claude_tmux",
-            model="claude-3-sonnet-20240229"
+            provider_type="claude_tmux", model="claude-3-sonnet-20240229"
         )
         provider = ClaudeTmuxProvider(claude_config)
 
@@ -608,20 +603,25 @@ class TestProviderErrorHandling:
 
     def test_fallback_on_error(self):
         """Test fallback provider on errors."""
-        fallback = FallbackProvider({
-            "provider": "fallback",
-            "fallback_providers": ["failing_provider", "mock"]
-        })
+        fallback = FallbackProvider(
+            {"provider": "fallback", "fallback_providers": ["failing_provider", "mock"]}
+        )
 
         # Should fall back to mock
-        with patch.object(fallback, '_initialize_provider') as mock_init:
+        with patch.object(fallback, "_initialize_provider") as mock_init:
             # First call fails, second succeeds with mock
-            mock_init.side_effect = [False, True]  # First provider fails, second succeeds
-            
+            mock_init.side_effect = [
+                False,
+                True,
+            ]  # First provider fails, second succeeds
+
             # Mock the _providers dict to have a working mock provider
-            from hydra.providers.mock_provider import MockProvider
             from hydra.providers.base import LLMConfig
-            mock_provider = MockProvider(LLMConfig(provider_type="mock", model="mock-fast"))
+            from hydra.providers.mock_provider import MockProvider
+
+            mock_provider = MockProvider(
+                LLMConfig(provider_type="mock", model="mock-fast")
+            )
             fallback._providers = {"mock": mock_provider}
             fallback._current_provider_index = 1  # Point to mock provider
 
@@ -648,6 +648,7 @@ class TestEndToEndWorkflow:
 
         # Extract executable code
         from hydra.providers.output_handler import extract_executable_code
+
         executable = extract_executable_code(response, provider.name)
 
         assert parsed.code_blocks is not None
@@ -656,8 +657,6 @@ class TestEndToEndWorkflow:
     @patch.dict(os.environ, {"LLM_PROVIDER": "mock"})
     def test_agent_workflow(self):
         """Test agent workflow with provider."""
-        from hydra.agents.base import CodeAgent
-
         agent = CodeAgent("test_task")
         assert agent.llm_provider is not None
         assert agent.llm_provider.name == "mock"
@@ -739,7 +738,7 @@ class TestProviderMetrics:
         duration = time.time() - start_time
 
         # Check if metrics are collected
-        if hasattr(provider, 'get_performance_metrics'):
+        if hasattr(provider, "get_performance_metrics"):
             metrics = provider.get_performance_metrics()
             assert metrics is not None
 
@@ -755,7 +754,7 @@ def test_provider_framework_exists():
     # Check providers are registered
     factory = ProviderFactory()
     providers = factory.registry.list_providers()
-    
+
     assert len(providers) > 0
     # Check for at least one provider (mock_provider, claude_tmux, or venice_api)
     assert any(p in providers for p in ["mock_provider", "claude_tmux", "venice_api"])

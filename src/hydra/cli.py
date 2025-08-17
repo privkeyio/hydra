@@ -6,13 +6,13 @@ All functionality has been moved to hydra.cli.main and hydra.cli.commands.
 
 import sys
 
-from hydra.cli.main import create_parser, main
+from hydra.cli.commands.claude import handle_claude_command
+from hydra.cli.commands.context import handle_context_command
 
 # Re-export key functions for backwards compatibility
 from hydra.cli.commands.template import handle_template_command
 from hydra.cli.commands.ticket import handle_ticket_command
-from hydra.cli.commands.claude import handle_claude_command
-from hydra.cli.commands.context import handle_context_command
+from hydra.cli.main import create_parser, main
 
 # Import parallel and verify if they exist
 try:

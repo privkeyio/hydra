@@ -62,7 +62,8 @@ class GitGuard:
     def _compile_patterns(self) -> None:
         """Compile regex patterns for efficiency."""
         self.blocked_config_regex = [
-            re.compile(pattern, re.IGNORECASE) for pattern in self.BLOCKED_CONFIG_PATTERNS
+            re.compile(pattern, re.IGNORECASE)
+            for pattern in self.BLOCKED_CONFIG_PATTERNS
         ]
         self.dangerous_ops_regex = [
             re.compile(pattern, re.IGNORECASE) for pattern in self.DANGEROUS_OPERATIONS
@@ -127,7 +128,9 @@ class GitGuard:
             for allowed in basic_allowed:
                 if command.startswith(allowed):
                     # Additional checks for push
-                    if command.startswith("git push") and ("--force" in command or "-f" in command):
+                    if command.startswith("git push") and (
+                        "--force" in command or "-f" in command
+                    ):
                         error_msg = "Force push is not allowed in strict mode"
                         logger.warning(f"{error_msg}: {command}")
                         return False, error_msg

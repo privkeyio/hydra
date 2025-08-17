@@ -1,17 +1,13 @@
+import json
 import subprocess
 import sys
-import json
+
 import pytest
 
 
 def run_cli(args, input_text=None):
     cmd = [sys.executable, "-m", "hydra.cli"] + args
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        input=input_text
-    )
+    result = subprocess.run(cmd, capture_output=True, text=True, input=input_text)
     return result
 
 
@@ -78,10 +74,10 @@ def test_cli_error_handling():
 
 
 def test_cli_interrupt_simulation():
-    import signal
     import os
-    import time
+    import signal
     import threading
+    import time
 
     def delayed_interrupt(pid):
         time.sleep(0.1)
@@ -91,7 +87,7 @@ def test_cli_interrupt_simulation():
         [sys.executable, "-m", "hydra.cli", "run", "Long running task"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
     )
 
     thread = threading.Thread(target=delayed_interrupt, args=(proc.pid,))

@@ -12,8 +12,7 @@ def main():
         return
 
     client = HydraClient(
-        api_key=api_key,
-        base_url=os.getenv("HYDRA_BASE_URL", "http://localhost:8000")
+        api_key=api_key, base_url=os.getenv("HYDRA_BASE_URL", "http://localhost:8000")
     )
 
     try:
@@ -59,6 +58,7 @@ def main():
 
     except Exception as e:
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     main()

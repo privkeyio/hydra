@@ -1,4 +1,5 @@
 """Anthropic Claude provider implementation."""
+
 from typing import Any, Dict, List, Optional
 
 import orjson
@@ -29,10 +30,7 @@ class AnthropicProvider(LLMProvider):
         session_manager = get_session_manager()
         http_client = session_manager.get_session("anthropic")
 
-        self.client = Anthropic(
-            api_key=self.config.api_key,
-            http_client=http_client
-        )
+        self.client = Anthropic(api_key=self.config.api_key, http_client=http_client)
 
         # Initialize token tracker
         self.token_tracker = get_token_tracker()
@@ -47,7 +45,9 @@ class AnthropicProvider(LLMProvider):
         """Generate a response from Claude."""
         try:
             # Check budget before making request
-            estimated_tokens = self.token_tracker.count_tokens(prompt, "anthropic") + 1000
+            estimated_tokens = (
+                self.token_tracker.count_tokens(prompt, "anthropic") + 1000
+            )
             budget_ok, message = self.token_tracker.check_budget_available(
                 estimated_tokens, self.config.model
             )
@@ -55,15 +55,15 @@ class AnthropicProvider(LLMProvider):
                 raise ValueError(f"Token budget exceeded: {message}")
 
             # Merge kwargs with config
-            temperature = kwargs.get('temperature', self.config.temperature)
-            max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+            temperature = kwargs.get("temperature", self.config.temperature)
+            max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
 
             response = self.client.messages.create(
                 model=self.config.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **self.config.extra_params
+                **self.config.extra_params,
             )
 
             response_text = response.content[0].text
@@ -79,8 +79,8 @@ class AnthropicProvider(LLMProvider):
                 metadata={
                     "temperature": temperature,
                     "max_tokens": max_tokens,
-                    "usage": getattr(response, "usage", None)
-                }
+                    "usage": getattr(response, "usage", None),
+                },
             )
 
             return response_text
@@ -120,13 +120,14 @@ class AnthropicProvider(LLMProvider):
         return [
             "claude-3-5-sonnet-20241022",
             "claude-opus-4-1-20250805",
-            "claude-3-sonnet-20240229"
+            "claude-3-sonnet-20240229",
         ]
 
-    def set_tracking_context(self, ticket_id: Optional[int] = None,
-                            session_id: Optional[int] = None) -> None:
+    def set_tracking_context(
+        self, ticket_id: Optional[int] = None, session_id: Optional[int] = None
+    ) -> None:
         """Set context for token tracking.
-        
+
         Args:
             ticket_id: Optional ticket ID for tracking
             session_id: Optional session ID for tracking

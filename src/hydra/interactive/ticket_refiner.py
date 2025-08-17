@@ -65,11 +65,11 @@ class TicketRefiner:
         if not self.tickets_path.exists():
             raise FileNotFoundError(f"Tickets file not found: {self.tickets_path}")
 
-        with open(self.tickets_path, 'r') as f:
+        with open(self.tickets_path, "r") as f:
             content = f.read()
 
         # Find all ticket sections
-        ticket_pattern = r'## Ticket (\d+):(.*?)(?=## Ticket|\Z)'
+        ticket_pattern = r"## Ticket (\d+):(.*?)(?=## Ticket|\Z)"
         matches = re.finditer(ticket_pattern, content, re.DOTALL | re.IGNORECASE)
 
         for match in matches:
@@ -81,7 +81,7 @@ class TicketRefiner:
 
     def _parse_ticket_content(self, ticket_id: str, content: str) -> TicketData:
         """Parse individual ticket content into structured data."""
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Initialize with defaults
         data = TicketData(
@@ -94,7 +94,7 @@ class TicketRefiner:
             required_input_files=[],
             output_files=[],
             acceptance_criteria=[],
-            progress="started"
+            progress="started",
         )
 
         current_section = None
@@ -103,43 +103,47 @@ class TicketRefiner:
             line = line.strip()
 
             # Parse metadata fields
-            if line.startswith('**Status:**'):
-                data.status = line.replace('**Status:**', '').strip()
-            elif line.startswith('**Model:**'):
-                data.model = line.replace('**Model:**', '').strip()
-            elif line.startswith('**Dependencies:**'):
-                deps_text = line.replace('**Dependencies:**', '').strip()
-                if deps_text and deps_text.lower() != 'none':
-                    data.dependencies = [d.strip() for d in deps_text.split(',')]
-            elif line.startswith('**Description:**'):
-                data.description = line.replace('**Description:**', '').strip()
-                current_section = 'description'
-            elif line.startswith('**Progress:**'):
-                data.progress = line.replace('**Progress:**', '').strip()
+            if line.startswith("**Status:**"):
+                data.status = line.replace("**Status:**", "").strip()
+            elif line.startswith("**Model:**"):
+                data.model = line.replace("**Model:**", "").strip()
+            elif line.startswith("**Dependencies:**"):
+                deps_text = line.replace("**Dependencies:**", "").strip()
+                if deps_text and deps_text.lower() != "none":
+                    data.dependencies = [d.strip() for d in deps_text.split(",")]
+            elif line.startswith("**Description:**"):
+                data.description = line.replace("**Description:**", "").strip()
+                current_section = "description"
+            elif line.startswith("**Progress:**"):
+                data.progress = line.replace("**Progress:**", "").strip()
 
             # Parse section headers
-            elif line.startswith('**Required Input Files:**'):
-                current_section = 'required_input_files'
-            elif line.startswith('**Output Files:**'):
-                current_section = 'output_files'
-            elif line.startswith('**Acceptance Criteria:**'):
-                current_section = 'acceptance_criteria'
-            elif line.startswith('**'):
+            elif line.startswith("**Required Input Files:**"):
+                current_section = "required_input_files"
+            elif line.startswith("**Output Files:**"):
+                current_section = "output_files"
+            elif line.startswith("**Acceptance Criteria:**"):
+                current_section = "acceptance_criteria"
+            elif line.startswith("**"):
                 current_section = None
 
             # Parse list items
-            elif line.startswith('- '):
+            elif line.startswith("- "):
                 item = line[2:].strip()
-                if not item or item.lower() == 'none':
+                if not item or item.lower() == "none":
                     continue
 
-                if current_section == 'required_input_files':
+                if current_section == "required_input_files":
                     data.required_input_files.append(item)
-                elif current_section == 'output_files':
+                elif current_section == "output_files":
                     data.output_files.append(item)
-                elif current_section == 'acceptance_criteria':
+                elif current_section == "acceptance_criteria":
                     # Handle checkboxes
-                    if item.startswith('[ ]') or item.startswith('[x]') or item.startswith('[X]'):
+                    if (
+                        item.startswith("[ ]")
+                        or item.startswith("[x]")
+                        or item.startswith("[X]")
+                    ):
                         criteria = item[3:].strip()
                         if criteria:
                             data.acceptance_criteria.append(criteria)
@@ -147,14 +151,20 @@ class TicketRefiner:
                         data.acceptance_criteria.append(item)
 
             # Handle standalone checkboxes
-            elif line.startswith('- [ ]') or line.startswith('- [x]') or line.startswith('- [X]'):
+            elif (
+                line.startswith("- [ ]")
+                or line.startswith("- [x]")
+                or line.startswith("- [X]")
+            ):
                 criteria = line[5:].strip()
                 if criteria:
                     data.acceptance_criteria.append(criteria)
 
             # Continue description on multiple lines
-            elif current_section == 'description' and line and not line.startswith('**'):
-                data.description += ' ' + line
+            elif (
+                current_section == "description" and line and not line.startswith("**")
+            ):
+                data.description += " " + line
 
         return data
 
@@ -187,37 +197,43 @@ class TicketRefiner:
 
         return suggestions
 
-    def _suggest_model_adjustment(self, ticket: TicketData) -> Optional[RefinementSuggestion]:
+    def _suggest_model_adjustment(
+        self, ticket: TicketData
+    ) -> Optional[RefinementSuggestion]:
         """Suggest model adjustments based on ticket complexity."""
         criteria_count = len(ticket.acceptance_criteria)
         output_files_count = len(ticket.output_files)
 
         # Suggest smart model for complex tickets
         if criteria_count >= 6 or output_files_count >= 3:
-            if ticket.model != 'smart':
+            if ticket.model != "smart":
                 return RefinementSuggestion(
                     action=RefinementAction.ADJUST_MODEL,
                     description=f"Consider using 'smart' model for Ticket {ticket.id}",
                     reason=f"High complexity: {criteria_count} criteria, {output_files_count} output files",
                     target_ticket=ticket.id,
-                    suggested_value='smart'
+                    suggested_value="smart",
                 )
 
         # Suggest coder model for implementation-heavy tickets
-        if any('implement' in criteria.lower() or 'create' in criteria.lower()
-               for criteria in ticket.acceptance_criteria):
-            if ticket.model != 'coder':
+        if any(
+            "implement" in criteria.lower() or "create" in criteria.lower()
+            for criteria in ticket.acceptance_criteria
+        ):
+            if ticket.model != "coder":
                 return RefinementSuggestion(
                     action=RefinementAction.ADJUST_MODEL,
                     description=f"Consider using 'coder' model for Ticket {ticket.id}",
                     reason="Heavy implementation requirements detected",
                     target_ticket=ticket.id,
-                    suggested_value='coder'
+                    suggested_value="coder",
                 )
 
         return None
 
-    def _suggest_ticket_split(self, ticket: TicketData) -> Optional[RefinementSuggestion]:
+    def _suggest_ticket_split(
+        self, ticket: TicketData
+    ) -> Optional[RefinementSuggestion]:
         """Suggest splitting large tickets."""
         criteria_count = len(ticket.acceptance_criteria)
         output_files_count = len(ticket.output_files)
@@ -227,56 +243,66 @@ class TicketRefiner:
                 action=RefinementAction.SPLIT_TICKET,
                 description=f"Consider splitting Ticket {ticket.id} into smaller tickets",
                 reason=f"Large scope: {criteria_count} criteria, {output_files_count} output files",
-                target_ticket=ticket.id
+                target_ticket=ticket.id,
             )
 
         return None
 
-    def _suggest_dependency_fixes(self, ticket: TicketData) -> List[RefinementSuggestion]:
+    def _suggest_dependency_fixes(
+        self, ticket: TicketData
+    ) -> List[RefinementSuggestion]:
         """Suggest dependency-related fixes."""
         suggestions = []
 
         # Check for missing dependencies based on required input files
         for input_file in ticket.required_input_files:
-            if '(from Ticket ' in input_file:
+            if "(from Ticket " in input_file:
                 # Extract source ticket from input file reference
-                match = re.search(r'\(from Ticket (\d+)\)', input_file)
+                match = re.search(r"\(from Ticket (\d+)\)", input_file)
                 if match:
                     source_ticket = match.group(1)
                     if source_ticket not in ticket.dependencies:
-                        suggestions.append(RefinementSuggestion(
-                            action=RefinementAction.ADD_DEPENDENCY,
-                            description=f"Add missing dependency on Ticket {source_ticket}",
-                            reason=f"Ticket {ticket.id} requires file from Ticket {source_ticket}",
-                            target_ticket=ticket.id,
-                            suggested_value=source_ticket
-                        ))
+                        suggestions.append(
+                            RefinementSuggestion(
+                                action=RefinementAction.ADD_DEPENDENCY,
+                                description=f"Add missing dependency on Ticket {source_ticket}",
+                                reason=f"Ticket {ticket.id} requires file from Ticket {source_ticket}",
+                                target_ticket=ticket.id,
+                                suggested_value=source_ticket,
+                            )
+                        )
 
         # Check for circular dependencies
         circular_deps = self._detect_circular_dependencies(ticket.id)
         if circular_deps:
-            suggestions.append(RefinementSuggestion(
-                action=RefinementAction.REMOVE_DEPENDENCY,
-                description=f"Remove circular dependency in Ticket {ticket.id}",
-                reason=f"Circular dependency detected: {' -> '.join(circular_deps)}",
-                target_ticket=ticket.id
-            ))
+            suggestions.append(
+                RefinementSuggestion(
+                    action=RefinementAction.REMOVE_DEPENDENCY,
+                    description=f"Remove circular dependency in Ticket {ticket.id}",
+                    reason=f"Circular dependency detected: {' -> '.join(circular_deps)}",
+                    target_ticket=ticket.id,
+                )
+            )
 
         return suggestions
 
-    def _suggest_file_flow_validation(self, ticket: TicketData) -> Optional[RefinementSuggestion]:
+    def _suggest_file_flow_validation(
+        self, ticket: TicketData
+    ) -> Optional[RefinementSuggestion]:
         """Suggest file flow validation."""
         if ticket.required_input_files or ticket.dependencies:
             return RefinementSuggestion(
                 action=RefinementAction.VALIDATE_FLOWS,
                 description=f"Validate file flows for Ticket {ticket.id}",
                 reason="Ticket has dependencies or required input files",
-                target_ticket=ticket.id
+                target_ticket=ticket.id,
             )
 
         return None
 
-    def _detect_circular_dependencies(self, ticket_id: str, visited: Optional[Set[str]] = None) -> Optional[List[str]]:
+    def _detect_circular_dependencies(
+        self, ticket_id: str, visited: Optional[Set[str]] = None
+    ) -> Optional[List[str]]:
         """Detect circular dependencies starting from a ticket."""
         if visited is None:
             visited = set()
@@ -299,7 +325,7 @@ class TicketRefiner:
 
     def adjust_model(self, ticket_id: str, new_model: str) -> bool:
         """Adjust the model for a ticket."""
-        valid_models = ['smart', 'balanced', 'coder', 'fast']
+        valid_models = ["smart", "balanced", "coder", "fast"]
         if new_model not in valid_models:
             return False
 
@@ -329,7 +355,9 @@ class TicketRefiner:
 
         return True
 
-    def split_ticket(self, ticket_id: str, split_criteria: List[int]) -> Tuple[str, str]:
+    def split_ticket(
+        self, ticket_id: str, split_criteria: List[int]
+    ) -> Tuple[str, str]:
         """Split a ticket into two tickets based on criteria indices."""
         if ticket_id not in self.tickets:
             raise ValueError(f"Ticket {ticket_id} not found")
@@ -364,7 +392,7 @@ class TicketRefiner:
             description=original.description,
             required_input_files=original.required_input_files.copy(),
             output_files=[],  # To be specified by user
-            acceptance_criteria=new_criteria
+            acceptance_criteria=new_criteria,
         )
 
         # Add dependency from new ticket to original
@@ -376,34 +404,35 @@ class TicketRefiner:
 
     def validate_file_flows(self, ticket_id: str) -> Dict[str, any]:
         """Validate file flows for a specific ticket using dependency validator."""
-        validation_result = self.validator.validate_ticket_dependencies(str(self.tickets_path))
+        validation_result = self.validator.validate_ticket_dependencies(
+            str(self.tickets_path)
+        )
 
         # Filter results for the specific ticket
         ticket_issues = [
-            issue for issue in validation_result.issues
-            if issue.ticket_id == ticket_id
+            issue for issue in validation_result.issues if issue.ticket_id == ticket_id
         ]
 
         ticket_flows = [
-            flow for flow in validation_result.file_flows
+            flow
+            for flow in validation_result.file_flows
             if flow.target_ticket == ticket_id or flow.source_ticket == ticket_id
         ]
 
         return {
-            'valid': len(ticket_issues) == 0,
-            'issues': ticket_issues,
-            'flows': ticket_flows,
-            'suggestions': [
-                issue.suggested_fix for issue in ticket_issues
-                if issue.suggested_fix
-            ]
+            "valid": len(ticket_issues) == 0,
+            "issues": ticket_issues,
+            "flows": ticket_flows,
+            "suggestions": [
+                issue.suggested_fix for issue in ticket_issues if issue.suggested_fix
+            ],
         }
 
     def save_changes(self) -> bool:
         """Save all changes back to the tickets file."""
         try:
             # Read the original file to preserve formatting
-            with open(self.tickets_path, 'r') as f:
+            with open(self.tickets_path, "r") as f:
                 content = f.read()
 
             # Update each ticket section
@@ -411,11 +440,11 @@ class TicketRefiner:
                 updated_section = self._format_ticket_section(ticket_data)
 
                 # Find and replace the ticket section
-                pattern = rf'(## Ticket {ticket_id}:.*?)(?=## Ticket|\Z)'
+                pattern = rf"(## Ticket {ticket_id}:.*?)(?=## Ticket|\Z)"
                 content = re.sub(pattern, updated_section, content, flags=re.DOTALL)
 
             # Write back to file
-            with open(self.tickets_path, 'w') as f:
+            with open(self.tickets_path, "w") as f:
                 f.write(content)
 
             return True
@@ -429,7 +458,7 @@ class TicketRefiner:
         lines.append(f"**Status:** {ticket.status}")
         lines.append(f"**Model:** {ticket.model}")
 
-        deps_str = ','.join(ticket.dependencies) if ticket.dependencies else 'None'
+        deps_str = ",".join(ticket.dependencies) if ticket.dependencies else "None"
         lines.append(f"**Dependencies:** {deps_str}")
         lines.append(f"**Description:** {ticket.description}")
         lines.append(f"**Progress:** {ticket.progress}")
@@ -458,13 +487,12 @@ class TicketRefiner:
         else:
             lines.append("- None")
 
-        return '\n'.join(lines) + '\n\n---\n'
+        return "\n".join(lines) + "\n\n---\n"
 
     def get_ticket_list(self) -> List[Tuple[str, str, str]]:
         """Get list of all tickets with id, title, and status."""
         return [
-            (ticket.id, ticket.title, ticket.status)
-            for ticket in self.tickets.values()
+            (ticket.id, ticket.title, ticket.status) for ticket in self.tickets.values()
         ]
 
     def get_ticket_details(self, ticket_id: str) -> Optional[TicketData]:

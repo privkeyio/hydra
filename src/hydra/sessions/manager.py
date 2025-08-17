@@ -149,8 +149,7 @@ class TmuxBackend(SessionBackend):
     def session_exists(self, session_id: str) -> bool:
         """Check if a tmux session exists."""
         result = subprocess.run(
-            ["tmux", "has-session", "-t", session_id],
-            capture_output=True
+            ["tmux", "has-session", "-t", session_id], capture_output=True
         )
         return result.returncode == 0
 
@@ -159,8 +158,9 @@ class TmuxBackend(SessionBackend):
         try:
             # For multiline text, use tmux's load-buffer/paste-buffer approach
             import tempfile
+
             with tempfile.NamedTemporaryFile(
-                mode='w', delete=False, suffix='.txt'
+                mode="w", delete=False, suffix=".txt"
             ) as f:
                 f.write(text)
                 temp_file = f.name
@@ -168,15 +168,18 @@ class TmuxBackend(SessionBackend):
             try:
                 subprocess.run(
                     ["tmux", "load-buffer", "-t", session_id, temp_file],
-                    capture_output=True, check=True
+                    capture_output=True,
+                    check=True,
                 )
                 subprocess.run(
                     ["tmux", "paste-buffer", "-t", session_id],
-                    capture_output=True, check=True
+                    capture_output=True,
+                    check=True,
                 )
                 subprocess.run(
                     ["tmux", "send-keys", "-t", session_id, "Enter"],
-                    capture_output=True, check=True
+                    capture_output=True,
+                    check=True,
                 )
                 return True
             finally:
@@ -191,7 +194,7 @@ class TmuxBackend(SessionBackend):
                 ["tmux", "capture-pane", "-t", session_id, "-p"],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
             return result.stdout
         except subprocess.CalledProcessError:
@@ -202,7 +205,8 @@ class TmuxBackend(SessionBackend):
         try:
             subprocess.run(
                 ["tmux", "kill-session", "-t", session_id],
-                capture_output=True, check=True
+                capture_output=True,
+                check=True,
             )
             return True
         except subprocess.CalledProcessError:
@@ -215,21 +219,23 @@ class TmuxBackend(SessionBackend):
                 ["tmux", "list-sessions", "-F", "#{session_name}:#{session_created}"],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
             sessions = []
-            for line in result.stdout.strip().split('\n'):
+            for line in result.stdout.strip().split("\n"):
                 if line:
-                    parts = line.split(':')
+                    parts = line.split(":")
                     if len(parts) >= 2:
                         session_id = parts[0]
                         created_at = float(parts[1])
-                        sessions.append(SessionInfo(
-                            session_id=session_id,
-                            backend_type=self.backend_type,
-                            project_path="",  # tmux doesn't provide this info directly
-                            created_at=created_at
-                        ))
+                        sessions.append(
+                            SessionInfo(
+                                session_id=session_id,
+                                backend_type=self.backend_type,
+                                project_path="",  # tmux doesn't provide this info directly
+                                created_at=created_at,
+                            )
+                        )
             return sessions
         except subprocess.CalledProcessError:
             return []
@@ -244,14 +250,14 @@ class TmuxBackend(SessionBackend):
                 ["tmux", "list-sessions", "-t", session_id, "-F", "#{session_created}"],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
             created_at = float(result.stdout.strip())
             return SessionInfo(
                 session_id=session_id,
                 backend_type=self.backend_type,
                 project_path="",  # Not directly available
-                created_at=created_at
+                created_at=created_at,
             )
         except subprocess.CalledProcessError:
             return None
@@ -298,7 +304,7 @@ class DirectProcessBackend(SessionBackend):
             cwd=project_path,
             env=env,
             text=True,
-            bufsize=1
+            bufsize=1,
         )
 
         self._processes[session_id] = process
@@ -307,7 +313,7 @@ class DirectProcessBackend(SessionBackend):
             backend_type=self.backend_type,
             project_path=project_path,
             created_at=float(os.times().elapsed),
-            pid=process.pid
+            pid=process.pid,
         )
 
         return session_id
@@ -327,7 +333,7 @@ class DirectProcessBackend(SessionBackend):
 
         try:
             process = self._processes[session_id]
-            process.stdin.write(text + '\n')
+            process.stdin.write(text + "\n")
             process.stdin.flush()
             return True
         except (BrokenPipeError, OSError):
@@ -344,8 +350,10 @@ class DirectProcessBackend(SessionBackend):
             import select
             import sys
 
-            if (sys.platform != "win32" and
-                    select.select([process.stdout], [], [], 0.1)[0]):
+            if (
+                sys.platform != "win32"
+                and select.select([process.stdout], [], [], 0.1)[0]
+            ):
                 return process.stdout.read()
             return ""
         except (OSError, AttributeError):
@@ -444,19 +452,14 @@ class ScreenBackend(SessionBackend):
         if command:
             cmd_str = " ".join(command)
             subprocess.run(
-                ["screen", "-S", session_id, "-X", "stuff", f"{cmd_str}\n"],
-                check=True
+                ["screen", "-S", session_id, "-X", "stuff", f"{cmd_str}\n"], check=True
             )
 
         return session_id
 
     def session_exists(self, session_id: str) -> bool:
         """Check if a screen session exists."""
-        result = subprocess.run(
-            ["screen", "-ls"],
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(["screen", "-ls"], capture_output=True, text=True)
         return session_id in result.stdout
 
     def send_input(self, session_id: str, text: str) -> bool:
@@ -465,7 +468,8 @@ class ScreenBackend(SessionBackend):
             # Screen's stuff command sends text directly
             subprocess.run(
                 ["screen", "-S", session_id, "-X", "stuff", f"{text}\n"],
-                capture_output=True, check=True
+                capture_output=True,
+                check=True,
             )
             return True
         except subprocess.CalledProcessError:
@@ -476,17 +480,19 @@ class ScreenBackend(SessionBackend):
         try:
             # Create temporary file for hardcopy
             import tempfile
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as f:
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
                 temp_file = f.name
 
             # Use hardcopy to capture screen content
             subprocess.run(
                 ["screen", "-S", session_id, "-X", "hardcopy", temp_file],
-                capture_output=True, check=True
+                capture_output=True,
+                check=True,
             )
 
             # Read the captured output
-            with open(temp_file, 'r') as f:
+            with open(temp_file, "r") as f:
                 output = f.read()
 
             # Clean up temp file
@@ -500,7 +506,8 @@ class ScreenBackend(SessionBackend):
         try:
             subprocess.run(
                 ["screen", "-S", session_id, "-X", "quit"],
-                capture_output=True, check=True
+                capture_output=True,
+                check=True,
             )
             return True
         except subprocess.CalledProcessError:
@@ -509,24 +516,22 @@ class ScreenBackend(SessionBackend):
     def list_sessions(self) -> List[SessionInfo]:
         """List all screen sessions."""
         try:
-            result = subprocess.run(
-                ["screen", "-ls"],
-                capture_output=True,
-                text=True
-            )
+            result = subprocess.run(["screen", "-ls"], capture_output=True, text=True)
             sessions = []
-            for line in result.stdout.split('\n'):
+            for line in result.stdout.split("\n"):
                 # Parse screen session lines like: "12345.session_name    (Detached)"
-                if '\t' in line and '.' in line:
-                    parts = line.strip().split('\t')[0].split('.')
-                    if len(parts) >= 2 and parts[1].startswith('screen_'):
+                if "\t" in line and "." in line:
+                    parts = line.strip().split("\t")[0].split(".")
+                    if len(parts) >= 2 and parts[1].startswith("screen_"):
                         session_id = parts[1].split()[0]
-                        sessions.append(SessionInfo(
-                            session_id=session_id,
-                            backend_type=self.backend_type,
-                            project_path="",
-                            created_at=float(os.times().elapsed)
-                        ))
+                        sessions.append(
+                            SessionInfo(
+                                session_id=session_id,
+                                backend_type=self.backend_type,
+                                project_path="",
+                                created_at=float(os.times().elapsed),
+                            )
+                        )
             return sessions
         except subprocess.CalledProcessError:
             return []
@@ -540,7 +545,7 @@ class ScreenBackend(SessionBackend):
             session_id=session_id,
             backend_type=self.backend_type,
             project_path="",
-            created_at=float(os.times().elapsed)
+            created_at=float(os.times().elapsed),
         )
 
 
@@ -579,11 +584,17 @@ class DockerBackend(SessionBackend):
 
         # Build docker run command
         docker_cmd = [
-            "docker", "run", "-d", "-i",
-            "--name", session_id,
-            "-v", f"{project_path}:/workspace",
-            "-w", "/workspace",
-            self.image
+            "docker",
+            "run",
+            "-d",
+            "-i",
+            "--name",
+            session_id,
+            "-v",
+            f"{project_path}:/workspace",
+            "-w",
+            "/workspace",
+            self.image,
         ]
         docker_cmd.extend(command)
 
@@ -603,7 +614,7 @@ class DockerBackend(SessionBackend):
             result = subprocess.run(
                 ["docker", "ps", "-q", "-f", f"name={session_id}"],
                 capture_output=True,
-                text=True
+                text=True,
             )
             return bool(result.stdout.strip())
         except subprocess.CalledProcessError:
@@ -617,7 +628,8 @@ class DockerBackend(SessionBackend):
         try:
             subprocess.run(
                 ["docker", "exec", "-i", session_id, "bash", "-c", f"echo '{text}'"],
-                capture_output=True, check=True
+                capture_output=True,
+                check=True,
             )
             return True
         except subprocess.CalledProcessError:
@@ -633,7 +645,7 @@ class DockerBackend(SessionBackend):
                 ["docker", "logs", "--tail", "50", session_id],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
             return result.stdout
         except subprocess.CalledProcessError:
@@ -643,12 +655,10 @@ class DockerBackend(SessionBackend):
         """Terminate a Docker container session."""
         try:
             subprocess.run(
-                ["docker", "stop", session_id],
-                capture_output=True, check=True
+                ["docker", "stop", session_id], capture_output=True, check=True
             )
             subprocess.run(
-                ["docker", "rm", session_id],
-                capture_output=True, check=True
+                ["docker", "rm", session_id], capture_output=True, check=True
             )
             if session_id in self._containers:
                 del self._containers[session_id]
@@ -663,22 +673,24 @@ class DockerBackend(SessionBackend):
                 ["docker", "ps", "--format", "{{.Names}}:{{.CreatedAt}}"],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
             sessions = []
-            for line in result.stdout.strip().split('\n'):
+            for line in result.stdout.strip().split("\n"):
                 if line and line.startswith("docker_"):
-                    parts = line.split(':')
+                    parts = line.split(":")
                     if len(parts) >= 2:
                         session_id = parts[0]
                         # Docker CreatedAt format is complex,
                         # use current time as approximation
-                        sessions.append(SessionInfo(
-                            session_id=session_id,
-                            backend_type=self.backend_type,
-                            project_path="/workspace",
-                            created_at=float(os.times().elapsed)
-                        ))
+                        sessions.append(
+                            SessionInfo(
+                                session_id=session_id,
+                                backend_type=self.backend_type,
+                                project_path="/workspace",
+                                created_at=float(os.times().elapsed),
+                            )
+                        )
             return sessions
         except subprocess.CalledProcessError:
             return []
@@ -692,7 +704,7 @@ class DockerBackend(SessionBackend):
             session_id=session_id,
             backend_type=self.backend_type,
             project_path="/workspace",
-            created_at=float(os.times().elapsed)
+            created_at=float(os.times().elapsed),
         )
 
     def cleanup(self):
@@ -704,8 +716,11 @@ class DockerBackend(SessionBackend):
 class SessionManager:
     """Main session manager that auto-discovers and uses the best available backend."""
 
-    def __init__(self, preferred_backend: Optional[SessionBackendType] = None,
-                 enable_persistence: bool = True):
+    def __init__(
+        self,
+        preferred_backend: Optional[SessionBackendType] = None,
+        enable_persistence: bool = True,
+    ):
         self.preferred_backend = preferred_backend
         self._backends: Dict[SessionBackendType, SessionBackend] = {}
         self._active_backend: Optional[SessionBackend] = None
@@ -726,7 +741,7 @@ class SessionManager:
             (SessionBackendType.TMUX, TmuxBackend),
             (SessionBackendType.SCREEN, ScreenBackend),
             (SessionBackendType.DIRECT_PROCESS, DirectProcessBackend),
-            (SessionBackendType.DOCKER, DockerBackend)
+            (SessionBackendType.DOCKER, DockerBackend),
         ]
 
         for backend_type, backend_class in backends_to_try:
@@ -755,7 +770,7 @@ class SessionManager:
         priority = [
             SessionBackendType.TMUX,
             SessionBackendType.DIRECT_PROCESS,
-            SessionBackendType.DOCKER
+            SessionBackendType.DOCKER,
         ]
 
         for backend_type in priority:
@@ -768,7 +783,7 @@ class SessionManager:
         self,
         command: List[str],
         config: Optional[SessionConfig] = None,
-        backend_type: Optional[SessionBackendType] = None
+        backend_type: Optional[SessionBackendType] = None,
     ) -> tuple[str, SessionBackend]:
         """Create a session using the best available backend."""
         backend = self.select_backend(backend_type)
@@ -807,7 +822,8 @@ class SessionManager:
         if state_file.exists():
             try:
                 import json
-                with open(state_file, 'r') as f:
+
+                with open(state_file, "r") as f:
                     self._session_states = json.load(f)
             except Exception:
                 self._session_states = {}
@@ -820,7 +836,8 @@ class SessionManager:
         state_file = self._persistence_dir / "session_states.json"
         try:
             import json
-            with open(state_file, 'w') as f:
+
+            with open(state_file, "w") as f:
                 json.dump(self._session_states, f, indent=2)
         except Exception:
             pass
@@ -830,7 +847,7 @@ class SessionManager:
         self._session_states[session_id] = {
             **state,
             "last_updated": float(os.times().elapsed),
-            "backend_type": state.get("backend_type", "unknown")
+            "backend_type": state.get("backend_type", "unknown"),
         }
         self._save_persisted_states()
 
@@ -838,9 +855,12 @@ class SessionManager:
         """Load state for a specific session."""
         return self._session_states.get(session_id)
 
-    def migrate_session(self, session_id: str,
-                       from_backend: SessionBackend,
-                       to_backend_type: SessionBackendType) -> Optional[str]:
+    def migrate_session(
+        self,
+        session_id: str,
+        from_backend: SessionBackend,
+        to_backend_type: SessionBackendType,
+    ) -> Optional[str]:
         """Migrate a session from one backend to another."""
         # Save current state
         if from_backend.session_exists(session_id):
@@ -848,7 +868,7 @@ class SessionManager:
                 "session_id": session_id,
                 "backend_type": from_backend.backend_type.value,
                 "output": from_backend.capture_output(session_id),
-                "info": from_backend.get_session_info(session_id)
+                "info": from_backend.get_session_info(session_id),
             }
             self.save_session_state(session_id, state)
 
@@ -873,11 +893,10 @@ class SessionManager:
                     "session_id": session_info.session_id,
                     "backend_type": backend.backend_type.value,
                     "project_path": session_info.project_path,
-                    "created_at": session_info.created_at
+                    "created_at": session_info.created_at,
                 }
                 self.save_session_state(session_info.session_id, state)
 
         # Clean up backends
         for backend in self._backends.values():
             backend.cleanup()
-

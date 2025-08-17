@@ -11,6 +11,11 @@ from .project_state import (
 )
 
 __all__ = [
-    'ProjectState', 'ProjectStateManager', 'ProjectStatus',
-    'Checkpoint', 'CheckpointType', 'Operation', 'StateSerializer'
+    "ProjectState",
+    "ProjectStateManager",
+    "ProjectStatus",
+    "Checkpoint",
+    "CheckpointType",
+    "Operation",
+    "StateSerializer",
 ]

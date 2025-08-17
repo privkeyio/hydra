@@ -1,4 +1,5 @@
 """Utility for finding Claude CLI path dynamically."""
+
 import os
 import shutil
 from pathlib import Path
@@ -19,12 +20,12 @@ def find_claude_cli_path():
 
     """
     # 1. Check environment variable first
-    env_path = os.environ.get('CLAUDE_CLI_PATH')
+    env_path = os.environ.get("CLAUDE_CLI_PATH")
     if env_path and os.path.exists(env_path):
         return env_path
 
     # 2. Check if 'claude' is in PATH
-    claude_in_path = shutil.which('claude')
+    claude_in_path = shutil.which("claude")
     if claude_in_path:
         return claude_in_path
 
@@ -33,9 +34,9 @@ def find_claude_cli_path():
 
     # Common user-specific locations
     user_locations = [
-        home / '.claude' / 'local' / 'claude',
-        home / '.local' / 'bin' / 'claude',
-        home / 'bin' / 'claude',
+        home / ".claude" / "local" / "claude",
+        home / ".local" / "bin" / "claude",
+        home / "bin" / "claude",
     ]
 
     for path in user_locations:
@@ -44,9 +45,9 @@ def find_claude_cli_path():
 
     # 4. Check system-wide locations
     system_locations = [
-        Path('/usr/local/bin/claude'),
-        Path('/usr/bin/claude'),
-        Path('/opt/claude/claude'),
+        Path("/usr/local/bin/claude"),
+        Path("/usr/bin/claude"),
+        Path("/opt/claude/claude"),
     ]
 
     for path in system_locations:
@@ -55,7 +56,7 @@ def find_claude_cli_path():
 
     # If not found, return a sensible default
     # This will fail gracefully if the path doesn't exist
-    return str(home / '.claude' / 'local' / 'claude')
+    return str(home / ".claude" / "local" / "claude")
 
 
 def get_claude_cli_path():
@@ -65,6 +66,6 @@ def get_claude_cli_path():
         str: Path to claude CLI executable
 
     """
-    if not hasattr(get_claude_cli_path, '_cached_path'):
+    if not hasattr(get_claude_cli_path, "_cached_path"):
         get_claude_cli_path._cached_path = find_claude_cli_path()
     return get_claude_cli_path._cached_path

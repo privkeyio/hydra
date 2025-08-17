@@ -62,7 +62,10 @@ class FileLockManager:
 
         with self.global_lock:
             # Check if this agent holds the lock
-            if file_path in self.lock_holders and self.lock_holders[file_path] == agent_id:
+            if (
+                file_path in self.lock_holders
+                and self.lock_holders[file_path] == agent_id
+            ):
                 self.locks[file_path].release()
                 del self.lock_holders[file_path]
 

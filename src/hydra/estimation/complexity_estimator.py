@@ -51,22 +51,22 @@ class ComplexityEstimator:
 
     # File type complexity weights
     FILE_COMPLEXITY_WEIGHTS = {
-        r"\.py$": 1.0,           # Python files - baseline
-        r"\.js$|\.ts$": 1.1,     # JavaScript/TypeScript - slightly more complex
-        r"\.jsx$|\.tsx$": 1.2,   # React components - more complex
-        r"\.go$": 1.0,           # Go files - baseline
-        r"\.rs$": 1.3,           # Rust - more complex type system
-        r"\.cpp$|\.cc$": 1.4,    # C++ - high complexity
-        r"\.java$": 1.1,         # Java - moderate complexity
-        r"\.sql$": 1.2,          # SQL - data complexity
-        r"\.proto$": 1.5,        # Protocol buffers - high complexity
-        r"\.graphql$": 1.4,      # GraphQL schemas - complex
-        r"migration": 1.6,       # Database migrations - highest risk
-        r"dockerfile": 1.2,      # Docker configs - moderate
+        r"\.py$": 1.0,  # Python files - baseline
+        r"\.js$|\.ts$": 1.1,  # JavaScript/TypeScript - slightly more complex
+        r"\.jsx$|\.tsx$": 1.2,  # React components - more complex
+        r"\.go$": 1.0,  # Go files - baseline
+        r"\.rs$": 1.3,  # Rust - more complex type system
+        r"\.cpp$|\.cc$": 1.4,  # C++ - high complexity
+        r"\.java$": 1.1,  # Java - moderate complexity
+        r"\.sql$": 1.2,  # SQL - data complexity
+        r"\.proto$": 1.5,  # Protocol buffers - high complexity
+        r"\.graphql$": 1.4,  # GraphQL schemas - complex
+        r"migration": 1.6,  # Database migrations - highest risk
+        r"dockerfile": 1.2,  # Docker configs - moderate
         r"\.yaml$|\.yml$": 0.8,  # Config files - lower complexity
-        r"\.md$": 0.3,           # Documentation - lowest complexity
-        r"test.*\.": 0.7,        # Test files - lower complexity
-        r"spec.*\.": 0.7,        # Spec files - lower complexity
+        r"\.md$": 0.3,  # Documentation - lowest complexity
+        r"test.*\.": 0.7,  # Test files - lower complexity
+        r"spec.*\.": 0.7,  # Spec files - lower complexity
     }
 
     # Effort thresholds based on complexity scores
@@ -124,9 +124,7 @@ class ComplexityEstimator:
         )
 
         # Calculate confidence score
-        confidence_score = self._calculate_confidence_score(
-            complexity_factors, ticket
-        )
+        confidence_score = self._calculate_confidence_score(complexity_factors, ticket)
 
         # Generate reasoning
         reasoning = self._generate_estimation_reasoning(
@@ -155,9 +153,7 @@ class ComplexityEstimator:
         acceptance_criteria = ticket.get("acceptance_criteria") or []
 
         # Adjust for file types and operations
-        file_complexity_adjustment = self._calculate_file_type_complexity(
-            output_files
-        )
+        file_complexity_adjustment = self._calculate_file_type_complexity(output_files)
         factors.implementation_complexity *= file_complexity_adjustment
 
         # Boost complexity for tickets with many acceptance criteria
@@ -214,8 +210,15 @@ class ComplexityEstimator:
 
         # High complexity operations
         high_complexity_ops = [
-            "migrate", "refactor", "redesign", "rewrite", "optimize",
-            "performance", "scale", "distributed", "concurrent"
+            "migrate",
+            "refactor",
+            "redesign",
+            "rewrite",
+            "optimize",
+            "performance",
+            "scale",
+            "distributed",
+            "concurrent",
         ]
         for op in high_complexity_ops:
             if op in full_text:
@@ -223,8 +226,14 @@ class ComplexityEstimator:
 
         # Medium complexity operations
         medium_complexity_ops = [
-            "integrate", "connect", "api", "database", "authentication",
-            "authorization", "validation", "error handling"
+            "integrate",
+            "connect",
+            "api",
+            "database",
+            "authentication",
+            "authorization",
+            "validation",
+            "error handling",
         ]
         for op in medium_complexity_ops:
             if op in full_text:
@@ -232,8 +241,14 @@ class ComplexityEstimator:
 
         # Simple operations (reduce complexity)
         simple_ops = [
-            "format", "style", "comment", "documentation", "readme",
-            "config", "setting", "parameter"
+            "format",
+            "style",
+            "comment",
+            "documentation",
+            "readme",
+            "config",
+            "setting",
+            "parameter",
         ]
         simple_op_count = sum(1 for op in simple_ops if op in full_text)
         if simple_op_count > 2:
@@ -514,9 +529,8 @@ class ComplexityEstimator:
             "effort_distribution": {k.value: v for k, v in effort_counts.items()},
             "time_distribution": {k.value: v for k, v in time_counts.items()},
             "average_complexity": total_complexity / len(estimations),
-            "high_confidence_percentage": (
-                high_confidence_count / len(estimations)
-            ) * 100,
+            "high_confidence_percentage": (high_confidence_count / len(estimations))
+            * 100,
             "estimated_total_time": self._calculate_total_time(estimations),
         }
 
@@ -539,9 +553,7 @@ class ComplexityEstimator:
             TimeEstimate.ONE_DAY: 480,  # 8 hours
         }
 
-        total_minutes = sum(
-            time_to_minutes[est.time_estimate] for est in estimations
-        )
+        total_minutes = sum(time_to_minutes[est.time_estimate] for est in estimations)
 
         if total_minutes < 60:
             return f"{total_minutes}min"
@@ -551,4 +563,3 @@ class ComplexityEstimator:
         else:
             days = total_minutes / 480
             return f"{days:.1f} days"
-

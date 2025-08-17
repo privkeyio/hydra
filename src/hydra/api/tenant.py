@@ -95,11 +95,11 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Skip tenant check for health endpoint
-        if path == '/health':
+        if path == "/health":
             return await call_next(request)
 
         # Get tenant ID from API key
-        if not hasattr(request.state, 'api_key'):
+        if not hasattr(request.state, "api_key"):
             # Auth middleware should have already handled this
             return await call_next(request)
 
@@ -108,26 +108,28 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
 
         try:
             # Get tenant info from API key
-            api_key_obj = db.query(APIKey).filter(
-                APIKey.key == api_key,
-                APIKey.is_active.is_(True)
-            ).first()
+            api_key_obj = (
+                db.query(APIKey)
+                .filter(APIKey.key == api_key, APIKey.is_active.is_(True))
+                .first()
+            )
 
             if not api_key_obj or not api_key_obj.tenant_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="API key not associated with a tenant"
+                    detail="API key not associated with a tenant",
                 )
 
-            tenant = db.query(Tenant).filter(
-                Tenant.id == api_key_obj.tenant_id,
-                Tenant.is_active.is_(True)
-            ).first()
+            tenant = (
+                db.query(Tenant)
+                .filter(Tenant.id == api_key_obj.tenant_id, Tenant.is_active.is_(True))
+                .first()
+            )
 
             if not tenant:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Tenant not found or inactive"
+                    detail="Tenant not found or inactive",
                 )
 
             # Check request rate limit
@@ -139,7 +141,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
                     detail=(
                         f"Tenant request limit exceeded: "
                         f"{tenant.max_requests_per_minute}/min"
-                    )
+                    ),
                 )
 
             # Add tenant info to request state
@@ -157,10 +159,9 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
 
 async def get_current_tenant(request: Request) -> Tenant:
     """Get current tenant from request state."""
-    if not hasattr(request.state, 'tenant'):
+    if not hasattr(request.state, "tenant"):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tenant context available"
+            status_code=status.HTTP_403_FORBIDDEN, detail="No tenant context available"
         )
     return request.state.tenant
 
@@ -172,10 +173,11 @@ def check_tenant_quota(
     db: Session = next(get_db())
 
     try:
-        tenant = db.query(Tenant).filter(
-            Tenant.id == tenant_id,
-            Tenant.is_active.is_(True)
-        ).first()
+        tenant = (
+            db.query(Tenant)
+            .filter(Tenant.id == tenant_id, Tenant.is_active.is_(True))
+            .first()
+        )
 
         if not tenant:
             return False
@@ -204,7 +206,7 @@ def update_tenant_usage(
     tenant_id: str,
     tokens: int = 0,
     task_id: Optional[str] = None,
-    completed: bool = False
+    completed: bool = False,
 ):
     """Update tenant resource usage."""
     if tokens > 0:
@@ -227,22 +229,23 @@ def get_tenant_usage_stats(tenant_id: str) -> Dict:
         month_start = now.replace(day=1, hour=0, minute=0, second=0)
 
         # Get task count for current month
-        task_count = db.query(Task).filter(
-            Task.tenant_id == tenant_id,
-            Task.created_at >= month_start
-        ).count()
+        task_count = (
+            db.query(Task)
+            .filter(Task.tenant_id == tenant_id, Task.created_at >= month_start)
+            .count()
+        )
 
         return {
-            'tenant_id': tenant_id,
-            'tenant_name': tenant.name,
-            'current_month_tokens': resource_tracker.token_usage.get(tenant_id, 0),
-            'max_tokens_per_month': tenant.max_tokens_per_month,
-            'active_tasks': len(
+            "tenant_id": tenant_id,
+            "tenant_name": tenant.name,
+            "current_month_tokens": resource_tracker.token_usage.get(tenant_id, 0),
+            "max_tokens_per_month": tenant.max_tokens_per_month,
+            "active_tasks": len(
                 resource_tracker.concurrent_tasks.get(tenant_id, set())
             ),
-            'max_concurrent_tasks': tenant.max_concurrent_tasks,
-            'tasks_this_month': task_count,
-            'requests_per_minute_limit': tenant.max_requests_per_minute
+            "max_concurrent_tasks": tenant.max_concurrent_tasks,
+            "tasks_this_month": task_count,
+            "requests_per_minute_limit": tenant.max_requests_per_minute,
         }
 
     finally:

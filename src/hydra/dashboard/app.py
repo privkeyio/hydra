@@ -68,7 +68,8 @@ STATIC_DIR.mkdir(exist_ok=True)
 # Create default index.html if it doesn't exist
 INDEX_HTML = STATIC_DIR / "index.html"
 if not INDEX_HTML.exists():
-    INDEX_HTML.write_text("""<!DOCTYPE html>
+    INDEX_HTML.write_text(
+        """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -487,7 +488,8 @@ if not INDEX_HTML.exists():
         }, 5000);  // Every 5 seconds instead of 30
     </script>
 </body>
-</html>""")
+</html>"""
+    )
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -510,32 +512,42 @@ async def get_dashboard_stats():
     """Get dashboard statistics."""
     db_manager = get_db_manager()
     from sqlalchemy import func
-    from hydra.dashboard.database import Ticket, Execution, Project
-    
+
+    from hydra.dashboard.database import Project, Ticket
+
     with db_manager.get_session() as db:
         total_projects = db.query(func.count(Project.id)).scalar() or 0
-        active_tickets = db.query(func.count(Ticket.id)).filter(
-            Ticket.status.in_(["IN_PROGRESS", "TODO"])
-        ).scalar() or 0
-        completed_today = db.query(func.count(Ticket.id)).filter(
-            Ticket.status == "DONE",
-            func.date(Ticket.updated_at) == func.date(func.now())
-        ).scalar() or 0
-        
+        active_tickets = (
+            db.query(func.count(Ticket.id))
+            .filter(Ticket.status.in_(["IN_PROGRESS", "TODO"]))
+            .scalar()
+            or 0
+        )
+        completed_today = (
+            db.query(func.count(Ticket.id))
+            .filter(
+                Ticket.status == "DONE",
+                func.date(Ticket.updated_at) == func.date(func.now()),
+            )
+            .scalar()
+            or 0
+        )
+
         total_tickets = db.query(func.count(Ticket.id)).scalar() or 0
-        successful_tickets = db.query(func.count(Ticket.id)).filter(
-            Ticket.status == "DONE"
-        ).scalar() or 0
-        
+        successful_tickets = (
+            db.query(func.count(Ticket.id)).filter(Ticket.status == "DONE").scalar()
+            or 0
+        )
+
         success_rate = 0
         if total_tickets > 0:
             success_rate = int((successful_tickets / total_tickets) * 100)
-    
+
     return {
         "total_projects": total_projects,
         "active_tickets": active_tickets,
         "completed_today": completed_today,
-        "success_rate": success_rate
+        "success_rate": success_rate,
     }
 
 
@@ -544,12 +556,16 @@ async def get_tickets(limit: int = 10, offset: int = 0):
     """Get recent tickets."""
     db_manager = get_db_manager()
     from hydra.dashboard.database import Ticket
-    
+
     with db_manager.get_session() as db:
-        tickets = db.query(Ticket).order_by(
-            Ticket.created_at.desc()
-        ).limit(limit).offset(offset).all()
-        
+        tickets = (
+            db.query(Ticket)
+            .order_by(Ticket.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
+
         return [
             {
                 "id": t.id,
@@ -559,7 +575,7 @@ async def get_tickets(limit: int = 10, offset: int = 0):
                 "priority": t.priority,
                 "model": t.model,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
-                "updated_at": t.updated_at.isoformat() if t.updated_at else None
+                "updated_at": t.updated_at.isoformat() if t.updated_at else None,
             }
             for t in tickets
         ]
@@ -572,6 +588,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Generate a unique client ID (in production, use authentication)
     import uuid
+
     client_id = str(uuid.uuid4())
 
     await ws_handler.handle_connection(websocket, client_id)
@@ -596,7 +613,7 @@ class DashboardServer:
 
     def start(self, background=False):
         """Start the dashboard server.
-        
+
         Args:
             background: If True, run server in background thread (non-blocking)
 
@@ -618,10 +635,12 @@ class DashboardServer:
         if background:
             # Run in background thread for non-blocking operation
             import threading
+
             self.server_thread = threading.Thread(target=self._run_server, daemon=True)
             self.server_thread.start()
             # Give server a moment to start
             import time
+
             time.sleep(1)
         else:
             try:

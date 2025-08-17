@@ -48,56 +48,58 @@ class MockProvider(BaseProvider):
 
     def __init__(self, config: LLMConfig, fail_on_generate: bool = False):
         """Initialize mock provider.
-        
+
         Args:
             config: Provider configuration
             fail_on_generate: Whether to fail on generate calls
-        
+
         """
         # Set attributes before calling super().__init__()
         self.fail_on_generate = fail_on_generate
         self.generate_call_count = 0
         self.last_prompt = None
-        self.mock_response = "Generated code:\n```python\ndef test():\n    return 42\n```"
+        self.mock_response = (
+            "Generated code:\n```python\ndef test():\n    return 42\n```"
+        )
         self.streaming_enabled = False
         self.session_counter = 0
         self.model_selected = config.model or "mock-model"
-        
+
         # Now call super().__init__() which will call validate_config()
         super().__init__(config)
-    
+
     def validate_config(self):
         """Validate the configuration."""
         pass
-    
+
     @property
     def name(self) -> str:
         """Return the provider name."""
         return "mock"
-    
+
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response."""
         self.generate_call_count += 1
         self.last_prompt = prompt
-        
+
         if self.fail_on_generate:
             raise RuntimeError("Mock provider configured to fail")
-        
+
         return {"result": "mock_json_response", "prompt": prompt}
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate response from prompt.
-        
+
         Args:
             prompt: Input prompt
             **kwargs: Additional parameters
-            
+
         Returns:
             Generated response
-            
+
         Raises:
             RuntimeError: If configured to fail
-        
+
         """
         self.generate_call_count += 1
         self.last_prompt = prompt
@@ -107,35 +109,31 @@ class MockProvider(BaseProvider):
 
         return self.mock_response
 
-    def generate_code(
-        self, prompt: str, context: Dict[str, Any], **kwargs
-    ) -> str:
+    def generate_code(self, prompt: str, context: Dict[str, Any], **kwargs) -> str:
         """Generate code with context.
-        
+
         Args:
             prompt: Code generation prompt
             context: Additional context
             **kwargs: Provider-specific parameters
-            
+
         Returns:
             Generated code
-        
+
         """
         self.last_prompt = prompt
         return self.mock_response
 
-    def generate_streaming(
-        self, prompt: str, **kwargs
-    ) -> Iterator[str]:
+    def generate_streaming(self, prompt: str, **kwargs) -> Iterator[str]:
         """Generate streaming response.
-        
+
         Args:
             prompt: Input prompt
             **kwargs: Additional parameters
-            
+
         Yields:
             Response chunks
-        
+
         """
         self.last_prompt = prompt
         self.streaming_enabled = True
@@ -147,7 +145,7 @@ class MockProvider(BaseProvider):
             "```python\n",
             "def test():\n",
             "    return 42\n",
-            "```"
+            "```",
         ]
 
         for chunk in chunks:
@@ -155,14 +153,14 @@ class MockProvider(BaseProvider):
 
     def create_session(self, session_id: str, **kwargs) -> Session:
         """Create a new session.
-        
+
         Args:
             session_id: Session identifier
             **kwargs: Additional parameters
-            
+
         Returns:
             Created session
-        
+
         """
         self.session_counter += 1
         session = Session(
@@ -172,7 +170,7 @@ class MockProvider(BaseProvider):
             created_at=datetime.now(),
             last_activity=datetime.now(),
             state=SessionState.ACTIVE,
-            metadata=kwargs
+            metadata=kwargs,
         )
         self._sessions[session_id] = session
         self._current_session = session
@@ -180,16 +178,16 @@ class MockProvider(BaseProvider):
 
     def attach_session(self, session_id: str) -> Session:
         """Attach to existing session.
-        
+
         Args:
             session_id: Session to attach to
-            
+
         Returns:
             Session object
-            
+
         Raises:
             KeyError: If session doesn't exist
-        
+
         """
         if session_id not in self._sessions:
             raise KeyError(f"Session {session_id} not found")
@@ -200,22 +198,22 @@ class MockProvider(BaseProvider):
 
     def list_sessions(self) -> List[Session]:
         """List all sessions.
-        
+
         Returns:
             List of sessions
-        
+
         """
         return list(self._sessions.values())
 
     def kill_session(self, session_id: str) -> bool:
         """Terminate a session.
-        
+
         Args:
             session_id: Session to terminate
-            
+
         Returns:
             True if successful
-        
+
         """
         if session_id in self._sessions:
             self._sessions[session_id].state = SessionState.TERMINATED
@@ -226,10 +224,10 @@ class MockProvider(BaseProvider):
 
     def list_models(self) -> List[ModelInfo]:
         """List available models.
-        
+
         Returns:
             List of model information
-        
+
         """
         return [
             ModelInfo(
@@ -240,7 +238,7 @@ class MockProvider(BaseProvider):
                 max_output_tokens=4096,
                 supports_streaming=True,
                 supports_interactive=False,
-                cost_per_token=0.001
+                cost_per_token=0.001,
             ),
             ModelInfo(
                 identifier="mock-smart",
@@ -250,23 +248,26 @@ class MockProvider(BaseProvider):
                 max_output_tokens=8192,
                 supports_streaming=True,
                 supports_interactive=True,
-                cost_per_token=0.01
-            )
+                cost_per_token=0.01,
+            ),
         ]
 
     def select_model(self, model_identifier: str) -> bool:
         """Select a model.
-        
+
         Args:
             model_identifier: Model to select
-            
+
         Returns:
             True if successful
-        
+
         """
         models = self.list_models()
         for model in models:
-            if model.identifier == model_identifier or model.display_name == model_identifier:
+            if (
+                model.identifier == model_identifier
+                or model.display_name == model_identifier
+            ):
                 self.model_selected = model.identifier
                 self.config.model = model.identifier
                 return True
@@ -274,26 +275,22 @@ class MockProvider(BaseProvider):
 
     def get_model_mapping(self) -> Dict[str, str]:
         """Get model mapping.
-        
+
         Returns:
             Model name mappings
-        
+
         """
-        return {
-            "fast": "mock-fast",
-            "smart": "mock-smart",
-            "default": "mock-fast"
-        }
+        return {"fast": "mock-fast", "smart": "mock-smart", "default": "mock-fast"}
 
     def parse_response(self, response: str) -> ParsedResponse:
         """Parse response into structured format.
-        
+
         Args:
             response: Raw response
-            
+
         Returns:
             Parsed response
-        
+
         """
         code_blocks = self.extract_code_blocks(response)
         return ParsedResponse(
@@ -301,70 +298,72 @@ class MockProvider(BaseProvider):
             code_blocks=code_blocks,
             metadata={"provider": "mock", "parsed": True},
             tokens_used=len(response.split()),
-            execution_time=0.1
+            execution_time=0.1,
         )
 
     def extract_code_blocks(self, response: str) -> List[CodeBlock]:
         """Extract code blocks from response.
-        
+
         Args:
             response: Response text
-            
+
         Returns:
             List of code blocks
-        
+
         """
         import re
 
         blocks = []
-        pattern = r'```(\w+)?\n(.*?)```'
+        pattern = r"```(\w+)?\n(.*?)```"
         matches = re.finditer(pattern, response, re.DOTALL)
 
         for match in matches:
             language = match.group(1) or "text"
             content = match.group(2).strip()
-            blocks.append(CodeBlock(
-                language=language,
-                content=content,
-                line_start=1,
-                line_end=content.count('\n') + 1,
-                executable=language in ["python", "bash", "javascript"]
-            ))
+            blocks.append(
+                CodeBlock(
+                    language=language,
+                    content=content,
+                    line_start=1,
+                    line_end=content.count("\n") + 1,
+                    executable=language in ["python", "bash", "javascript"],
+                )
+            )
 
         return blocks
 
     def supports_interactive(self) -> bool:
         """Check if interactive mode is supported.
-        
+
         Returns:
             True if supported
-        
+
         """
         current_model = self.get_current_model()
         return current_model.supports_interactive if current_model else False
 
     def wait_for_prompt(self, timeout: int = 30) -> bool:
         """Wait for interactive prompt.
-        
+
         Args:
             timeout: Timeout in seconds
-            
+
         Returns:
             True if prompt detected
-        
+
         """
         # Simulate immediate prompt availability
         return True
 
     def intercept_file_operation(self, operation: FileOperation) -> bool:
         """Intercept file operation.
-        
+
         Args:
             operation: File operation to validate
-            
+
         Returns:
             True if operation should proceed
-        
+
         """
         # Allow all operations in mock
         return True
@@ -375,11 +374,7 @@ class TestProviderFramework:
 
     def test_mock_provider_basic(self):
         """Test basic mock provider functionality."""
-        config = LLMConfig(
-            provider_type="mock",
-            model="mock-fast",
-            api_key="test-key"
-        )
+        config = LLMConfig(provider_type="mock", model="mock-fast", api_key="test-key")
 
         provider = MockProvider(config)
 
@@ -472,7 +467,7 @@ class TestProviderRegistry:
     def test_registry_creation(self):
         """Test creating providers from registry."""
         registry = ProviderRegistry()
-        
+
         # Use a unique provider name for testing
         try:
             registry.register("test_mock_create", MockProvider)
@@ -488,7 +483,7 @@ class TestProviderRegistry:
     def test_registry_list_providers(self):
         """Test listing registered providers."""
         registry = ProviderRegistry()
-        
+
         # Register test providers with unique names
         try:
             registry.register("test_list_1", MockProvider)
@@ -506,7 +501,7 @@ class TestProviderRegistry:
     def test_registry_unregister(self):
         """Test unregistering providers."""
         registry = ProviderRegistry()
-        
+
         # Register and unregister a test provider
         registry.register("test_unreg", MockProvider)
         registry.unregister("test_unreg")
@@ -535,11 +530,13 @@ class TestProviderFactory:
             if "test_factory_mock" in factory.registry._providers:
                 factory.registry.unregister("test_factory_mock")
 
-    @patch.dict(os.environ, {"LLM_PROVIDER": "mock_provider", "LLM_MODEL": "mock-smart"})
+    @patch.dict(
+        os.environ, {"LLM_PROVIDER": "mock_provider", "LLM_MODEL": "mock-smart"}
+    )
     def test_factory_from_environment(self):
         """Test creating provider from environment variables."""
         factory = ProviderFactory()
-        
+
         # The mock_provider should already be registered
         provider = factory.from_environment()
         assert provider is not None
@@ -549,7 +546,7 @@ class TestProviderFactory:
     def test_factory_with_fallback(self):
         """Test creating provider with fallback options."""
         factory = ProviderFactory()
-        
+
         # Register test providers
         try:
             factory.registry.register("test_fallback_mock", MockProvider)
@@ -563,9 +560,7 @@ class TestProviderFactory:
 
             # Try failing first, then mock
             provider = factory.create_with_fallback(
-                "test_failing",
-                ["test_fallback_mock"],
-                config={"model": "mock-fast"}
+                "test_failing", ["test_fallback_mock"], config={"model": "mock-fast"}
             )
 
             assert isinstance(provider, MockProvider)
@@ -697,7 +692,7 @@ def greet(name):
             "```python\n",
             "def test():\n",
             "    return 42\n",
-            "```"
+            "```",
         ]
 
         merged = merge_streaming_responses(chunks)
@@ -745,10 +740,10 @@ class TestProviderSwitching:
         # Test switching between mock providers
         os.environ["LLM_PROVIDER"] = "mock_provider"
         provider1 = self.factory.from_environment()
-        
+
         # Even with same provider type, should be able to create another instance
         provider2 = self.factory.from_environment()
-        
+
         # Both should be mock providers
         assert provider1 is not None
         assert provider2 is not None
@@ -801,7 +796,7 @@ class TestErrorScenarios:
         provider_error = error_handler.handle_error(
             provider="mock",  # Changed from provider_type to provider
             error=error,
-            context={"operation": "generate"}
+            context={"operation": "generate"},
         )
 
         assert isinstance(provider_error, ProviderError)
@@ -849,8 +844,7 @@ class TestErrorScenarios:
         provider.intercept_file_operation = lambda op: False
 
         operation = FileOperation(
-            operation_type=FileOperationType.DELETE,
-            path="/sensitive/file.txt"
+            operation_type=FileOperationType.DELETE, path="/sensitive/file.txt"
         )
 
         allowed = provider.intercept_file_operation(operation)
@@ -864,7 +858,7 @@ class TestIntegrationScenarios:
         """Test end-to-end code generation workflow."""
         # Set up
         factory = ProviderFactory()
-        
+
         # Register test provider
         try:
             factory.registry.register("test_e2e_mock", MockProvider)
@@ -893,7 +887,7 @@ class TestIntegrationScenarios:
     def test_multi_provider_parallel_execution(self):
         """Test parallel execution with multiple providers."""
         factory = ProviderFactory()
-        
+
         # Register test providers
         try:
             factory.registry.register("test_parallel_mock1", MockProvider)
@@ -903,7 +897,7 @@ class TestIntegrationScenarios:
 
         providers = [
             factory.create("test_parallel_mock1", {"model": "mock-fast"}),
-            factory.create("test_parallel_mock2", {"model": "mock-smart"})
+            factory.create("test_parallel_mock2", {"model": "mock-smart"}),
         ]
 
         prompts = ["Generate function A", "Generate function B"]
@@ -926,12 +920,12 @@ class TestIntegrationScenarios:
         provider.generate("First prompt")
 
         # Save session (mock implementation)
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             session_data = {
                 "id": session.id,
                 "model": session.model,
                 "state": session.state.value,
-                "metadata": session.metadata
+                "metadata": session.metadata,
             }
             json.dump(session_data, f)
             temp_path = f.name
@@ -941,7 +935,7 @@ class TestIntegrationScenarios:
             new_provider = MockProvider(config)
 
             # Restore session (mock implementation)
-            with open(temp_path, 'r') as f:
+            with open(temp_path, "r") as f:
                 session_data = json.load(f)
 
             # Recreate session
@@ -1020,10 +1014,7 @@ class TestProviderConfiguration:
             "default_model": "mock-smart",
             "api_key": "test-key-123",
             "base_url": "https://api.example.com",
-            "extra_params": {
-                "timeout": 30,
-                "max_retries": 3
-            }
+            "extra_params": {"timeout": 30, "max_retries": 3},
         }
 
         config = ProviderConfig(**config_data)
@@ -1035,12 +1026,15 @@ class TestProviderConfiguration:
         assert config.api_key == "test-key-123"
         assert config.extra_params["timeout"] == 30
 
-    @patch.dict(os.environ, {
-        "LLM_PROVIDER": "mock",
-        "LLM_MODEL": "mock-smart",
-        "LLM_TIMEOUT": "60",
-        "LLM_MAX_RETRIES": "5"
-    })
+    @patch.dict(
+        os.environ,
+        {
+            "LLM_PROVIDER": "mock",
+            "LLM_MODEL": "mock-smart",
+            "LLM_TIMEOUT": "60",
+            "LLM_MAX_RETRIES": "5",
+        },
+    )
     def test_environment_override(self):
         """Test environment variable overrides."""
         factory = ProviderFactory()
@@ -1049,7 +1043,7 @@ class TestProviderConfiguration:
         # Note: _create_config_from_env may not exist, testing general env override
         os.environ["LLM_PROVIDER"] = "mock_provider"
         os.environ["LLM_MODEL"] = "mock-smart"
-        
+
         provider = factory.from_environment()
         assert provider is not None
 
@@ -1061,13 +1055,13 @@ class TestProviderConfiguration:
             type="test",
             enabled=True,
             api_key="test-key",
-            base_url="https://test.api"
+            base_url="https://test.api",
         )
-        
+
         assert config.name == "test"
         assert config.api_key == "test-key"
         assert config.base_url == "https://test.api"
-        
+
         # Test conversion to LLMConfig
         llm_config = config.to_llm_config()
         assert llm_config.provider_type == "test"

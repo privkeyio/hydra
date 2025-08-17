@@ -38,10 +38,12 @@ app.conf.task_queues = (
     Queue("dead_letter", default_exchange, routing_key="dead_letter", priority=0),
 )
 
+
 def get_tenant_queue_name(tenant_id: str, priority: bool = False) -> str:
     """Get queue name for tenant."""
     suffix = "_priority" if priority else ""
     return f"tenant_{tenant_id}{suffix}"
+
 
 def register_tenant_queue(tenant_id: str, priority: bool = False):
     """Dynamically register a tenant-specific queue."""
@@ -54,10 +56,7 @@ def register_tenant_queue(tenant_id: str, priority: bool = False):
         tenant_exchange,
         routing_key=routing_key,
         priority=queue_priority,
-        queue_arguments={
-            'x-max-priority': 10,
-            'x-message-ttl': 3600000  # 1 hour TTL
-        }
+        queue_arguments={"x-max-priority": 10, "x-message-ttl": 3600000},  # 1 hour TTL
     )
 
     # Add queue to configuration
@@ -67,16 +66,19 @@ def register_tenant_queue(tenant_id: str, priority: bool = False):
 
     return queue_name
 
+
 app.conf.task_routes = {
     "hydra.workers.tasks.generate_code": {"queue": "default"},
     "hydra.workers.tasks.execute_workflow": {"queue": "default"},
     "hydra.workers.tasks.generate_code_priority": {"queue": "high_priority"},
     "hydra.workers.tasks.execute_workflow_priority": {"queue": "high_priority"},
     "hydra.workers.tasks.generate_code_tenant": {
-        "exchange": "tenant", "routing_key": "tenant.*"
+        "exchange": "tenant",
+        "routing_key": "tenant.*",
     },
     "hydra.workers.tasks.execute_workflow_tenant": {
-        "exchange": "tenant", "routing_key": "tenant.*"
+        "exchange": "tenant",
+        "routing_key": "tenant.*",
     },
 }
 

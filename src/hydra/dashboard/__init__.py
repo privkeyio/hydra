@@ -19,6 +19,7 @@ try:
     from .websocket import DashboardWebSocketHandler, get_ws_handler
 except ImportError as e:
     import logging
+
     logger = logging.getLogger(__name__)
     logger.warning(f"Some dashboard features unavailable: {e}")
 
@@ -30,18 +31,18 @@ except ImportError as e:
     get_ws_handler = None
 
 __all__ = [
-    'DashboardServer',
-    'run_dashboard',
-    'DashboardState',
-    'TicketStatus',
-    'DatabaseManager',
-    'Project',
-    'Ticket',
-    'Session',
-    'Execution',
-    'User',
-    'get_db_manager',
-    'DataExporter',
-    'DashboardWebSocketHandler',
-    'get_ws_handler',
+    "DashboardServer",
+    "run_dashboard",
+    "DashboardState",
+    "TicketStatus",
+    "DatabaseManager",
+    "Project",
+    "Ticket",
+    "Session",
+    "Execution",
+    "User",
+    "get_db_manager",
+    "DataExporter",
+    "DashboardWebSocketHandler",
+    "get_ws_handler",
 ]

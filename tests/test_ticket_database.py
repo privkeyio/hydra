@@ -82,15 +82,15 @@ class TestTicketDatabaseService:
         # Check ticket details
         ticket_001 = service.get_ticket("test_project", "001")
         assert ticket_001 is not None
-        assert ticket_001['title'] == "Setup Database"
-        assert ticket_001['status'] == "TODO"
-        assert ticket_001['model'] == "balanced"
-        assert len(ticket_001['acceptance_criteria']) == 3
-        assert ticket_001['dependencies'] == []
+        assert ticket_001["title"] == "Setup Database"
+        assert ticket_001["status"] == "TODO"
+        assert ticket_001["model"] == "balanced"
+        assert len(ticket_001["acceptance_criteria"]) == 3
+        assert ticket_001["dependencies"] == []
 
         # Check dependencies
         ticket_002 = service.get_ticket("test_project", "002")
-        assert "001" in ticket_002['dependencies']
+        assert "001" in ticket_002["dependencies"]
 
     def test_export_to_markdown(self, service, sample_markdown, tmp_path):
         """Test exporting tickets to markdown."""
@@ -125,17 +125,19 @@ class TestTicketDatabaseService:
 
         # Verify status was updated
         ticket = service.get_ticket("test_project", "001")
-        assert ticket['status'] == "IN_PROGRESS"
+        assert ticket["status"] == "IN_PROGRESS"
 
         # Update to DONE with criteria update
-        success = service.update_ticket_status("test_project", "001", "DONE", update_criteria=True)
+        success = service.update_ticket_status(
+            "test_project", "001", "DONE", update_criteria=True
+        )
         assert success
 
         ticket = service.get_ticket("test_project", "001")
-        assert ticket['status'] == "DONE"
-        assert ticket['completed']
+        assert ticket["status"] == "DONE"
+        assert ticket["completed"]
         # Check that criteria are marked as completed
-        for criterion in ticket['acceptance_criteria']:
+        for criterion in ticket["acceptance_criteria"]:
             assert criterion.startswith("✅")
 
     def test_add_ticket_artifact(self, service, sample_markdown):
@@ -145,20 +147,22 @@ class TestTicketDatabaseService:
 
         # Add artifact
         success = service.add_ticket_artifact(
-            "test_project", "001",
-            "schema.sql", "file",
+            "test_project",
+            "001",
+            "schema.sql",
+            "file",
             path="/db/schema.sql",
             content="CREATE TABLE users...;",
-            metadata={"size": 1024}
+            metadata={"size": 1024},
         )
         assert success
 
         # Verify artifact was added
         ticket = service.get_ticket("test_project", "001")
-        assert 'artifacts' in ticket
-        assert len(ticket['artifacts']) == 1
-        assert ticket['artifacts'][0]['name'] == "schema.sql"
-        assert ticket['artifacts'][0]['type'] == "file"
+        assert "artifacts" in ticket
+        assert len(ticket["artifacts"]) == 1
+        assert ticket["artifacts"][0]["name"] == "schema.sql"
+        assert ticket["artifacts"][0]["type"] == "file"
 
     def test_dependency_graph(self, service, sample_markdown):
         """Test building dependency graphs."""
@@ -185,7 +189,9 @@ class TestTicketDatabaseService:
         """Test project creation and retrieval."""
         with db_manager.get_session() as session:
             # Create new project
-            project1 = service.get_or_create_project(session, "project1", "/path/to/project1")
+            project1 = service.get_or_create_project(
+                session, "project1", "/path/to/project1"
+            )
             assert project1.name == "project1"
             assert project1.repository_url == "/path/to/project1"
 
@@ -198,7 +204,8 @@ class TestTicketDatabaseService:
         # Create markdown with many tickets
         lines = ["# Project Tickets\n"]
         for i in range(100):
-            lines.append(f"""
+            lines.append(
+                f"""
 ## Ticket {i:03d}: Task {i}
 **Status:** TODO
 **Model:** balanced
@@ -209,10 +216,11 @@ class TestTicketDatabaseService:
 **Acceptance Criteria:**
 - [ ] Criterion 1
 - [ ] Criterion 2
-""")
+"""
+            )
 
         tickets_path = tmp_path / "large_tickets.md"
-        tickets_path.write_text('\n'.join(lines))
+        tickets_path.write_text("\n".join(lines))
 
         # Measure import time
         start = time.time()
@@ -251,6 +259,7 @@ class TestTicketDatabaseService:
         # Verify no duplicate dependencies
         with service.db_manager.get_session() as session:
             from hydra.dashboard.database import TicketDependency
+
             dep_count = session.query(TicketDependency).count()
             assert dep_count == 2  # Only 2 dependencies (002->001, 003->002)
 
@@ -261,16 +270,12 @@ class TestTicketDatabaseService:
 
         # Add artifact
         service.add_ticket_artifact(
-            "test_project", "001",
-            "config.json", "config",
-            content='{"version": 1}'
+            "test_project", "001", "config.json", "config", content='{"version": 1}'
         )
 
         # Update same artifact
         service.add_ticket_artifact(
-            "test_project", "001",
-            "config.json", "config",
-            content='{"version": 2}'
+            "test_project", "001", "config.json", "config", content='{"version": 2}'
         )
 
         # Verify only one artifact exists with updated content
@@ -278,15 +283,17 @@ class TestTicketDatabaseService:
             from hydra.dashboard.database import TicketArtifact
 
             project = session.query(Project).filter_by(name="test_project").first()
-            ticket = session.query(Ticket).filter_by(
-                project_id=project.id,
-                ticket_number="001"
-            ).first()
+            ticket = (
+                session.query(Ticket)
+                .filter_by(project_id=project.id, ticket_number="001")
+                .first()
+            )
 
-            artifacts = session.query(TicketArtifact).filter_by(
-                ticket_id=ticket.id,
-                name="config.json"
-            ).all()
+            artifacts = (
+                session.query(TicketArtifact)
+                .filter_by(ticket_id=ticket.id, name="config.json")
+                .all()
+            )
 
             assert len(artifacts) == 1
             assert artifacts[0].content == '{"version": 2}'
@@ -324,8 +331,8 @@ class TestTicketCompatibility:
 
         ticket = parse_ticket_compat(sample_markdown, "001")
         assert ticket is not None
-        assert ticket['title'] == "Test Task"
-        assert ticket['status'] == "TODO"
+        assert ticket["title"] == "Test Task"
+        assert ticket["status"] == "TODO"
 
     def test_sync_operations(self, sample_markdown, monkeypatch):
         """Test sync between markdown and database."""

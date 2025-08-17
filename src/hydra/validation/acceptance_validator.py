@@ -42,7 +42,10 @@ def extract_required_files_from_criteria(acceptance_criteria: List[str]) -> List
                 # Clean up the file path
                 file_path = match.strip()
                 # Skip if it's a generic pattern
-                if not any(skip in file_path.lower() for skip in ['example', 'sample', 'template']):
+                if not any(
+                    skip in file_path.lower()
+                    for skip in ["example", "sample", "template"]
+                ):
                     required_files.append(file_path)
 
     # Remove duplicates while preserving order
@@ -57,9 +60,7 @@ def extract_required_files_from_criteria(acceptance_criteria: List[str]) -> List
 
 
 def validate_files_created(
-    project_dir: str,
-    required_files: List[str],
-    check_common_locations: bool = True
+    project_dir: str, required_files: List[str], check_common_locations: bool = True
 ) -> Tuple[List[str], List[str]]:
     """Validate that required files were created.
 
@@ -76,7 +77,15 @@ def validate_files_created(
     missing_files = []
 
     # Common locations where files might be created
-    common_prefixes = ['', 'src/', 'src/core/', 'src/utils/', 'src/lib/', 'lib/', 'utils/']
+    common_prefixes = [
+        "",
+        "src/",
+        "src/core/",
+        "src/utils/",
+        "src/lib/",
+        "lib/",
+        "utils/",
+    ]
 
     for file_path in required_files:
         file_found = False
@@ -103,9 +112,7 @@ def validate_files_created(
 
 
 def validate_ticket_completion(
-    project_dir: str,
-    ticket: Dict,
-    verbose: bool = True
+    project_dir: str, ticket: Dict, verbose: bool = True
 ) -> Tuple[bool, str]:
     """Validate that a ticket's acceptance criteria were met.
 
@@ -120,7 +127,7 @@ def validate_ticket_completion(
     """
     # Extract required files from acceptance criteria
     required_files = extract_required_files_from_criteria(
-        ticket.get('acceptance_criteria', [])
+        ticket.get("acceptance_criteria", [])
     )
 
     if verbose and required_files:
@@ -130,9 +137,7 @@ def validate_ticket_completion(
 
     # Validate files were created
     found_files, missing_files = validate_files_created(
-        project_dir,
-        required_files,
-        check_common_locations=True
+        project_dir, required_files, check_common_locations=True
     )
 
     if missing_files:
@@ -141,7 +146,9 @@ def validate_ticket_completion(
             for f in missing_files:
                 print(f"   ❌ {f}")
 
-        message = f"Missing {len(missing_files)} required files: {', '.join(missing_files)}"
+        message = (
+            f"Missing {len(missing_files)} required files: {', '.join(missing_files)}"
+        )
         return False, message
 
     if verbose and found_files:
@@ -166,11 +173,13 @@ def pre_execution_check(ticket: Dict) -> List[str]:
 
     # Extract required files
     required_files = extract_required_files_from_criteria(
-        ticket.get('acceptance_criteria', [])
+        ticket.get("acceptance_criteria", [])
     )
 
     if required_files:
-        warnings.append(f"⚠️  This ticket requires creating {len(required_files)} new files:")
+        warnings.append(
+            f"⚠️  This ticket requires creating {len(required_files)} new files:"
+        )
         for f in required_files:
             warnings.append(f"   📄 {f}")
         warnings.append("   Make sure Claude creates ALL these files!")

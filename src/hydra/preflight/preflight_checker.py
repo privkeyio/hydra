@@ -150,9 +150,7 @@ class PreflightChecker:
             self.validation_report.add_check(check)
             return
 
-        result = self.dependency_validator.validate_ticket_dependencies(
-            tickets_path
-        )
+        result = self.dependency_validator.validate_ticket_dependencies(tickets_path)
 
         if not result.valid:
             check.passed = False
@@ -242,9 +240,7 @@ class PreflightChecker:
         if missing_files:
             check.passed = False
             check.message = f"Found {len(missing_files)} missing input files"
-            check.details.append(
-                "These files must exist before execution can begin"
-            )
+            check.details.append("These files must exist before execution can begin")
         else:
             check.passed = True
             check.message = f"All {len(checked_files)} required input files exist"
@@ -287,7 +283,7 @@ class PreflightChecker:
         for model in required_models:
             if model not in self.AVAILABLE_MODELS:
                 invalid_models.append(model)
-                tickets_str = ', '.join(model_usage[model])
+                tickets_str = ", ".join(model_usage[model])
                 check.details.append(
                     f"Unknown model '{model}' used by tickets: {tickets_str}"
                 )
@@ -302,9 +298,7 @@ class PreflightChecker:
             check.passed = True
             check.message = f"All {len(required_models)} required models are valid"
             for model, tickets in model_usage.items():
-                check.details.append(
-                    f"Model '{model}': {len(tickets)} tickets"
-                )
+                check.details.append(f"Model '{model}': {len(tickets)} tickets")
 
         self.validation_report.add_check(check)
 
@@ -375,7 +369,7 @@ class PreflightChecker:
             for file_path, writers in group_files.items():
                 if len(writers) > 1:
                     conflicts.append((file_path, writers))
-                    writers_str = ', '.join(writers)
+                    writers_str = ", ".join(writers)
                     msg = f"Conflict: '{file_path}' written by parallel tickets: "
                     check.details.append(f"{msg}{writers_str}")
 
@@ -443,22 +437,22 @@ class PreflightChecker:
             self.validation_report.add_check(check)
             return
 
-        result = self.dependency_validator.validate_ticket_dependencies(
-            tickets_path
-        )
+        result = self.dependency_validator.validate_ticket_dependencies(tickets_path)
 
         if not result.topological_order:
             # Check if there are any actual dependency issues
-            if result.issues and any(issue.severity.value == 'invalid' for issue in result.issues):
+            if result.issues and any(
+                issue.severity.value == "invalid" for issue in result.issues
+            ):
                 check.passed = False
                 check.message = "Cannot determine execution order"
-                check.details.append(
-                    "Fix dependency issues first before execution"
-                )
+                check.details.append("Fix dependency issues first before execution")
             else:
                 # No critical issues, just no dependencies to order
                 check.passed = True
-                check.message = "No dependencies to validate - tickets can execute independently"
+                check.message = (
+                    "No dependencies to validate - tickets can execute independently"
+                )
         else:
             check.passed = True
             check.message = "Valid execution order determined"
@@ -478,9 +472,7 @@ class PreflightChecker:
                             f"  Phase {i}: {', '.join(group)} (parallel)"
                         )
                     else:
-                        check.details.append(
-                            f"  Phase {i}: {group[0]} (sequential)"
-                        )
+                        check.details.append(f"  Phase {i}: {group[0]} (sequential)")
 
                 # Estimate time savings from parallelization
                 parallel_ticket_count = sum(
@@ -559,9 +551,7 @@ class PreflightChecker:
             check.message = "Resource check completed (unable to verify disk space)"
 
         # Add complexity summary
-        check.details.append(
-            f"Total execution complexity: {total_complexity:.1f}"
-        )
+        check.details.append(f"Total execution complexity: {total_complexity:.1f}")
         if large_tickets:
             check.details.append(
                 f"Large complexity tickets: {', '.join(large_tickets[:5])}"
@@ -632,9 +622,7 @@ class PreflightChecker:
             check.message = (
                 f"Found structure issues in {len(set(structure_issues))} tickets"
             )
-            check.details.append(
-                "Consider adding missing fields for better execution"
-            )
+            check.details.append("Consider adding missing fields for better execution")
         else:
             check.passed = True
             check.message = f"All {len(tickets)} tickets have valid structure"
@@ -701,8 +689,9 @@ class PreflightChecker:
 
             # Parse list items
             if line_stripped.startswith("- "):
-                self._parse_list_item(line_stripped[2:].strip(),
-                                     current_section, ticket_data)
+                self._parse_list_item(
+                    line_stripped[2:].strip(), current_section, ticket_data
+                )
 
             # Handle continuation of description
             elif current_section == "description" and line_stripped:
@@ -724,9 +713,7 @@ class PreflightChecker:
             "status": "",
         }
 
-    def _parse_section_header(
-        self, line: str, ticket_data: Dict
-    ) -> Optional[str]:
+    def _parse_section_header(self, line: str, ticket_data: Dict) -> Optional[str]:
         """Parse section headers and return the current section."""
         if not line.startswith("**"):
             return None
@@ -796,8 +783,7 @@ class PreflightChecker:
 
         """
         return (
-            self.validation_report.has_warnings()
-            or self.validation_report.has_errors()
+            self.validation_report.has_warnings() or self.validation_report.has_errors()
         )
 
     def get_summary(self) -> str:
@@ -826,4 +812,3 @@ class PreflightChecker:
 
         """
         return self.validation_report.get_critical_issues()
-

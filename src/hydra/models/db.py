@@ -103,7 +103,7 @@ Index(
     "ix_usage_cost_timestamp",
     Usage.cost,
     Usage.timestamp,
-    postgresql_where=Usage.cost.isnot(None)
+    postgresql_where=Usage.cost.isnot(None),
 )
 Index("ix_api_keys_active", APIKey.is_active, APIKey.key)
 
@@ -123,11 +123,15 @@ class DatabaseManager:
             pool_pre_ping=True,
             pool_recycle=3600,
             echo=os.getenv("SQL_DEBUG", "false").lower() == "true",
-            connect_args={
-                "connect_timeout": 10,
-                "application_name": "hydra_api",
-                "options": "-c statement_timeout=30000"  # 30 second statement timeout
-            } if "postgresql" in database_url else {}
+            connect_args=(
+                {
+                    "connect_timeout": 10,
+                    "application_name": "hydra_api",
+                    "options": "-c statement_timeout=30000",  # 30 second statement timeout
+                }
+                if "postgresql" in database_url
+                else {}
+            ),
         )
 
         self.SessionLocal = sessionmaker(

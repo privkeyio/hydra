@@ -63,7 +63,9 @@ class FileSandbox:
             self.sandbox_root = Path(sandbox_root).resolve()
             self.sandbox_root.mkdir(parents=True, exist_ok=True)
         else:
-            self.sandbox_root = Path(tempfile.mkdtemp(prefix="hydra_sandbox_")).resolve()
+            self.sandbox_root = Path(
+                tempfile.mkdtemp(prefix="hydra_sandbox_")
+            ).resolve()
 
         self.enable_backups = enable_backups
         self.max_file_size = max_file_size
@@ -129,7 +131,10 @@ class FileSandbox:
             try:
                 file_size = path.stat().st_size
                 if file_size > self.max_file_size:
-                    return False, f"File size ({file_size} bytes) exceeds maximum ({self.max_file_size} bytes)"
+                    return (
+                        False,
+                        f"File size ({file_size} bytes) exceeds maximum ({self.max_file_size} bytes)",
+                    )
             except Exception as e:
                 return False, f"Error checking file size: {e}"
 
@@ -208,7 +213,9 @@ class FileSandbox:
 
         try:
             content = file_path.read_text()
-            logger.debug(f"Successfully read {len(content)} characters from {file_path}")
+            logger.debug(
+                f"Successfully read {len(content)} characters from {file_path}"
+            )
             return content, None
         except Exception as e:
             error_msg = f"Error reading file {file_path}: {e}"
@@ -216,10 +223,7 @@ class FileSandbox:
             return None, error_msg
 
     def write_file(
-        self,
-        file_path: Path,
-        content: str,
-        create_dirs: bool = True
+        self, file_path: Path, content: str, create_dirs: bool = True
     ) -> Tuple[bool, Optional[str]]:
         """Safely write to a file.
 
@@ -325,9 +329,7 @@ class FileSandbox:
             return False, error_msg
 
     def move_file(
-        self,
-        source_path: Path,
-        target_path: Path
+        self, source_path: Path, target_path: Path
     ) -> Tuple[bool, Optional[str]]:
         """Safely move a file.
 
@@ -402,18 +404,25 @@ class FileSandbox:
                     # Delete the created file only if it wasn't subsequently modified
                     # Check if there are any modify operations for this file after this create
                     has_subsequent_modify = any(
-                        op.operation_type == "modify" and op.source_path == operation.source_path
-                        for op in self.operations[self.operations.index(operation) + 1:]
+                        op.operation_type == "modify"
+                        and op.source_path == operation.source_path
+                        for op in self.operations[
+                            self.operations.index(operation) + 1 :
+                        ]
                     )
                     if not has_subsequent_modify and operation.source_path.exists():
                         operation.source_path.unlink()
-                        logger.info(f"Rolled back file creation: {operation.source_path}")
+                        logger.info(
+                            f"Rolled back file creation: {operation.source_path}"
+                        )
 
                 elif operation.operation_type == "modify":
                     # Restore from backup
                     if operation.backup_path and operation.backup_path.exists():
                         shutil.copy2(operation.backup_path, operation.source_path)
-                        logger.info(f"Restored file from backup: {operation.source_path}")
+                        logger.info(
+                            f"Restored file from backup: {operation.source_path}"
+                        )
 
                 elif operation.operation_type == "delete":
                     # Restore from backup
@@ -424,7 +433,9 @@ class FileSandbox:
                 elif operation.operation_type == "move":
                     # Move back to original location
                     if operation.target_path and operation.target_path.exists():
-                        shutil.move(str(operation.target_path), str(operation.source_path))
+                        shutil.move(
+                            str(operation.target_path), str(operation.source_path)
+                        )
                         logger.info(f"Rolled back move: {operation.source_path}")
                     # Restore original target if it was overwritten
                     if operation.backup_path and operation.backup_path.exists():

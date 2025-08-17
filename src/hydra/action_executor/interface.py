@@ -245,9 +245,7 @@ class CompositeExecutor(ActionExecutor):
         super().__init__(context)
         self.executors = executors or {}
 
-    def register_executor(
-        self, action_type: type, executor: ActionExecutor
-    ) -> None:
+    def register_executor(self, action_type: type, executor: ActionExecutor) -> None:
         """Register an executor for a specific action type.
 
         Args:
@@ -306,4 +304,3 @@ class CompositeExecutor(ActionExecutor):
         executor = self.executors.get(result.action.type)
         if executor:
             executor._perform_rollback(result)
-

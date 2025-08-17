@@ -54,22 +54,36 @@ class SecurityPolicy(ABC):
 class GitSafetyPolicy(SecurityPolicy):
     """Policy for git operation safety."""
 
-    dangerous_operations: Set[str] = field(default_factory=lambda: {
-        'commit', 'push', 'merge', 'rebase', 'reset', 'checkout',
-        'branch -d', 'branch -D', 'stash drop', 'clean -f',
-        'rm --cached', 'filter-branch', 'reflog expire'
-    })
+    dangerous_operations: Set[str] = field(
+        default_factory=lambda: {
+            "commit",
+            "push",
+            "merge",
+            "rebase",
+            "reset",
+            "checkout",
+            "branch -d",
+            "branch -D",
+            "stash drop",
+            "clean -f",
+            "rm --cached",
+            "filter-branch",
+            "reflog expire",
+        }
+    )
 
-    protected_branches: Set[str] = field(default_factory=lambda: {
-        'main', 'master', 'production', 'prod', 'release'
-    })
+    protected_branches: Set[str] = field(
+        default_factory=lambda: {"main", "master", "production", "prod", "release"}
+    )
 
-    require_approval_patterns: List[str] = field(default_factory=lambda: [
-        r'git\s+(push|merge)\s.*origin',
-        r'git\s+reset\s+--hard',
-        r'git\s+clean\s+-[fF]',
-        r'git\s+rm\s+--cached'
-    ])
+    require_approval_patterns: List[str] = field(
+        default_factory=lambda: [
+            r"git\s+(push|merge)\s.*origin",
+            r"git\s+reset\s+--hard",
+            r"git\s+clean\s+-[fF]",
+            r"git\s+rm\s+--cached",
+        ]
+    )
 
     def evaluate(self, operation: str, context: Dict[str, Any]) -> OperationResult:
         if not self.enabled:
@@ -78,7 +92,7 @@ class GitSafetyPolicy(SecurityPolicy):
         cmd = operation.lower().strip()
 
         # Check if it's a git command
-        if not cmd.startswith('git '):
+        if not cmd.startswith("git "):
             return OperationResult.ALLOW
 
         # Extract git subcommand
@@ -86,7 +100,7 @@ class GitSafetyPolicy(SecurityPolicy):
         if len(git_parts) < 2:
             return OperationResult.ALLOW
 
-        subcommand = ' '.join(git_parts[1:3]) if len(git_parts) > 2 else git_parts[1]
+        subcommand = " ".join(git_parts[1:3]) if len(git_parts) > 2 else git_parts[1]
 
         # Check dangerous operations
         dangerous_found = any(
@@ -97,7 +111,7 @@ class GitSafetyPolicy(SecurityPolicy):
                 return OperationResult.DENY
 
             # Check if targeting protected branch
-            branch = context.get('branch', '')
+            branch = context.get("branch", "")
             if branch in self.protected_branches:
                 return OperationResult.REQUIRE_APPROVAL
 
@@ -111,11 +125,11 @@ class GitSafetyPolicy(SecurityPolicy):
     def get_risk_level(self, operation: str, context: Dict[str, Any]) -> RiskLevel:
         cmd = operation.lower().strip()
 
-        if 'push' in cmd and 'origin' in cmd:
+        if "push" in cmd and "origin" in cmd:
             return RiskLevel.CRITICAL
-        if any(op in cmd for op in ['reset --hard', 'clean -f', 'rm --cached']):
+        if any(op in cmd for op in ["reset --hard", "clean -f", "rm --cached"]):
             return RiskLevel.HIGH
-        if any(op in cmd for op in ['commit', 'merge', 'rebase']):
+        if any(op in cmd for op in ["commit", "merge", "rebase"]):
             return RiskLevel.MEDIUM
 
         return RiskLevel.LOW
@@ -126,24 +140,50 @@ class FileSystemSandbox(SecurityPolicy):
     """File system access control policy."""
 
     allowed_directories: Set[str] = field(default_factory=set)
-    forbidden_directories: Set[str] = field(default_factory=lambda: {
-        '/etc', '/usr/bin', '/bin', '/sbin', '/root', '/boot',
-        '/sys', '/proc', '/dev', '/var/log', '/tmp/sensitive'
-    })
+    forbidden_directories: Set[str] = field(
+        default_factory=lambda: {
+            "/etc",
+            "/usr/bin",
+            "/bin",
+            "/sbin",
+            "/root",
+            "/boot",
+            "/sys",
+            "/proc",
+            "/dev",
+            "/var/log",
+            "/tmp/sensitive",
+        }
+    )
 
-    allowed_extensions: Set[str] = field(default_factory=lambda: {
-        '.py', '.js', '.ts', '.json', '.yaml', '.yml', '.md',
-        '.txt', '.csv', '.log', '.conf', '.cfg', '.ini'
-    })
+    allowed_extensions: Set[str] = field(
+        default_factory=lambda: {
+            ".py",
+            ".js",
+            ".ts",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".md",
+            ".txt",
+            ".csv",
+            ".log",
+            ".conf",
+            ".cfg",
+            ".ini",
+        }
+    )
 
-    forbidden_patterns: List[str] = field(default_factory=lambda: [
-        r'.*\.ssh/.*',
-        r'.*\.aws/.*',
-        r'.*\.env$',
-        r'.*password.*',
-        r'.*secret.*',
-        r'.*private.*key.*'
-    ])
+    forbidden_patterns: List[str] = field(
+        default_factory=lambda: [
+            r".*\.ssh/.*",
+            r".*\.aws/.*",
+            r".*\.env$",
+            r".*password.*",
+            r".*secret.*",
+            r".*private.*key.*",
+        ]
+    )
 
     def __post_init__(self):
         """Initialize with default allowed directories."""
@@ -152,18 +192,18 @@ class FileSystemSandbox(SecurityPolicy):
             cwd = os.getcwd()
             self.allowed_directories = {
                 cwd,
-                os.path.join(cwd, 'src'),
-                os.path.join(cwd, 'tests'),
-                os.path.join(cwd, 'docs'),
-                '/tmp/hydra',
-                os.path.expanduser('~/.hydra')
+                os.path.join(cwd, "src"),
+                os.path.join(cwd, "tests"),
+                os.path.join(cwd, "docs"),
+                "/tmp/hydra",
+                os.path.expanduser("~/.hydra"),
             }
 
     def evaluate(self, operation: str, context: Dict[str, Any]) -> OperationResult:
         if not self.enabled:
             return OperationResult.ALLOW
 
-        file_path = context.get('path', '')
+        file_path = context.get("path", "")
         if not file_path:
             return OperationResult.ALLOW
 
@@ -173,7 +213,8 @@ class FileSystemSandbox(SecurityPolicy):
         for forbidden_dir in self.forbidden_directories:
             if abs_path.startswith(forbidden_dir):
                 return (
-                    OperationResult.DENY if self.strict_mode
+                    OperationResult.DENY
+                    if self.strict_mode
                     else OperationResult.REQUIRE_APPROVAL
                 )
 
@@ -181,7 +222,8 @@ class FileSystemSandbox(SecurityPolicy):
         for pattern in self.forbidden_patterns:
             if re.search(pattern, abs_path, re.IGNORECASE):
                 return (
-                    OperationResult.DENY if self.strict_mode
+                    OperationResult.DENY
+                    if self.strict_mode
                     else OperationResult.REQUIRE_APPROVAL
                 )
 
@@ -195,7 +237,7 @@ class FileSystemSandbox(SecurityPolicy):
                 return OperationResult.REQUIRE_APPROVAL
 
         # Check file extension for write operations
-        if context.get('operation_type') in ['write', 'modify', 'delete']:
+        if context.get("operation_type") in ["write", "modify", "delete"]:
             ext = Path(file_path).suffix.lower()
             if ext and ext not in self.allowed_extensions:
                 return OperationResult.REQUIRE_APPROVAL
@@ -203,11 +245,11 @@ class FileSystemSandbox(SecurityPolicy):
         return OperationResult.ALLOW
 
     def get_risk_level(self, operation: str, context: Dict[str, Any]) -> RiskLevel:
-        file_path = context.get('path', '')
+        file_path = context.get("path", "")
         abs_path = os.path.abspath(file_path)
 
         # Check critical system paths
-        critical_paths = ['/etc', '/usr/bin', '/bin']
+        critical_paths = ["/etc", "/usr/bin", "/bin"]
         if any(abs_path.startswith(critical) for critical in critical_paths):
             return RiskLevel.CRITICAL
 
@@ -217,8 +259,8 @@ class FileSystemSandbox(SecurityPolicy):
                 return RiskLevel.HIGH
 
         # Check operation type
-        op_type = context.get('operation_type', '')
-        if op_type in ['delete', 'modify']:
+        op_type = context.get("operation_type", "")
+        if op_type in ["delete", "modify"]:
             return RiskLevel.MEDIUM
 
         return RiskLevel.LOW
@@ -228,39 +270,42 @@ class FileSystemSandbox(SecurityPolicy):
 class NetworkAccessControl(SecurityPolicy):
     """Network access control policy."""
 
-    allowed_domains: Set[str] = field(default_factory=lambda: {
-        'api.anthropic.com',
-        'api.openai.com',
-        'huggingface.co',
-        'github.com',
-        'pypi.org',
-        'npmjs.com'
-    })
+    allowed_domains: Set[str] = field(
+        default_factory=lambda: {
+            "api.anthropic.com",
+            "api.openai.com",
+            "huggingface.co",
+            "github.com",
+            "pypi.org",
+            "npmjs.com",
+        }
+    )
 
-    blocked_domains: Set[str] = field(default_factory=lambda: {
-        'malware-site.com',
-        'phishing-domain.net'
-    })
+    blocked_domains: Set[str] = field(
+        default_factory=lambda: {"malware-site.com", "phishing-domain.net"}
+    )
 
     allowed_ports: Set[int] = field(default_factory=lambda: {80, 443, 8000, 8080, 3000})
 
-    require_approval_patterns: List[str] = field(default_factory=lambda: [
-        r'.*\.onion$',
-        r'.*localhost.*',
-        r'.*127\.0\.0\.1.*',
-        r'.*internal.*'
-    ])
+    require_approval_patterns: List[str] = field(
+        default_factory=lambda: [
+            r".*\.onion$",
+            r".*localhost.*",
+            r".*127\.0\.0\.1.*",
+            r".*internal.*",
+        ]
+    )
 
     def evaluate(self, operation: str, context: Dict[str, Any]) -> OperationResult:
         if not self.enabled:
             return OperationResult.ALLOW
 
-        url = context.get('url', '')
+        url = context.get("url", "")
         if not url:
             return OperationResult.ALLOW
 
         parsed = urlparse(url)
-        domain = parsed.hostname or ''
+        domain = parsed.hostname or ""
         port = parsed.port
 
         # Check blocked domains
@@ -287,14 +332,14 @@ class NetworkAccessControl(SecurityPolicy):
         return OperationResult.ALLOW
 
     def get_risk_level(self, operation: str, context: Dict[str, Any]) -> RiskLevel:
-        url = context.get('url', '')
+        url = context.get("url", "")
 
-        suspicious_patterns = ['.onion', 'localhost', '127.0.0.1']
+        suspicious_patterns = [".onion", "localhost", "127.0.0.1"]
         if any(pattern in url.lower() for pattern in suspicious_patterns):
             return RiskLevel.HIGH
 
         parsed = urlparse(url)
-        if parsed.scheme != 'https':
+        if parsed.scheme != "https":
             return RiskLevel.MEDIUM
 
         return RiskLevel.LOW
@@ -304,30 +349,40 @@ class NetworkAccessControl(SecurityPolicy):
 class CodeExecutionValidator(SecurityPolicy):
     """Validator for generated code execution."""
 
-    dangerous_imports: Set[str] = field(default_factory=lambda: {
-        'os.system', 'subprocess.call', 'eval', 'exec',
-        'compile', '__import__', 'pickle.loads', 'marshal.loads'
-    })
+    dangerous_imports: Set[str] = field(
+        default_factory=lambda: {
+            "os.system",
+            "subprocess.call",
+            "eval",
+            "exec",
+            "compile",
+            "__import__",
+            "pickle.loads",
+            "marshal.loads",
+        }
+    )
 
-    dangerous_functions: Set[str] = field(default_factory=lambda: {
-        'system', 'popen', 'spawn', 'fork', 'execv', 'execve'
-    })
+    dangerous_functions: Set[str] = field(
+        default_factory=lambda: {"system", "popen", "spawn", "fork", "execv", "execve"}
+    )
 
-    suspicious_patterns: List[str] = field(default_factory=lambda: [
-        r'rm\s+-rf\s+/',
-        r'sudo\s+',
-        r'passwd\s+',
-        r'chmod\s+777',
-        r'curl.*\|.*sh',
-        r'wget.*\|.*sh',
-        r'base64.*decode'
-    ])
+    suspicious_patterns: List[str] = field(
+        default_factory=lambda: [
+            r"rm\s+-rf\s+/",
+            r"sudo\s+",
+            r"passwd\s+",
+            r"chmod\s+777",
+            r"curl.*\|.*sh",
+            r"wget.*\|.*sh",
+            r"base64.*decode",
+        ]
+    )
 
     def evaluate(self, operation: str, context: Dict[str, Any]) -> OperationResult:
         if not self.enabled:
             return OperationResult.ALLOW
 
-        code = context.get('code', '')
+        code = context.get("code", "")
         if not code:
             return OperationResult.ALLOW
 
@@ -340,7 +395,7 @@ class CodeExecutionValidator(SecurityPolicy):
 
         # Check dangerous functions
         for func in self.dangerous_functions:
-            if re.search(rf'\b{func}\s*\(', code):
+            if re.search(rf"\b{func}\s*\(", code):
                 return OperationResult.REQUIRE_APPROVAL
 
         # Check suspicious patterns
@@ -351,12 +406,12 @@ class CodeExecutionValidator(SecurityPolicy):
         return OperationResult.ALLOW
 
     def get_risk_level(self, operation: str, context: Dict[str, Any]) -> RiskLevel:
-        code = context.get('code', '')
+        code = context.get("code", "")
 
         if any(dangerous in code for dangerous in self.dangerous_imports):
             return RiskLevel.CRITICAL
 
-        if any(re.search(rf'\b{func}\s*\(', code) for func in self.dangerous_functions):
+        if any(re.search(rf"\b{func}\s*\(", code) for func in self.dangerous_functions):
             return RiskLevel.HIGH
 
         suspicious_found = any(
@@ -383,10 +438,7 @@ class ApprovalWorkflow:
         self.lock = threading.Lock()
 
     def request_approval(
-        self,
-        operation: str,
-        risk_level: RiskLevel,
-        context: Dict[str, Any]
+        self, operation: str, risk_level: RiskLevel, context: Dict[str, Any]
     ) -> bool:
         """Request approval for an operation."""
         if risk_level == RiskLevel.LOW and self.auto_approve_low_risk:
@@ -396,10 +448,10 @@ class ApprovalWorkflow:
 
         with self.lock:
             self.pending_approvals[approval_id] = {
-                'operation': operation,
-                'risk_level': risk_level,
-                'context': context,
-                'timestamp': time.time()
+                "operation": operation,
+                "risk_level": risk_level,
+                "context": context,
+                "timestamp": time.time(),
             }
 
         try:
@@ -413,13 +465,13 @@ class ApprovalWorkflow:
         approval_id: str,
         operation: str,
         risk_level: RiskLevel,
-        context: Dict[str, Any]
+        context: Dict[str, Any],
     ) -> bool:
         """Provide default denial for operations requiring approval."""
         warnings.warn(
             f"Operation requires approval but no callback configured: {operation}",
             UserWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         return False
 
@@ -433,7 +485,7 @@ class SecurityManager:
         fs_policy: Optional[FileSystemSandbox] = None,
         network_policy: Optional[NetworkAccessControl] = None,
         code_policy: Optional[CodeExecutionValidator] = None,
-        approval_workflow: Optional[ApprovalWorkflow] = None
+        approval_workflow: Optional[ApprovalWorkflow] = None,
     ):
         self.git_policy = git_policy or GitSafetyPolicy()
         self.fs_policy = fs_policy or FileSystemSandbox()
@@ -442,10 +494,10 @@ class SecurityManager:
         self.approval_workflow = approval_workflow or ApprovalWorkflow()
 
         self.policies: Dict[str, SecurityPolicy] = {
-            'git': self.git_policy,
-            'filesystem': self.fs_policy,
-            'network': self.network_policy,
-            'code': self.code_policy
+            "git": self.git_policy,
+            "filesystem": self.fs_policy,
+            "network": self.network_policy,
+            "code": self.code_policy,
         }
 
         self.audit_log: List[Dict[str, Any]] = []
@@ -455,7 +507,7 @@ class SecurityManager:
         self,
         operation_type: str,
         operation: str,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[bool, str]:
         """Check if an operation is allowed."""
         context = context or {}
@@ -498,14 +550,12 @@ class SecurityManager:
         return False, "Unknown result"
 
     def safe_subprocess_run(
-        self,
-        cmd: Union[str, List[str]],
-        **kwargs
+        self, cmd: Union[str, List[str]], **kwargs
     ) -> subprocess.CompletedProcess:
         """Safe subprocess execution with security checks."""
-        cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd
+        cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
 
-        operation_type = 'git' if 'git' in cmd_str else 'code'
+        operation_type = "git" if "git" in cmd_str else "code"
         allowed, reason = self.check_operation(operation_type, cmd_str)
         if not allowed:
             raise SecurityError(f"Subprocess execution denied: {reason}")
@@ -513,46 +563,25 @@ class SecurityManager:
         return subprocess.run(cmd, **kwargs)
 
     def safe_file_operation(
-        self,
-        operation_type: str,
-        file_path: str,
-        **kwargs
+        self, operation_type: str, file_path: str, **kwargs
     ) -> Tuple[bool, str]:
         """Safe file operation with security checks."""
-        context = {
-            'path': file_path,
-            'operation_type': operation_type,
-            **kwargs
-        }
+        context = {"path": file_path, "operation_type": operation_type, **kwargs}
 
         operation_desc = f"{operation_type} {file_path}"
-        return self.check_operation('filesystem', operation_desc, context)
+        return self.check_operation("filesystem", operation_desc, context)
 
-    def safe_network_request(
-        self,
-        url: str,
-        **kwargs
-    ) -> Tuple[bool, str]:
+    def safe_network_request(self, url: str, **kwargs) -> Tuple[bool, str]:
         """Safe network request with security checks."""
-        context = {
-            'url': url,
-            **kwargs
-        }
+        context = {"url": url, **kwargs}
 
-        return self.check_operation('network', f"request {url}", context)
+        return self.check_operation("network", f"request {url}", context)
 
-    def validate_code(
-        self,
-        code: str,
-        **kwargs
-    ) -> Tuple[bool, str]:
+    def validate_code(self, code: str, **kwargs) -> Tuple[bool, str]:
         """Validate generated code for safety."""
-        context = {
-            'code': code,
-            **kwargs
-        }
+        context = {"code": code, **kwargs}
 
-        return self.check_operation('code', "execute code", context)
+        return self.check_operation("code", "execute code", context)
 
     def _log_audit(
         self,
@@ -560,18 +589,20 @@ class SecurityManager:
         operation: str,
         result: OperationResult,
         risk_level: RiskLevel,
-        context: Dict[str, Any]
+        context: Dict[str, Any],
     ):
         """Log operation to audit trail."""
         with self.lock:
-            self.audit_log.append({
-                'timestamp': time.time(),
-                'operation_type': operation_type,
-                'operation': operation,
-                'result': result.value,
-                'risk_level': risk_level.value,
-                'context': context
-            })
+            self.audit_log.append(
+                {
+                    "timestamp": time.time(),
+                    "operation_type": operation_type,
+                    "operation": operation,
+                    "result": result.value,
+                    "risk_level": risk_level.value,
+                    "context": context,
+                }
+            )
 
             # Keep only recent entries
             if len(self.audit_log) > 10000:
@@ -582,11 +613,7 @@ class SecurityManager:
         with self.lock:
             return self.audit_log[-limit:] if limit > 0 else self.audit_log[:]
 
-    def configure_policy(
-        self,
-        policy_type: str,
-        **config
-    ):
+    def configure_policy(self, policy_type: str, **config):
         """Configure a security policy."""
         if policy_type not in self.policies:
             raise ValueError(f"Unknown policy type: {policy_type}")
@@ -619,4 +646,3 @@ class SecurityError(Exception):
 
 # Global security manager instance
 security_manager = SecurityManager()
-

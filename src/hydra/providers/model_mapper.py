@@ -53,7 +53,7 @@ class ModelMapper:
                     display_name="Claude 3.5 Sonnet",
                     context_window=200000,
                     max_output_tokens=8192,
-                    relative_cost=0.1
+                    relative_cost=0.1,
                 ),
                 ModelCategory.BALANCED: ModelMapping(
                     category=ModelCategory.BALANCED,
@@ -61,7 +61,7 @@ class ModelMapper:
                     display_name="Claude 3.5 Sonnet",
                     context_window=200000,
                     max_output_tokens=8192,
-                    relative_cost=0.3
+                    relative_cost=0.3,
                 ),
                 ModelCategory.SMART: ModelMapping(
                     category=ModelCategory.SMART,
@@ -69,7 +69,7 @@ class ModelMapper:
                     display_name="Claude Opus 4.1",
                     context_window=200000,
                     max_output_tokens=4096,
-                    relative_cost=1.0
+                    relative_cost=1.0,
                 ),
                 ModelCategory.CODER: ModelMapping(
                     category=ModelCategory.CODER,
@@ -77,7 +77,7 @@ class ModelMapper:
                     display_name="Claude 3.5 Sonnet",
                     context_window=200000,
                     max_output_tokens=8192,
-                    relative_cost=0.3
+                    relative_cost=0.3,
                 ),
             },
             "venice": {
@@ -87,7 +87,7 @@ class ModelMapper:
                     display_name="Llama 3.1 8B",
                     context_window=131072,
                     max_output_tokens=4096,
-                    relative_cost=0.05
+                    relative_cost=0.05,
                 ),
                 ModelCategory.BALANCED: ModelMapping(
                     category=ModelCategory.BALANCED,
@@ -95,7 +95,7 @@ class ModelMapper:
                     display_name="Llama 3.3 70B",
                     context_window=131072,
                     max_output_tokens=4096,
-                    relative_cost=0.2
+                    relative_cost=0.2,
                 ),
                 ModelCategory.SMART: ModelMapping(
                     category=ModelCategory.SMART,
@@ -103,7 +103,7 @@ class ModelMapper:
                     display_name="Qwen 2.5 Coder 32B",
                     context_window=32768,
                     max_output_tokens=4096,
-                    relative_cost=0.15
+                    relative_cost=0.15,
                 ),
                 ModelCategory.CODER: ModelMapping(
                     category=ModelCategory.CODER,
@@ -111,7 +111,7 @@ class ModelMapper:
                     display_name="Qwen 2.5 Coder 32B",
                     context_window=32768,
                     max_output_tokens=4096,
-                    relative_cost=0.15
+                    relative_cost=0.15,
                 ),
             },
             "mock": {
@@ -121,7 +121,7 @@ class ModelMapper:
                     display_name="Mock Fast Model",
                     context_window=4096,
                     max_output_tokens=2048,
-                    relative_cost=0.1
+                    relative_cost=0.1,
                 ),
                 ModelCategory.BALANCED: ModelMapping(
                     category=ModelCategory.BALANCED,
@@ -129,7 +129,7 @@ class ModelMapper:
                     display_name="Mock Balanced Model",
                     context_window=8192,
                     max_output_tokens=4096,
-                    relative_cost=0.3
+                    relative_cost=0.3,
                 ),
                 ModelCategory.SMART: ModelMapping(
                     category=ModelCategory.SMART,
@@ -137,7 +137,7 @@ class ModelMapper:
                     display_name="Mock Smart Model",
                     context_window=16384,
                     max_output_tokens=8192,
-                    relative_cost=0.8
+                    relative_cost=0.8,
                 ),
                 ModelCategory.CODER: ModelMapping(
                     category=ModelCategory.CODER,
@@ -145,7 +145,7 @@ class ModelMapper:
                     display_name="Mock Coder Model",
                     context_window=16384,
                     max_output_tokens=8192,
-                    relative_cost=0.6
+                    relative_cost=0.6,
                 ),
             },
         }
@@ -165,7 +165,6 @@ class ModelMapper:
             "claude-3-opus": ModelCategory.SMART,
             "claude-opus-4-1-20250805": ModelCategory.SMART,
             "claude-opus-4-20250514": ModelCategory.SMART,
-
             "sonnet": ModelCategory.BALANCED,
             "sonnet 4": ModelCategory.BALANCED,
             "claude-sonnet": ModelCategory.BALANCED,
@@ -174,8 +173,6 @@ class ModelMapper:
             "claude-sonnet-4-20250514": ModelCategory.BALANCED,
             "claude-3-5-sonnet-20241022": ModelCategory.BALANCED,
             "claude-3-7-sonnet-20250220": ModelCategory.BALANCED,
-
-
             # Venice model names
             "qwen-2.5-coder-32b": ModelCategory.CODER,
             "llama-3.1-8b": ModelCategory.FAST,
@@ -184,7 +181,6 @@ class ModelMapper:
             "llama-3.1-405b": ModelCategory.SMART,
             "deepseek-coder-v2-lite": ModelCategory.CODER,
             "qwen-2.5-qwq-32b": ModelCategory.SMART,
-
             # Generic aliases
             "fast": ModelCategory.FAST,
             "balanced": ModelCategory.BALANCED,
@@ -193,9 +189,7 @@ class ModelMapper:
         }
 
     def map_model(
-        self,
-        model_name: str,
-        provider: Optional[str] = None
+        self, model_name: str, provider: Optional[str] = None
     ) -> Optional[str]:
         """Map a model name to provider-specific model identifier.
 
@@ -249,9 +243,7 @@ class ModelMapper:
             pass
 
         # Default to balanced model
-        logger.warning(
-            f"Unknown model '{model_name}', defaulting to balanced"
-        )
+        logger.warning(f"Unknown model '{model_name}', defaulting to balanced")
         balanced = provider_models.get(ModelCategory.BALANCED)
         return balanced.provider_model if balanced else None
 
@@ -305,9 +297,7 @@ class ModelMapper:
         }
 
     def suggest_model_for_task(
-        self,
-        task_complexity: str,
-        provider: Optional[str] = None
+        self, task_complexity: str, provider: Optional[str] = None
     ) -> Optional[str]:
         """Suggest a model based on task complexity.
 
@@ -372,8 +362,7 @@ def map_model(model_name: str, provider: Optional[str] = None) -> Optional[str]:
 
 
 def get_model_for_complexity(
-    complexity: str,
-    provider: Optional[str] = None
+    complexity: str, provider: Optional[str] = None
 ) -> Optional[str]:
     """Get appropriate model for task complexity.
 

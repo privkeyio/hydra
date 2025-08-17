@@ -88,4 +88,4 @@ class BaseClient:
                 raise HydraAPIError(0, f"Request failed: {str(e)}")
 
     def _exponential_backoff(self, attempt: int) -> float:
-        return self.retry_delay * (2 ** attempt)
+        return self.retry_delay * (2**attempt)

@@ -51,7 +51,7 @@ class FileOperationsExecutor(ActionExecutor):
     def __del__(self) -> None:
         """Clean up backup directory on deletion."""
         try:
-            if hasattr(self, 'backup_dir') and self.backup_dir.exists():
+            if hasattr(self, "backup_dir") and self.backup_dir.exists():
                 shutil.rmtree(self.backup_dir)
         except Exception as e:
             logger.warning(f"Failed to clean up backup directory: {e}")
@@ -86,7 +86,7 @@ class FileOperationsExecutor(ActionExecutor):
             return ActionResult(
                 action=action,
                 success=False,
-                error=f"Unsupported action type: {action.type}"
+                error=f"Unsupported action type: {action.type}",
             )
 
         # Execute with error handling
@@ -97,11 +97,7 @@ class FileOperationsExecutor(ActionExecutor):
             return handler(action)
         except Exception as e:
             logger.error(f"Action failed: {action.type.name} on {action.target}: {e}")
-            return ActionResult(
-                action=action,
-                success=False,
-                error=str(e)
-            )
+            return ActionResult(action=action, success=False, error=str(e))
 
     def validate(self, action: Action) -> bool:
         """Validate a file action before execution.
@@ -132,8 +128,7 @@ class FileOperationsExecutor(ActionExecutor):
 
         if action.type not in supported_types:
             raise ValidationError(
-                f"Unsupported action type: {action.type}",
-                action=action
+                f"Unsupported action type: {action.type}", action=action
             )
 
         # Validate target path
@@ -149,8 +144,7 @@ class FileOperationsExecutor(ActionExecutor):
         if action.type in [ActionType.CREATE_FILE, ActionType.MODIFY_FILE]:
             if action.content is None:
                 raise ValidationError(
-                    f"Action {action.type.name} requires content",
-                    action=action
+                    f"Action {action.type.name} requires content", action=action
                 )
 
         # Validate move/copy operations
@@ -158,7 +152,7 @@ class FileOperationsExecutor(ActionExecutor):
             if "source" not in action.options:
                 raise ValidationError(
                     f"Action {action.type.name} requires 'source' in options",
-                    action=action
+                    action=action,
                 )
             source_path = self.context.resolve_path(action.options["source"])
             self._validate_safe_path(source_path, action)
@@ -230,7 +224,7 @@ class FileOperationsExecutor(ActionExecutor):
                 return ActionResult(
                     action=action,
                     success=False,
-                    error=f"File already exists: {file_path}"
+                    error=f"File already exists: {file_path}",
                 )
 
         # Create parent directories if needed
@@ -261,14 +255,12 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"File created: {file_path}",
-                rollback_data={"created": True}
+                rollback_data={"created": True},
             )
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to create file: {e}",
-                action=action,
-                recoverable=True
+                f"Failed to create file: {e}", action=action, recoverable=True
             ) from e
 
     def _modify_file(self, action: Action) -> ActionResult:
@@ -290,9 +282,7 @@ class FileOperationsExecutor(ActionExecutor):
                 return self._create_file(action)
             else:
                 return ActionResult(
-                    action=action,
-                    success=False,
-                    error=f"File not found: {file_path}"
+                    action=action, success=False, error=f"File not found: {file_path}"
                 )
 
         # Backup the file before modification
@@ -321,7 +311,7 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"File modified: {file_path}",
-                rollback_data={"backup_path": str(backup_path)}
+                rollback_data={"backup_path": str(backup_path)},
             )
 
         except Exception as e:
@@ -332,9 +322,7 @@ class FileOperationsExecutor(ActionExecutor):
                 pass
 
             raise ExecutionError(
-                f"Failed to modify file: {e}",
-                action=action,
-                recoverable=True
+                f"Failed to modify file: {e}", action=action, recoverable=True
             ) from e
 
     def _append_file(self, action: Action) -> ActionResult:
@@ -354,9 +342,7 @@ class FileOperationsExecutor(ActionExecutor):
                 return self._create_file(action)
             else:
                 return ActionResult(
-                    action=action,
-                    success=False,
-                    error=f"File not found: {file_path}"
+                    action=action, success=False, error=f"File not found: {file_path}"
                 )
 
         # Backup before modification
@@ -374,14 +360,12 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"Content appended to: {file_path}",
-                rollback_data={"backup_path": str(backup_path)}
+                rollback_data={"backup_path": str(backup_path)},
             )
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to append to file: {e}",
-                action=action,
-                recoverable=True
+                f"Failed to append to file: {e}", action=action, recoverable=True
             ) from e
 
     def _replace_in_file(self, action: Action) -> ActionResult:
@@ -398,9 +382,7 @@ class FileOperationsExecutor(ActionExecutor):
 
         if not file_path.exists():
             return ActionResult(
-                action=action,
-                success=False,
-                error=f"File not found: {file_path}"
+                action=action, success=False, error=f"File not found: {file_path}"
             )
 
         # Get search and replace patterns
@@ -411,7 +393,7 @@ class FileOperationsExecutor(ActionExecutor):
             return ActionResult(
                 action=action,
                 success=False,
-                error="Missing 'search' pattern in options"
+                error="Missing 'search' pattern in options",
             )
 
         # Backup before modification
@@ -432,14 +414,12 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"Replaced {count} occurrences in: {file_path}",
-                rollback_data={"backup_path": str(backup_path)}
+                rollback_data={"backup_path": str(backup_path)},
             )
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to replace in file: {e}",
-                action=action,
-                recoverable=True
+                f"Failed to replace in file: {e}", action=action, recoverable=True
             ) from e
 
     def _delete_file(self, action: Action) -> ActionResult:
@@ -456,9 +436,7 @@ class FileOperationsExecutor(ActionExecutor):
 
         if not file_path.exists():
             return ActionResult(
-                action=action,
-                success=True,
-                output=f"File already absent: {file_path}"
+                action=action, success=True, output=f"File already absent: {file_path}"
             )
 
         # Backup before deletion
@@ -472,14 +450,12 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"File deleted: {file_path}",
-                rollback_data={"backup_path": str(backup_path)}
+                rollback_data={"backup_path": str(backup_path)},
             )
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to delete file: {e}",
-                action=action,
-                recoverable=False
+                f"Failed to delete file: {e}", action=action, recoverable=False
             ) from e
 
     def _move_file(self, action: Action) -> ActionResult:
@@ -495,9 +471,7 @@ class FileOperationsExecutor(ActionExecutor):
         source = action.options.get("source", "")
         if not source:
             return ActionResult(
-                action=action,
-                success=False,
-                error="Missing 'source' in options"
+                action=action, success=False, error="Missing 'source' in options"
             )
 
         source_path = self.context.resolve_path(source)
@@ -507,7 +481,7 @@ class FileOperationsExecutor(ActionExecutor):
             return ActionResult(
                 action=action,
                 success=False,
-                error=f"Source file not found: {source_path}"
+                error=f"Source file not found: {source_path}",
             )
 
         # Create parent directories for destination
@@ -521,14 +495,12 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"File moved: {source_path} -> {dest_path}",
-                rollback_data={"original_path": str(source_path)}
+                rollback_data={"original_path": str(source_path)},
             )
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to move file: {e}",
-                action=action,
-                recoverable=True
+                f"Failed to move file: {e}", action=action, recoverable=True
             ) from e
 
     def _copy_file(self, action: Action) -> ActionResult:
@@ -544,9 +516,7 @@ class FileOperationsExecutor(ActionExecutor):
         source = action.options.get("source", "")
         if not source:
             return ActionResult(
-                action=action,
-                success=False,
-                error="Missing 'source' in options"
+                action=action, success=False, error="Missing 'source' in options"
             )
 
         source_path = self.context.resolve_path(source)
@@ -556,7 +526,7 @@ class FileOperationsExecutor(ActionExecutor):
             return ActionResult(
                 action=action,
                 success=False,
-                error=f"Source file not found: {source_path}"
+                error=f"Source file not found: {source_path}",
             )
 
         # Create parent directories for destination
@@ -573,14 +543,12 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"File copied: {source_path} -> {dest_path}",
-                rollback_data={"created": True}
+                rollback_data={"created": True},
             )
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to copy file: {e}",
-                action=action,
-                recoverable=True
+                f"Failed to copy file: {e}", action=action, recoverable=True
             ) from e
 
     def _create_directory(self, action: Action) -> ActionResult:
@@ -603,14 +571,12 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"Directory created: {dir_path}",
-                rollback_data={"created": True}
+                rollback_data={"created": True},
             )
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to create directory: {e}",
-                action=action,
-                recoverable=True
+                f"Failed to create directory: {e}", action=action, recoverable=True
             ) from e
 
     def _delete_directory(self, action: Action) -> ActionResult:
@@ -629,7 +595,7 @@ class FileOperationsExecutor(ActionExecutor):
             return ActionResult(
                 action=action,
                 success=True,
-                output=f"Directory already absent: {dir_path}"
+                output=f"Directory already absent: {dir_path}",
             )
 
         # Backup directory before deletion
@@ -645,14 +611,12 @@ class FileOperationsExecutor(ActionExecutor):
                 action=action,
                 success=True,
                 output=f"Directory deleted: {dir_path}",
-                rollback_data={"backup_path": str(backup_path)}
+                rollback_data={"backup_path": str(backup_path)},
             )
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to delete directory: {e}",
-                action=action,
-                recoverable=False
+                f"Failed to delete directory: {e}", action=action, recoverable=False
             ) from e
 
     def _read_file(self, action: Action) -> ActionResult:
@@ -669,9 +633,7 @@ class FileOperationsExecutor(ActionExecutor):
 
         if not file_path.exists():
             return ActionResult(
-                action=action,
-                success=False,
-                error=f"File not found: {file_path}"
+                action=action, success=False, error=f"File not found: {file_path}"
             )
 
         try:
@@ -683,17 +645,11 @@ class FileOperationsExecutor(ActionExecutor):
                 encoding = action.options.get("encoding", "utf-8")
                 content = file_path.read_text(encoding=encoding)
 
-            return ActionResult(
-                action=action,
-                success=True,
-                output=content
-            )
+            return ActionResult(action=action, success=True, output=content)
 
         except Exception as e:
             raise ExecutionError(
-                f"Failed to read file: {e}",
-                action=action,
-                recoverable=True
+                f"Failed to read file: {e}", action=action, recoverable=True
             ) from e
 
     def _backup_file(self, file_path: Path, relative_path: str) -> Path:
@@ -764,7 +720,7 @@ class FileOperationsExecutor(ActionExecutor):
                 raise ValidationError(
                     f"Potentially dangerous path: {path}",
                     action=action,
-                    validation_errors=[f"Path contains {pattern}"]
+                    validation_errors=[f"Path contains {pattern}"],
                 )
 
         # Check if path tries to escape working directory
@@ -774,23 +730,20 @@ class FileOperationsExecutor(ActionExecutor):
 
             # Allow operations in working directory and temp directories
             if not (
-                resolved.is_relative_to(working_dir) or
-                str(resolved).startswith("/tmp/") or
-                str(resolved).startswith(tempfile.gettempdir())
+                resolved.is_relative_to(working_dir)
+                or str(resolved).startswith("/tmp/")
+                or str(resolved).startswith(tempfile.gettempdir())
             ):
                 # Check if explicitly allowed
                 if not action.options.get("allow_outside_working_dir", False):
                     raise ValidationError(
                         f"Path outside working directory: {path}",
                         action=action,
-                        validation_errors=["Path escapes working directory"]
+                        validation_errors=["Path escapes working directory"],
                     )
         except Exception as e:
             # If resolution fails, consider it unsafe
-            raise ValidationError(
-                f"Cannot validate path: {path}",
-                action=action
-            ) from e
+            raise ValidationError(f"Cannot validate path: {path}", action=action) from e
 
     def _simulate_action(self, action: Action) -> ActionResult:
         """Simulate an action in dry-run mode.
@@ -805,7 +758,7 @@ class FileOperationsExecutor(ActionExecutor):
         return ActionResult(
             action=action,
             success=True,
-            output=f"[DRY RUN] Would execute: {action.type.name} on {action.target}"
+            output=f"[DRY RUN] Would execute: {action.type.name} on {action.target}",
         )
 
     def _run_command(self, action: Action) -> ActionResult:
@@ -833,7 +786,7 @@ class FileOperationsExecutor(ActionExecutor):
                 cwd=working_dir,
                 capture_output=True,
                 text=True,
-                timeout=30  # 30 second timeout
+                timeout=30,  # 30 second timeout
             )
 
             output = result.stdout
@@ -849,28 +802,16 @@ class FileOperationsExecutor(ActionExecutor):
                     f"Command failed with return code {result.returncode}: {command}"
                 )
 
-            return ActionResult(
-                action=action,
-                success=success,
-                output=output
-            )
+            return ActionResult(action=action, success=success, output=output)
 
         except subprocess.TimeoutExpired:
             error_msg = f"Command timed out: {command}"
             logger.error(error_msg)
-            raise ExecutionError(
-                error_msg,
-                action=action,
-                recoverable=False
-            )
+            raise ExecutionError(error_msg, action=action, recoverable=False)
         except Exception as e:
             error_msg = f"Failed to execute command: {e}"
             logger.error(error_msg)
-            raise ExecutionError(
-                error_msg,
-                action=action,
-                recoverable=True
-            ) from e
+            raise ExecutionError(error_msg, action=action, recoverable=True) from e
 
 
 class BinaryFileHandler:
@@ -882,15 +823,45 @@ class BinaryFileHandler:
 
     # Common binary file extensions
     BINARY_EXTENSIONS = {
-        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.ico', '.svg',
-        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-        '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar',
-        '.exe', '.dll', '.so', '.dylib', '.bin',
-        '.mp3', '.mp4', '.avi', '.mov', '.wav', '.flac',
-        '.ttf', '.otf', '.woff', '.woff2',
-        '.db', '.sqlite', '.dbf',
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".bmp",
+        ".ico",
+        ".svg",
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".7z",
+        ".rar",
+        ".exe",
+        ".dll",
+        ".so",
+        ".dylib",
+        ".bin",
+        ".mp3",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".wav",
+        ".flac",
+        ".ttf",
+        ".otf",
+        ".woff",
+        ".woff2",
+        ".db",
+        ".sqlite",
+        ".dbf",
     }
-
 
     @classmethod
     def is_binary_file(cls, file_path: Union[str, Path]) -> bool:
@@ -912,15 +883,15 @@ class BinaryFileHandler:
         # Check content if file exists
         if path.exists():
             try:
-                with path.open('rb') as f:
+                with path.open("rb") as f:
                     # Read first 8192 bytes
                     chunk = f.read(8192)
                     # Check for null bytes (common in binary files)
-                    if b'\x00' in chunk:
+                    if b"\x00" in chunk:
                         return True
                     # Try to decode as UTF-8
                     try:
-                        chunk.decode('utf-8')
+                        chunk.decode("utf-8")
                         return False
                     except UnicodeDecodeError:
                         return True
@@ -943,7 +914,7 @@ class BinaryFileHandler:
         """
         path = Path(file_path)
         binary_data = path.read_bytes()
-        return base64.b64encode(binary_data).decode('ascii')
+        return base64.b64encode(binary_data).decode("ascii")
 
     @classmethod
     def decode_binary_content(cls, encoded_content: str) -> bytes:
@@ -957,4 +928,3 @@ class BinaryFileHandler:
 
         """
         return base64.b64decode(encoded_content)
-

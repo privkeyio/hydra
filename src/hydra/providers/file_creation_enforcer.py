@@ -31,22 +31,26 @@ def extract_required_files(ticket: Dict[str, Any]) -> List[str]:
     ]
 
     # Check acceptance criteria
-    for criteria in ticket.get('acceptance_criteria', []):
+    for criteria in ticket.get("acceptance_criteria", []):
         for pattern in file_patterns:
             matches = re.findall(pattern, criteria, re.IGNORECASE)
             for match in matches:
-                if match and not any(skip in match.lower() for skip in ['example', 'sample']):
+                if match and not any(
+                    skip in match.lower() for skip in ["example", "sample"]
+                ):
                     # Clean up the path
                     file_path = match.strip()
                     if file_path not in required_files:
                         required_files.append(file_path)
 
     # Also check output files section
-    for output_file in ticket.get('output_files', []):
-        if isinstance(output_file, str) and '.' in output_file:
+    for output_file in ticket.get("output_files", []):
+        if isinstance(output_file, str) and "." in output_file:
             # Extract just the file path
-            file_path = output_file.split('(')[0].strip()
-            if file_path not in required_files and not any(skip in file_path.lower() for skip in ['updated', 'modified']):
+            file_path = output_file.split("(")[0].strip()
+            if file_path not in required_files and not any(
+                skip in file_path.lower() for skip in ["updated", "modified"]
+            ):
                 required_files.append(file_path)
 
     return required_files
@@ -62,20 +66,24 @@ def build_documentation_emphasis(required_files: List[str]) -> str:
         Extra prompt text for documentation files
 
     """
-    doc_files = [f for f in required_files if 'test-results/' in f or '.md' in f or 'metrics.json' in f]
+    doc_files = [
+        f
+        for f in required_files
+        if "test-results/" in f or ".md" in f or "metrics.json" in f
+    ]
     if not doc_files:
         return ""
 
     prompt = "\n📊 DOCUMENTATION REQUIREMENTS:\n"
     prompt += "These files MUST be created with actual test results/metrics:\n"
     for doc_file in doc_files:
-        if '30min-video-report.md' in doc_file:
+        if "30min-video-report.md" in doc_file:
             prompt += f"- {doc_file}: Document the ACTUAL test run with timings, segment counts, upload speeds\n"
-        elif 'performance-metrics.json' in doc_file:
+        elif "performance-metrics.json" in doc_file:
             prompt += f"- {doc_file}: Save ACTUAL performance data as JSON (memory usage, CPU, timing, etc.)\n"
-        elif 'report.md' in doc_file:
+        elif "report.md" in doc_file:
             prompt += f"- {doc_file}: Create detailed report with actual test results\n"
-        elif '.json' in doc_file:
+        elif ".json" in doc_file:
             prompt += f"- {doc_file}: Save actual metrics/data in JSON format\n"
         else:
             prompt += f"- {doc_file}: Create with actual results/documentation\n"
@@ -98,30 +106,44 @@ def build_file_creation_prompt(ticket_id: str, required_files: List[str]) -> str
         return ""
 
     prompt = f"\n\n🚨🚨🚨 CRITICAL FILE CREATION REQUIREMENTS FOR TICKET {ticket_id} 🚨🚨🚨\n"
-    prompt += "YOU MUST CREATE THE FOLLOWING FILES (DO NOT JUST MODIFY EXISTING FILES):\n\n"
+    prompt += (
+        "YOU MUST CREATE THE FOLLOWING FILES (DO NOT JUST MODIFY EXISTING FILES):\n\n"
+    )
 
     for i, file_path in enumerate(required_files, 1):
         # Suggest common locations if path doesn't include directory
-        if '/' not in file_path:
-            if file_path.endswith('.ts') or file_path.endswith('.js'):
-                if 'hardware' in file_path or 'detector' in file_path:
+        if "/" not in file_path:
+            if file_path.endswith(".ts") or file_path.endswith(".js"):
+                if "hardware" in file_path or "detector" in file_path:
                     prompt += f"{i}. CREATE NEW FILE: src/utils/{file_path} or src/core/{file_path}\n"
-                elif 'exponential' in file_path or 'backoff' in file_path or 'rate' in file_path:
+                elif (
+                    "exponential" in file_path
+                    or "backoff" in file_path
+                    or "rate" in file_path
+                ):
                     prompt += f"{i}. CREATE NEW FILE: src/utils/{file_path}\n"
-                elif 'progress' in file_path or 'emitter' in file_path or 'event' in file_path:
+                elif (
+                    "progress" in file_path
+                    or "emitter" in file_path
+                    or "event" in file_path
+                ):
                     prompt += f"{i}. CREATE NEW FILE: src/events/{file_path} or src/{file_path}\n"
-                elif 'network' in file_path or 'monitor' in file_path:
+                elif "network" in file_path or "monitor" in file_path:
                     prompt += f"{i}. CREATE NEW FILE: src/utils/{file_path} or src/core/{file_path}\n"
                 else:
                     prompt += f"{i}. CREATE NEW FILE: src/{file_path} or src/core/{file_path}\n"
-            elif file_path.endswith('.md'):
-                if 'test-results' in file_path or 'report' in file_path:
-                    prompt += f"{i}. CREATE NEW FILE: {file_path} (exactly as specified)\n"
+            elif file_path.endswith(".md"):
+                if "test-results" in file_path or "report" in file_path:
+                    prompt += (
+                        f"{i}. CREATE NEW FILE: {file_path} (exactly as specified)\n"
+                    )
                 else:
                     prompt += f"{i}. CREATE NEW FILE: {file_path} or docs/{file_path}\n"
-            elif file_path.endswith('.json'):
-                if 'test-results' in file_path or 'metrics' in file_path:
-                    prompt += f"{i}. CREATE NEW FILE: {file_path} (exactly as specified)\n"
+            elif file_path.endswith(".json"):
+                if "test-results" in file_path or "metrics" in file_path:
+                    prompt += (
+                        f"{i}. CREATE NEW FILE: {file_path} (exactly as specified)\n"
+                    )
                 else:
                     prompt += f"{i}. CREATE NEW FILE: {file_path}\n"
             else:
@@ -130,7 +152,9 @@ def build_file_creation_prompt(ticket_id: str, required_files: List[str]) -> str
             prompt += f"{i}. CREATE NEW FILE: {file_path}\n"
 
     prompt += "\n⚠️ THESE ARE NOT OPTIONAL - YOU MUST CREATE ALL THESE FILES!\n"
-    prompt += "⚠️ DO NOT JUST MODIFY EXISTING FILES - CREATE THE NEW FILES LISTED ABOVE!\n"
+    prompt += (
+        "⚠️ DO NOT JUST MODIFY EXISTING FILES - CREATE THE NEW FILES LISTED ABOVE!\n"
+    )
     prompt += "⚠️ USE THE 'Write' TOOL OR 'touch' COMMAND TO CREATE THESE FILES!\n"
 
     # Add documentation emphasis if needed
@@ -159,5 +183,5 @@ def enforce_file_creation(ticket: Dict[str, Any]) -> str:
     if not required_files:
         return ""
 
-    ticket_id = ticket.get('number', 'Unknown')
+    ticket_id = ticket.get("number", "Unknown")
     return build_file_creation_prompt(ticket_id, required_files)

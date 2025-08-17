@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive Hydra Example: Real-time code generation with Venice AI
-"""
+"""Interactive Hydra Example: Real-time code generation with Venice AI"""
 
 import os
 import sys
@@ -8,7 +7,7 @@ import sys
 from dotenv import load_dotenv
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from hydra import CodeAgent
 from hydra.config import get_config
@@ -49,8 +48,11 @@ def generate_code_example():
 
         # Execute the generated code
         print("\nExecuting generated code...")
-        result = agent.execute_code(code1 + '\n\n# Test the function\nprint(shorten_url("https://example.com/very/long/path"))')
-        if result['success']:
+        result = agent.execute_code(
+            code1
+            + '\n\n# Test the function\nprint(shorten_url("https://example.com/very/long/path"))'
+        )
+        if result["success"]:
             print(f"Output: {result['stdout']}")
         else:
             print(f"Error: {result['stderr']}")
@@ -94,7 +96,9 @@ def generate_code_example():
         print_separator()
 
         # Test the decorator
-        test_code = code3 + """
+        test_code = (
+            code3
+            + """
 
 @measure_time
 def slow_function(n):
@@ -107,9 +111,10 @@ def slow_function(n):
 result = slow_function(1000000)
 print(f"Result: {result}")
 """
+        )
         print("\nTesting the decorator...")
         result = agent.execute_code(test_code)
-        if result['success']:
+        if result["success"]:
             print(f"Output:\n{result['stdout']}")
     except Exception as e:
         print(f"Error: {e}")
@@ -137,9 +142,9 @@ def task_decomposition_example():
         plan = agent.reason(complex_task)
         print(f"\n📋 Execution Plan: {plan['plan']}")
 
-        if plan['subtasks']:
+        if plan["subtasks"]:
             print(f"\n📝 Subtasks ({len(plan['subtasks'])}):")
-            for i, subtask in enumerate(plan['subtasks'], 1):
+            for i, subtask in enumerate(plan["subtasks"], 1):
                 print(f"   {i}. {subtask}")
     except Exception as e:
         print(f"Error: {e}")
@@ -170,7 +175,7 @@ def hierarchical_execution_example():
         print(f"   Task decomposition: {len(result.get('subtasks', []))} subtasks")
 
         print("\n🤖 Agent Hierarchy:")
-        for agent in result['agents']:
+        for agent in result["agents"]:
             if agent == "package_builder":
                 print(f"   └─ {agent} (Boss)")
             else:
@@ -183,7 +188,7 @@ def hierarchical_execution_example():
 def main():
     """Run all examples."""
     # Check Venice API key
-    if not os.getenv('VENICE_API_KEY'):
+    if not os.getenv("VENICE_API_KEY"):
         print("⚠️  Error: VENICE_API_KEY not found!")
         print("   Please set it in your .env file")
         return

@@ -17,7 +17,7 @@ class CacheConfig:
         self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/1")
         self.code_ttl = int(os.getenv("CACHE_CODE_TTL", "3600"))  # 1 hour
         self.task_ttl = int(os.getenv("CACHE_TASK_TTL", "1800"))  # 30 minutes
-        self.api_ttl = int(os.getenv("CACHE_API_TTL", "300"))     # 5 minutes
+        self.api_ttl = int(os.getenv("CACHE_API_TTL", "300"))  # 5 minutes
         self.max_memory = os.getenv("CACHE_MAX_MEMORY", "256mb")
         self.key_prefix = os.getenv("CACHE_KEY_PREFIX", "hydra:")
 
@@ -37,9 +37,7 @@ class HydraCache:
         """Get or create a singleton Redis connection pool."""
         if HydraCache._connection_pool is None:
             HydraCache._connection_pool = ConnectionPool.from_url(
-                self.config.redis_url,
-                decode_responses=True,
-                max_connections=20
+                self.config.redis_url, decode_responses=True, max_connections=20
             )
         return HydraCache._connection_pool
 
@@ -63,11 +61,13 @@ class HydraCache:
 
     def _serialize(self, data: Any) -> str:
         """Serialize data for storage."""
-        return json.dumps({
-            "data": data,
-            "timestamp": datetime.utcnow().isoformat(),
-            "type": type(data).__name__
-        })
+        return json.dumps(
+            {
+                "data": data,
+                "timestamp": datetime.utcnow().isoformat(),
+                "type": type(data).__name__,
+            }
+        )
 
     def _deserialize(self, data: str) -> Any:
         """Deserialize data from storage."""
@@ -77,14 +77,14 @@ class HydraCache:
         except (json.JSONDecodeError, KeyError):
             return None
 
-    def get_code_cache(self, prompt: str, language: Optional[str] = None,
-                      max_tokens: Optional[int] = None) -> Optional[str]:
+    def get_code_cache(
+        self,
+        prompt: str,
+        language: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+    ) -> Optional[str]:
         """Get cached generated code."""
-        cache_key = self._hash_prompt(
-            prompt,
-            language=language,
-            max_tokens=max_tokens
-        )
+        cache_key = self._hash_prompt(prompt, language=language, max_tokens=max_tokens)
         key = self._make_key("code", cache_key)
 
         try:
@@ -95,15 +95,16 @@ class HydraCache:
             pass
         return None
 
-    def set_code_cache(self, prompt: str, code: str, language: Optional[str] = None,
-                      max_tokens: Optional[int] = None,
-                      ttl: Optional[int] = None) -> bool:
+    def set_code_cache(
+        self,
+        prompt: str,
+        code: str,
+        language: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        ttl: Optional[int] = None,
+    ) -> bool:
         """Cache generated code."""
-        cache_key = self._hash_prompt(
-            prompt,
-            language=language,
-            max_tokens=max_tokens
-        )
+        cache_key = self._hash_prompt(prompt, language=language, max_tokens=max_tokens)
         key = self._make_key("code", cache_key)
         ttl = ttl or self.config.code_ttl
 
@@ -125,8 +126,9 @@ class HydraCache:
             pass
         return None
 
-    def set_task_result(self, task_id: str, result: Dict[str, Any],
-                       ttl: Optional[int] = None) -> bool:
+    def set_task_result(
+        self, task_id: str, result: Dict[str, Any], ttl: Optional[int] = None
+    ) -> bool:
         """Cache task result."""
         key = self._make_key("task", task_id)
         ttl = ttl or self.config.task_ttl
@@ -137,8 +139,9 @@ class HydraCache:
         except redis.exceptions.RedisError:
             return False
 
-    def get_api_response(self, endpoint: str,
-                        params_hash: str) -> Optional[Dict[str, Any]]:
+    def get_api_response(
+        self, endpoint: str, params_hash: str
+    ) -> Optional[Dict[str, Any]]:
         """Get cached API response."""
         key = self._make_key("api", f"{endpoint}:{params_hash}")
 
@@ -150,8 +153,13 @@ class HydraCache:
             pass
         return None
 
-    def set_api_response(self, endpoint: str, params_hash: str,
-                        response: Dict[str, Any], ttl: Optional[int] = None) -> bool:
+    def set_api_response(
+        self,
+        endpoint: str,
+        params_hash: str,
+        response: Dict[str, Any],
+        ttl: Optional[int] = None,
+    ) -> bool:
         """Cache API response."""
         key = self._make_key("api", f"{endpoint}:{params_hash}")
         ttl = ttl or self.config.api_ttl
@@ -211,10 +219,12 @@ class HydraCache:
                 "memory_peak": info.get("used_memory_peak_human", "unknown"),
                 "total_keys": total_keys,
                 "connected_clients": self.redis_client.info("clients").get(
-                    "connected_clients", 0),
+                    "connected_clients", 0
+                ),
                 "cache_hit_rate": self._calculate_hit_rate(),
                 "uptime_seconds": self.redis_client.info("server").get(
-                    "uptime_in_seconds", 0)
+                    "uptime_in_seconds", 0
+                ),
             }
         except redis.exceptions.RedisError:
             return {"error": "Unable to retrieve cache stats"}
@@ -239,7 +249,7 @@ class HydraCache:
             "Write a REST API endpoint for",
             "Generate a React component that",
             "Implement a database query to",
-            "Create a unit test for"
+            "Create a unit test for",
         ]
 
         for pattern in patterns:
@@ -252,7 +262,7 @@ class HydraCache:
                         self.redis_client.setex(
                             key,
                             self.config.code_ttl,
-                            self._serialize({"warmed": True, "pattern": pattern})
+                            self._serialize({"warmed": True, "pattern": pattern}),
                         )
                         count += 1
                     except redis.exceptions.RedisError:
@@ -272,13 +282,11 @@ class HydraCache:
                 "status": "healthy",
                 "response_time_ms": round(response_time, 2),
                 "redis_version": self.redis_client.info("server").get(
-                    "redis_version", "unknown")
+                    "redis_version", "unknown"
+                ),
             }
         except redis.exceptions.RedisError as e:
-            return {
-                "status": "unhealthy",
-                "error": str(e)
-            }
+            return {"status": "unhealthy", "error": str(e)}
 
     def close(self):
         """Close cache connections."""
@@ -306,4 +314,3 @@ def reset_cache(config: Optional[CacheConfig] = None) -> HydraCache:
         _cache_instance.close()
     _cache_instance = HydraCache(config)
     return _cache_instance
-

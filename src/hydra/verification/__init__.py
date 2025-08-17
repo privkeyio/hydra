@@ -6,4 +6,4 @@ from .ticket_verifier import (
     VerificationResult,
 )
 
-__all__ = ['TicketVerifier', 'TicketVerificationReport', 'VerificationResult']
+__all__ = ["TicketVerifier", "TicketVerificationReport", "VerificationResult"]

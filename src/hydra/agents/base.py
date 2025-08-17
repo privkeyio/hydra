@@ -25,25 +25,28 @@ class CodeAgent:
     @classmethod
     def _setup_logger(cls):
         if cls._logger is None:
-            cls._logger = logging.getLogger('hydra_agent')
+            cls._logger = logging.getLogger("hydra_agent")
             cls._logger.setLevel(logging.INFO)
 
             if not cls._logger.handlers:
-                os.makedirs('logs', exist_ok=True)
+                os.makedirs("logs", exist_ok=True)
                 handler = RotatingFileHandler(
-                    'logs/agent_activity.log',
-                    maxBytes=10*1024*1024,
-                    backupCount=5
+                    "logs/agent_activity.log", maxBytes=10 * 1024 * 1024, backupCount=5
                 )
                 formatter = logging.Formatter(
-                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
                 )
                 handler.setFormatter(formatter)
                 cls._logger.addHandler(handler)
         return cls._logger
 
-    def __init__(self, name: str, parent: Optional['CodeAgent'] = None,
-                 depth: int = 0, safe_mode: bool = True):
+    def __init__(
+        self,
+        name: str,
+        parent: Optional["CodeAgent"] = None,
+        depth: int = 0,
+        safe_mode: bool = True,
+    ):
         # Sanitize and validate inputs
         self.name = InputSanitizer.sanitize_agent_name(name)
         if not self.name:
@@ -54,8 +57,8 @@ class CodeAgent:
         self.safe_mode = safe_mode
         self.config = get_config()
         self.agent_config = self.config.get_agent_config()
-        self.max_depth = self.agent_config['max_depth']
-        self.max_retries = self.agent_config['retry_attempts']
+        self.max_depth = self.agent_config["max_depth"]
+        self.max_retries = self.agent_config["retry_attempts"]
         self.employees = []
         self.agent_id = f"{self.name}_{id(self)}"
         self.logger = self._setup_logger()
@@ -114,7 +117,7 @@ Important: Return ONLY the JSON object, no other text or formatting.
 
         try:
             result = self.llm_provider.generate_json(prompt)
-            subtask_count = len(result.get('subtasks', []))
+            subtask_count = len(result.get("subtasks", []))
             self.logger.info(
                 f"Agent {self.agent_id} generated plan with "
                 f"{subtask_count} subtasks"
@@ -150,9 +153,7 @@ Important: Return ONLY the JSON object, no other text or formatting.
         if self.safe_mode:
             validation = CodeValidator.validate_code(code, allow_imports=False)
             if not validation["valid"]:
-                raise ValidationError(
-                    f"Code validation failed: {validation['errors']}"
-                )
+                raise ValidationError(f"Code validation failed: {validation['errors']}")
 
             if validation["dangerous_patterns"]:
                 self.logger.warning(
@@ -218,31 +219,29 @@ Only use safe built-in functions and standard library modules like math, datetim
             src_path = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             )
-            if 'PYTHONPATH' in env:
-                env['PYTHONPATH'] = f"{src_path}:{env['PYTHONPATH']}"
+            if "PYTHONPATH" in env:
+                env["PYTHONPATH"] = f"{src_path}:{env['PYTHONPATH']}"
             else:
-                env['PYTHONPATH'] = src_path
+                env["PYTHONPATH"] = src_path
 
             result = subprocess.run(
                 ["python", "-c", code_str],
                 capture_output=True,
                 text=True,
-                timeout=self.agent_config['timeout'],
+                timeout=self.agent_config["timeout"],
                 check=False,
-                env=env
+                env=env,
             )
 
             execution_result = {
                 "success": result.returncode == 0,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "returncode": result.returncode
+                "returncode": result.returncode,
             }
 
             if execution_result["success"]:
-                self.logger.info(
-                    f"Agent {self.agent_id} code execution successful"
-                )
+                self.logger.info(f"Agent {self.agent_id} code execution successful")
             else:
                 error_msg = (
                     f"Code execution failed with return code "
@@ -251,9 +250,7 @@ Only use safe built-in functions and standard library modules like math, datetim
                 self.logger.error(f"Agent {self.agent_id} {error_msg}")
 
                 if retry_count < self.max_retries - 1:
-                    self.logger.info(
-                        f"Agent {self.agent_id} retrying code execution"
-                    )
+                    self.logger.info(f"Agent {self.agent_id} retrying code execution")
                     return self.execute_code(code_str, retry_count + 1)
 
             return execution_result
@@ -275,7 +272,7 @@ Only use safe built-in functions and standard library modules like math, datetim
                 "success": False,
                 "stdout": "",
                 "stderr": error_msg,
-                "returncode": -1
+                "returncode": -1,
             }
 
     def create_employee(self, subtask: str) -> Dict[str, Any]:
@@ -295,12 +292,11 @@ Only use safe built-in functions and standard library modules like math, datetim
 
         employee_name = f"{self.name}_employee_{len(self.employees) + 1}"
         employee = CodeAgent(
-            employee_name, parent=self, depth=self.depth + 1, safe_mode=self.safe_mode)
+            employee_name, parent=self, depth=self.depth + 1, safe_mode=self.safe_mode
+        )
         self.employees.append(employee)
 
-        self.logger.info(
-            f"Agent {self.agent_id} created employee {employee.agent_id}"
-        )
+        self.logger.info(f"Agent {self.agent_id} created employee {employee.agent_id}")
 
         spawn_prompt = f"""Create a complete Python script for this subtask:
 Subtask: {subtask}
@@ -328,7 +324,7 @@ Return ONLY executable Python code."""
                         "success": True,
                         "employee": employee,
                         "result": result_data,
-                        "spawn_code": spawn_code
+                        "spawn_code": spawn_code,
                     }
                 except json.JSONDecodeError:
                     self.logger.warning(
@@ -339,7 +335,7 @@ Return ONLY executable Python code."""
                         "success": True,
                         "employee": employee,
                         "result": {"output": execution_result["stdout"]},
-                        "spawn_code": spawn_code
+                        "spawn_code": spawn_code,
                     }
             else:
                 error_msg = (
@@ -354,7 +350,7 @@ Return ONLY executable Python code."""
                     "success": False,
                     "employee": employee,
                     "error": error_msg,
-                    "spawn_code": spawn_code
+                    "spawn_code": spawn_code,
                 }
         except Exception as e:
             error_msg = (
@@ -368,7 +364,7 @@ Return ONLY executable Python code."""
                 "success": False,
                 "employee": employee,
                 "error": error_msg,
-                "spawn_code": None
+                "spawn_code": None,
             }
         finally:
             hierarchy = self._get_hierarchy_path()
@@ -409,9 +405,7 @@ Return ONLY the explanation text, no markdown formatting."""
 
         # Check depth limits
         if self.depth > self.max_depth:
-            error_msg = (
-                f"{self.depth} exceeds max depth {self.max_depth}"
-            )
+            error_msg = f"{self.depth} exceeds max depth {self.max_depth}"
             self.logger.error(f"Agent {self.agent_id} {error_msg}")
             raise RecursionLimitError(error_msg)
 
@@ -424,11 +418,11 @@ Return ONLY the explanation text, no markdown formatting."""
                 "task": task,
                 "generated_code": code,
                 "agent": self.agent_id,
-                "hierarchy": self._get_hierarchy_path()
+                "hierarchy": self._get_hierarchy_path(),
             }
 
             # Try to execute if it's a simple task
-            if len(code.split('\n')) < 50:  # Only execute smaller code blocks
+            if len(code.split("\n")) < 50:  # Only execute smaller code blocks
                 try:
                     execution = self.execute_code(code)
                     result["execution"] = execution
@@ -451,7 +445,7 @@ Return ONLY the explanation text, no markdown formatting."""
                 "task": task,
                 "error": error_msg,
                 "agent": self.agent_id,
-                "hierarchy": self._get_hierarchy_path()
+                "hierarchy": self._get_hierarchy_path(),
             }
 
     def get_stats(self) -> Dict[str, Any]:
@@ -465,5 +459,5 @@ Return ONLY the explanation text, no markdown formatting."""
             "code_generations": self.code_generations,
             "total_employees": len(self.employees),
             "provider": self.llm_provider.name,
-            "safe_mode": self.safe_mode
+            "safe_mode": self.safe_mode,
         }

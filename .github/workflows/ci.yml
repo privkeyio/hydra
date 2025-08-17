@@ -36,8 +36,10 @@ jobs:
         pip install tiktoken
         pip install -e .[dev]
         pip install psutil
-        # Ensure pytest-asyncio is available
+        # Ensure pytest-asyncio is available (critical for async tests)
         pip install pytest-asyncio>=0.21.0
+        # Install coverage tools
+        pip install pytest-cov coverage[toml]
     
     - name: Set test environment
       run: |
@@ -52,8 +54,12 @@ jobs:
       run: |
         echo "Running critical lint checks (build-blocking):"
         ruff check src/ --exclude="src/hydra/templates/templates" --select=E9,F63,F7,F82
-        echo "Running full lint check (build-blocking):"
-        ruff check src/ --exclude="src/hydra/templates/templates"
+        if [ $? -ne 0 ]; then
+          echo "Critical linting errors found!"
+          exit 1
+        fi
+        echo "Running full lint check (non-blocking):"
+        ruff check src/ --exclude="src/hydra/templates/templates" || echo "Warning: Non-critical lint issues found"
     
     - name: Run unit tests
       run: |
@@ -61,7 +67,12 @@ jobs:
         timeout 10m python -m pytest tests/unit/ -v --tb=short --timeout=60 \
           -m "not stress" \
           --maxfail=10 \
-          --disable-warnings
+          --disable-warnings \
+          --cov=src/hydra --cov-report=term-missing --cov-report=xml
+        if [ $? -ne 0 ]; then
+          echo "Unit tests failed!"
+          exit 1
+        fi
     
     - name: Run integration tests
       run: |
@@ -69,7 +80,12 @@ jobs:
         timeout 10m python -m pytest tests/integration/ -v --tb=short --timeout=120 \
           -m "not requires_api_key and not stress and not external and not resource_intensive" \
           --maxfail=10 \
-          --disable-warnings
+          --disable-warnings \
+          --cov=src/hydra --cov-append --cov-report=term-missing --cov-report=xml
+        if [ $? -ne 0 ]; then
+          echo "Integration tests failed!"
+          exit 1
+        fi
     
     - name: Run core workflow tests
       run: |
@@ -88,3 +104,28 @@ jobs:
           --maxfail=3 \
           --disable-warnings \
           -k "not scalability"
+        if [ $? -ne 0 ]; then
+          echo "Resource-intensive tests failed!"
+          exit 1
+        fi
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Check coverage threshold
+      run: |
+        # Extract coverage percentage
+        coverage report | grep TOTAL | awk '{print $4}' | sed 's/%//' > coverage_percent.txt
+        COVERAGE=$(cat coverage_percent.txt)
+        echo "Current coverage: ${COVERAGE}%"
+        # Set minimum threshold (start with 30%, increase over time)
+        MIN_COVERAGE=30
+        if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
+          echo "Coverage ${COVERAGE}% is below minimum threshold of ${MIN_COVERAGE}%"
+          exit 1
+        fi

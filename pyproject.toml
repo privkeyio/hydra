@@ -114,7 +114,8 @@ markers = [
     "slow: marks tests as slow running tests",
     "stress: marks tests as stress/load tests that may fail in resource-constrained environments",
     "external: marks tests that require external services (APIs, credentials, etc.)",
-    "resource_intensive: marks tests that spawn many subprocesses and may fail in CI"
+    "resource_intensive: marks tests that spawn many subprocesses and may fail in CI",
+    "asyncio: marks tests as async tests that require asyncio"
 ]
 
 [tool.coverage.run]

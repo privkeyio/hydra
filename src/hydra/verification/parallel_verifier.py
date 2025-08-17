@@ -9,6 +9,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
 from hydra.tickets.compatibility import TicketFormatHandler
+from hydra.verification.critical_reviewer import CriticalCodeReviewer
 
 
 class ParallelTicketVerifier:
@@ -18,8 +19,8 @@ class ParallelTicketVerifier:
         self,
         tickets_path: str,
         max_workers: int = 3,
-        check_ai_patterns: bool = False,
-        audit_diff: bool = False
+        check_ai_patterns: bool = True,  # DEFAULT TO TRUE - always be critical
+        audit_diff: bool = True  # DEFAULT TO TRUE - always audit
     ):
         self.tickets_path = Path(tickets_path)
         self.max_workers = max_workers
@@ -27,10 +28,9 @@ class ParallelTicketVerifier:
         self.audit_diff = audit_diff
         self.project_root = self.tickets_path.parent
         
-        # Load AI detection patterns if enabled
+        # Always load AI detection patterns - we should always be checking
         self.ai_patterns = []
-        if check_ai_patterns:
-            self._load_ai_patterns()
+        self._load_ai_patterns()  # Always load, don't make it conditional
             
     def _load_all_tickets(self) -> Dict[str, Dict]:
         """Load all tickets from the tickets file."""
@@ -135,7 +135,8 @@ class ParallelTicketVerifier:
             'checked_criteria': [],
             'failed_criteria': [],
             'ai_patterns_found': [],
-            'diff_issues': []
+            'diff_issues': [],
+            'critical_review': None
         }
         
         # Extract acceptance criteria
@@ -153,25 +154,58 @@ class ParallelTicketVerifier:
             else:
                 result['failed_criteria'].append(criterion)
                 
-        # Check for AI patterns if enabled
-        if self.check_ai_patterns:
-            ai_issues = await self._check_ai_patterns(ticket_id, ticket)
-            if ai_issues:
-                result['ai_patterns_found'] = ai_issues
+        # ALWAYS Perform CRITICAL CODE REVIEW - no conditions
+        # This is essential for quality control and should never be optional
+        print(f"\n🔍 Performing critical code review for ticket {ticket_id}...")
+        reviewer = CriticalCodeReviewer(str(self.project_root))
+        critical_review = reviewer.review_ticket_implementation(ticket_id, ticket)
+        result['critical_review'] = critical_review
+        
+        # Print critical findings
+        if critical_review['critical_issues']:
+            print(f"  ❌ {len(critical_review['critical_issues'])} CRITICAL ISSUES:")
+            for issue in critical_review['critical_issues'][:3]:
+                print(f"     - {issue.get('issue', issue)}")
                 
-        # Audit diff if enabled
-        if self.audit_diff:
-            diff_issues = await self._audit_ticket_diff(ticket_id, ticket)
-            if diff_issues:
-                result['diff_issues'] = diff_issues
+        if critical_review['ai_patterns']:
+            print(f"  🤖 AI PATTERNS DETECTED:")
+            for pattern in critical_review['ai_patterns'][:3]:
+                if isinstance(pattern, dict):
+                    if 'overall' in pattern:
+                        print(f"     - {pattern['overall']}")
+                    else:
+                        print(f"     - {pattern.get('file', 'Unknown')}: AI score {pattern.get('ai_score', 0)}")
+                        
+        print(f"  📊 Production Ready: {critical_review['production_readiness']}")
+        print(f"  💰 Value Assessment: {critical_review['value_assessment']}")
+        
+        if critical_review['recommendations']:
+            print(f"  📝 Recommendations:")
+            for rec in critical_review['recommendations'][:2]:
+                print(f"     - {rec}")
+        
+        # Note: Legacy AI pattern and diff audit checks are now part of critical review
+        # No need for separate checks since critical review is always performed
                 
-        # Determine status
-        if not result['failed_criteria']:
-            result['status'] = 'fully_verified'
-        elif len(result['checked_criteria']) > 0:
-            result['status'] = 'partially_verified'
+        # Determine status based on critical review if available
+        if result['critical_review']:
+            review = result['critical_review']
+            if review['production_readiness'] == 'NOT_READY' or review['value_assessment'] == 'NO_VALUE':
+                result['status'] = 'failed'
+            elif review['critical_issues']:
+                result['status'] = 'partially_verified'
+            elif not result['failed_criteria']:
+                result['status'] = 'fully_verified'
+            else:
+                result['status'] = 'partially_verified'
         else:
-            result['status'] = 'failed'
+            # Original status determination
+            if not result['failed_criteria']:
+                result['status'] = 'fully_verified'
+            elif len(result['checked_criteria']) > 0:
+                result['status'] = 'partially_verified'
+            else:
+                result['status'] = 'failed'
             
         return result
         

@@ -166,12 +166,17 @@ def add_ticket_parser(subparsers):
     verify_parallel_parser.add_argument(
         "--check-ai",
         action="store_true",
-        help="Check for and report AI-generated code patterns"
+        help="[DEPRECATED - Always on] AI pattern detection is now enabled by default"
     )
     verify_parallel_parser.add_argument(
         "--audit-diff",
         action="store_true",
-        help="Audit the git diff to ensure changes match acceptance criteria"
+        help="[DEPRECATED - Always on] Diff auditing is now enabled by default"
+    )
+    verify_parallel_parser.add_argument(
+        "--no-critical-review",
+        action="store_true",
+        help="Disable critical code review (NOT RECOMMENDED - use only for quick checks)"
     )
     verify_parallel_parser.add_argument(
         "--save-report",

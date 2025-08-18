@@ -940,8 +940,15 @@ def check_for_ai_generated_code(
         return []
 
 
-def validate_acceptance_criteria(ticket, project_dir):
-    """Validate that acceptance criteria were actually implemented."""
+def validate_acceptance_criteria(ticket, project_dir, allow_system_modifications=False):
+    """Validate that acceptance criteria were actually implemented.
+    
+    Args:
+        ticket: Ticket data dictionary
+        project_dir: Project directory path
+        allow_system_modifications: If True, skip system file modification checks
+
+    """
     criteria = ticket["acceptance_criteria"]
     failed_criteria = []
 
@@ -965,14 +972,20 @@ def validate_acceptance_criteria(ticket, project_dir):
                 system_files_modified.append(file_path)
 
         if system_files_modified:
-            print("\n❌ VALIDATION FAILURE: Agent modified Hydra system files:")
-            for file in system_files_modified:
-                print(f"   ❌ {file}")
-            failed_criteria.append(
-                "Modified Hydra system files instead of project files"
-            )
-            # This is a critical failure - don't continue validation
-            return False
+            if allow_system_modifications:
+                print("\n⚠️  WARNING: Agent modified Hydra system files (allowed by --allow-system-modifications):")
+                for file in system_files_modified:
+                    print(f"   ⚠️  {file}")
+                print("   Proceeding with validation despite system file modifications...")
+            else:
+                print("\n❌ VALIDATION FAILURE: Agent modified Hydra system files:")
+                for file in system_files_modified:
+                    print(f"   ❌ {file}")
+                failed_criteria.append(
+                    "Modified Hydra system files instead of project files"
+                )
+                # This is a critical failure - don't continue validation
+                return False
 
     # First, check for AI-generated code patterns in recent changes
     # Use enhanced AI detection with ticket context
@@ -1583,6 +1596,7 @@ def execute_single_ticket(
     timeout_override=None,
     workspace: Optional[SharedWorkspace] = None,
     skip_preflight=False,
+    allow_system_modifications=False,
 ):
     """Execute exactly like: 'execute ticket N in tickets.md'.
 
@@ -1938,7 +1952,7 @@ REMINDER: You are working on Ticket {ticket_identifier} ONLY."""
 
         # Validate acceptance criteria before marking complete
         print("\n🔍 Validating acceptance criteria...")
-        validation_passed = validate_acceptance_criteria(ticket, project_dir)
+        validation_passed = validate_acceptance_criteria(ticket, project_dir, allow_system_modifications)
 
         if not validation_passed:
             # Check if the actual work was done by looking at git changes

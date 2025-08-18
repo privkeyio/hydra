@@ -64,6 +64,11 @@ def add_ticket_parser(subparsers):
         action="store_true",
         help="Include context from dependent tickets in execution",
     )
+    execute_ticket_parser.add_argument(
+        "--allow-system-modifications",
+        action="store_true",
+        help="Allow modifications to Hydra system files (USE WITH CAUTION)",
+    )
 
     # Run all tickets
     run_tickets_parser = ticket_subparsers.add_parser(
@@ -130,6 +135,11 @@ def add_ticket_parser(subparsers):
         dest="async_mode",
         help="Use async execution mode for better concurrency",
     )
+    parallel_parser.add_argument(
+        "--allow-system-modifications",
+        action="store_true",
+        help="Allow modifications to Hydra system files (USE WITH CAUTION)",
+    )
 
     # Verify parallel execution results
     verify_parallel_parser = ticket_subparsers.add_parser(
@@ -166,6 +176,11 @@ def add_ticket_parser(subparsers):
     )
     verify_parallel_parser.add_argument(
         "--verbose", "-v", action="store_true", help="Show detailed verification output"
+    )
+    verify_parallel_parser.add_argument(
+        "--allow-system-modifications",
+        action="store_true",
+        help="Allow modifications to Hydra system files (USE WITH CAUTION)",
     )
 
     return ticket_parser
@@ -205,7 +220,8 @@ def _handle_execute_ticket(args) -> int:
         # Note: include_context is not currently supported in execute_single_ticket
         # but we capture it for future use
         success = execute_single_ticket(
-            args.tickets, args.identifier, skip_preflight=skip_preflight
+            args.tickets, args.identifier, skip_preflight=skip_preflight,
+            allow_system_modifications=getattr(args, "allow_system_modifications", False)
         )
         return 0 if success else 1
     except Exception as e:
@@ -402,7 +418,7 @@ Report what you found and what you completed."""
 
                     print(f"\n🔍 Validating ticket {ticket_id} after verification...")
                     validation_passed = validate_acceptance_criteria(
-                        ticket_data, str(project_root)
+                        ticket_data, str(project_root), getattr(args, "allow_system_modifications", False)
                     )
 
                     if validation_passed:

@@ -84,6 +84,7 @@ hydra parallel [options] <tickets_file>
 - `--save-log` - Save execution log
 - `--skip-preflight` - Skip preflight checks
 - `--async` - Use async execution mode
+- `--allow-system-modifications` - Allow modification of Hydra system files (USE WITH CAUTION)
 
 #### Examples
 
@@ -93,6 +94,9 @@ hydra ticket parallel tickets.yaml --workers 4
 
 # Async mode with logging
 hydra ticket parallel tickets.yaml --async --save-log
+
+# Allow system modifications (for self-improvement scenarios)
+hydra ticket parallel tickets.yaml --workers 3 --allow-system-modifications
 ```
 
 ### `hydra verify`
@@ -126,29 +130,28 @@ hydra quality <ticket_id> [options]
 Verify results from parallel execution.
 
 ```bash
-hydra refactor [options] <file> <instructions>
+hydra ticket verify-parallel [options] <tickets_file>
 ```
 
 #### Options
 
-- `--backup` - Create backup before refactoring
-- `--dry-run` - Show changes without applying
-- `--interactive` - Confirm each change
-- `--preserve-style` - Maintain existing code style
+- `--workers <n>` - Number of parallel workers for verification
+- `--check-ai` - Run AI detection on generated code
+- `--audit-diff` - Audit file differences
+- `--verbose` - Show detailed verification output
+- `--allow-system-modifications` - Allow modification of Hydra system files (USE WITH CAUTION)
 
 #### Examples
 
 ```bash
-# Refactor with default provider
-hydra refactor src/main.py "Convert to async/await pattern"
+# Verify parallel execution results
+hydra ticket verify-parallel tickets.yaml --workers 2
 
-# Use specific provider for refactoring
-hydra refactor --provider claude --model opus \
-  src/database.js "Add connection pooling"
+# Verify with AI detection
+hydra ticket verify-parallel tickets.yaml --check-ai
 
-# Dry run to preview changes
-hydra refactor --dry-run src/api.py \
-  "Split into smaller functions"
+# Verify allowing system modifications
+hydra ticket verify-parallel tickets.yaml --allow-system-modifications
 ```
 
 ### `hydra explain`
@@ -224,6 +227,7 @@ hydra ticket execute [options] <ticket-id>
 - `--cwd <path>` - Working directory
 - `--verify` - Verify after execution
 - `--no-commit` - Skip auto-commit
+- `--allow-system-modifications` - Allow modification of Hydra system files (USE WITH CAUTION)
 
 #### Examples
 
@@ -237,6 +241,9 @@ hydra ticket execute --provider venice 002 \
 
 # Execute with verification
 hydra ticket execute --verify 003
+
+# Execute allowing system modifications
+hydra ticket execute 001 --allow-system-modifications
 ```
 
 ### `hydra ticket parallel`

@@ -32,6 +32,11 @@ def add_parallel_parser(subparsers):
         dest="async_mode",
         help="Use async execution mode for better concurrency",
     )
+    parallel_parser.add_argument(
+        "--allow-system-modifications",
+        action="store_true",
+        help="Allow modifications to Hydra system files (USE WITH CAUTION)",
+    )
 
     # Batch execution command
     batch_parser = subparsers.add_parser(
@@ -127,6 +132,7 @@ def _handle_sync_parallel_execution(args) -> int:
             max_workers=config.max_parallel_tickets,
             project_root=str(project_root),
             dashboard_state=dashboard_state,
+            allow_system_modifications=getattr(args, "allow_system_modifications", False),
         )
 
         # Log configuration mode

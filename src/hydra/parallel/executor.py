@@ -64,10 +64,12 @@ class ParallelExecutor:
     """Executes tickets in parallel respecting dependencies."""
 
     def __init__(
-        self, max_workers: int = 3, project_root: str = ".", dashboard_state=None
+        self, max_workers: int = 3, project_root: str = ".", dashboard_state=None,
+        allow_system_modifications: bool = False
     ):
         self.max_workers = max_workers
         self.project_root = Path(project_root).resolve()
+        self.allow_system_modifications = allow_system_modifications
         self.tickets: Dict[str, TicketNode] = {}
         self.lock = threading.Lock()
         self.completed_tickets: Set[str] = set()
@@ -500,7 +502,7 @@ REMINDER: You are working on Ticket {ticket_id} ONLY. Ignore all other tickets."
                 from hydra.ticket_workflow import validate_acceptance_criteria
 
                 validation_passed = validate_acceptance_criteria(
-                    ticket_data, str(self.project_root)
+                    ticket_data, str(self.project_root), self.allow_system_modifications
                 )
 
                 if validation_passed:

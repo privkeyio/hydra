@@ -41,7 +41,6 @@ class AsyncOpenAIProvider(AsyncLLMProvider):
         self,
         endpoint: str,
         data: Dict[str, Any],
-        stream: bool = False
     ) -> Any:
         """Make an async HTTP request to OpenAI API."""
         url = f"{self.config.base_url or self.BASE_URL}/{endpoint}"
@@ -51,24 +50,36 @@ class AsyncOpenAIProvider(AsyncLLMProvider):
         }
 
         async with self.get_session() as session:
-            if stream:
-                async with session.post(
-                    url,
-                    json=data,
-                    headers=headers
-                ) as response:
-                    response.raise_for_status()
-                    async for line in response.content:
-                        if line:
-                            yield line
-            else:
-                async with session.post(
-                    url,
-                    json=data,
-                    headers=headers
-                ) as response:
-                    response.raise_for_status()
-                    return await response.json()
+            async with session.post(
+                url,
+                json=data,
+                headers=headers
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
+    
+    async def _make_stream_request(
+        self,
+        endpoint: str,
+        data: Dict[str, Any],
+    ) -> AsyncIterator[bytes]:
+        """Make an async streaming HTTP request to OpenAI API."""
+        url = f"{self.config.base_url or self.BASE_URL}/{endpoint}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.config.api_key}"
+        }
+
+        async with self.get_session() as session:
+            async with session.post(
+                url,
+                json=data,
+                headers=headers
+            ) as response:
+                response.raise_for_status()
+                async for line in response.content:
+                    if line:
+                        yield line
 
     async def generate(self, prompt: str, **kwargs) -> str:
         """Asynchronously generate a response from GPT."""

@@ -129,3 +129,52 @@ jobs:
           echo "Coverage ${COVERAGE}% is below minimum threshold of ${MIN_COVERAGE}%"
           exit 1
         fi
+    
+    - name: Run performance benchmarks
+      run: |
+        echo "Running performance benchmarks..."
+        # Create benchmark results directory
+        mkdir -p benchmark_results
+        # Run comprehensive benchmark suite (reduced iterations for CI)
+        timeout 10m python src/hydra/benchmarks/run_all_benchmarks.py
+        echo "Performance benchmarks completed"
+        if [ $? -ne 0 ]; then
+          echo "Performance benchmarks failed!"
+          exit 1
+        fi
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      if: always()  # Upload artifacts even if benchmarks failed
+      with:
+        name: performance-benchmarks-${{ github.sha }}
+        path: |
+          benchmark_results/
+          !benchmark_results/**/*.tmp
+        retention-days: 30
+    
+    - name: Comment benchmark results on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = 'benchmark_results/benchmark_summary.md';
+          
+          if (fs.existsSync(path)) {
+            const summary = fs.readFileSync(path, 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## Performance Benchmark Results\n\n' + summary
+            });
+          } else {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## Performance Benchmark Results\n\n❌ Benchmarks failed to run. Check the CI logs for details.'
+            });
+          }

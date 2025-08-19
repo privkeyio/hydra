@@ -1,3 +1,5 @@
+"""Standalone module."""
+
 #!/usr/bin/env python3
 """Standalone dashboard server that persists between hydra executions."""
 

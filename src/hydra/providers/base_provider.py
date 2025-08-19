@@ -1,4 +1,8 @@
-"""Extended base provider interface for LLM abstraction."""
+"""Unified provider interface for LLM abstraction.
+
+This module provides the comprehensive interface that consolidates all LLM providers
+in Hydra, eliminating duplication across Claude CLI, tmux, and enhanced implementations.
+"""
 
 from abc import abstractmethod
 from dataclasses import dataclass, field

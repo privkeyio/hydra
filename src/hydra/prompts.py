@@ -2,7 +2,10 @@
 
 from typing import Any, Dict, List, Optional
 
-import tiktoken
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
 
 
 class PromptTemplates:

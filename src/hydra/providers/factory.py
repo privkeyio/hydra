@@ -59,15 +59,17 @@ def auto_register_providers():
     """Automatically register core providers in the providers directory."""
     providers_dir = os.path.dirname(__file__)
 
-    # Register core providers including Claude session provider
+    # Register core providers including unified Claude provider
     provider_map = {
         "venice": "VeniceProvider",
         "anthropic": "AnthropicProvider",
         "openai": "OpenAIProvider",
         "mock": "MockProvider",
         "mock_provider": "MockProvider",  # Alias for compatibility
-        "claude_session": "ClaudeSessionProvider",
-        "claude_tmux": "ClaudeTmuxProvider",
+        "claude": "ClaudeUnifiedProvider",
+        "claude_cli": "ClaudeUnifiedProvider",  # Legacy alias
+        "claude_tmux": "ClaudeUnifiedProvider",  # Legacy alias
+        "claude_enhanced": "ClaudeUnifiedProvider",  # Legacy alias
     }
 
     for filename in os.listdir(providers_dir):
@@ -104,7 +106,7 @@ class LLMProviderFactory:
         # Auto-register core providers on first use
         if not any(
             p in ProviderRegistry._providers
-            for p in ["venice", "anthropic", "openai", "mock", "claude_session"]
+            for p in ["venice", "anthropic", "openai", "mock", "claude"]
         ):
             auto_register_providers()
 
@@ -226,13 +228,13 @@ def create_claude_provider_factory():
             return ClaudeInteractiveAdapter(config)
 
         except ImportError:
-            # Fallback to a basic Claude provider if interactive adapter not available
+            # Fallback to the unified Claude provider
             try:
                 from .base import LLMConfig
-                from .claude_cli import ClaudeCLIProvider
+                from .claude_unified import ClaudeUnifiedProvider
 
-                config = LLMConfig(provider_type="claude_cli", timeout=300)
-                return ClaudeCLIProvider(config)
+                config = LLMConfig(provider_type="claude", timeout=300)
+                return ClaudeUnifiedProvider(config)
 
             except ImportError:
                 raise RuntimeError("No Claude provider available for warm session pool")

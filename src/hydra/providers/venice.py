@@ -32,6 +32,8 @@ from hydra.providers.base_provider import (
     Session,
     SessionState,
 )
+from hydra.providers.error_handler import ErrorCategory, get_error_handler
+from hydra.providers.retry_utils import CircuitBreaker, with_retry
 from hydra.providers.session_manager import get_session_manager
 from hydra.token_tracker import get_token_tracker
 
@@ -160,6 +162,10 @@ class VeniceProvider(BaseProvider):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
 
+        # Initialize error handling
+        self.error_handler = get_error_handler()
+        self.circuit_breaker = CircuitBreaker("venice", failure_threshold=5, recovery_timeout=30.0)
+
         # Get session manager for connection pooling
         self.session_manager = get_session_manager()
 
@@ -223,8 +229,13 @@ class VeniceProvider(BaseProvider):
     def name(self) -> str:
         return "venice"
 
+    @with_retry(max_retries=3, retry_on=[ErrorCategory.NETWORK, ErrorCategory.API_LIMIT, ErrorCategory.TIMEOUT])
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response from Venice AI with retry logic and error handling."""
+        return self.circuit_breaker.call(self._generate_impl, prompt, **kwargs)
+
+    def _generate_impl(self, prompt: str, **kwargs) -> str:
+        """Internal implementation of generate with proper error handling."""
         self.stats["total_requests"] += 1
 
         # Check budget before making request
@@ -356,6 +367,13 @@ class VeniceProvider(BaseProvider):
 
             except RateLimitError as e:
                 last_exception = e
+                # Log error with context
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": operation_name, "attempt": attempt + 1}
+                )
+
                 if attempt < self.max_retries:
                     # Use retry-after header if available
                     retry_after = getattr(e, "retry_after", None)
@@ -372,6 +390,13 @@ class VeniceProvider(BaseProvider):
 
             except (APIConnectionError, OpenAITimeout) as e:
                 last_exception = e
+                # Log error with context
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": operation_name, "attempt": attempt + 1}
+                )
+
                 if attempt < self.max_retries:
                     wait_time = min(delay, self.max_delay)
                     logger.warning(
@@ -383,6 +408,13 @@ class VeniceProvider(BaseProvider):
 
             except APIError as e:
                 last_exception = e
+                # Log error with context
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": operation_name, "attempt": attempt + 1, "status_code": getattr(e, "status_code", None)}
+                )
+
                 # Check if it's a retryable error (5xx status codes)
                 if hasattr(e, "status_code") and e.status_code >= 500:
                     if attempt < self.max_retries:
@@ -401,6 +433,12 @@ class VeniceProvider(BaseProvider):
                 raise
 
             except Exception as e:
+                # Log unexpected error
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": operation_name, "attempt": attempt + 1, "unexpected": True}
+                )
                 # Unexpected error, don't retry
                 logger.error(f"Unexpected error for {operation_name}: {e}")
                 self.stats["failed_requests"] += 1

@@ -73,7 +73,7 @@ class TicketFormatHandler:
 
         if format_type == "md":
             # Use legacy MD parser directly to avoid circular import
-            from hydra.ticket_workflow import parse_ticket_md_legacy
+            from hydra.tickets.ticket_parser import parse_ticket_md_legacy
 
             return parse_ticket_md_legacy(file_path, ticket_id)
 
@@ -158,15 +158,28 @@ class TicketFormatHandler:
             )
 
             for ticket_id in ticket_ids:
-                from hydra.ticket_workflow import parse_ticket
+                from hydra.tickets.ticket_parser import parse_ticket_md_legacy
 
-                ticket = parse_ticket(file_path, ticket_id)
+                ticket = parse_ticket_md_legacy(file_path, ticket_id)
                 if ticket:
                     result[ticket_id] = ticket
 
             return result
 
         return {}
+
+    def parse_all_tickets(self, file_path: str) -> list:
+        """Parse all tickets from either format as a list.
+
+        Args:
+            file_path: Path to ticket file
+
+        Returns:
+            List of ticket dictionaries
+
+        """
+        all_tickets = self.get_all_tickets(file_path)
+        return list(all_tickets.values())
 
     def update_ticket_status(self, file_path: str, ticket_id: str, status: str) -> None:
         """Update ticket status in either format.
@@ -183,11 +196,11 @@ class TicketFormatHandler:
             self.yaml_handler.update_ticket_status(file_path, ticket_id, status)
         else:
             if status == "DONE":
-                from hydra.ticket_workflow import mark_ticket_completed
+                from hydra.tickets.ticket_status import mark_ticket_completed
 
                 mark_ticket_completed(file_path, ticket_id)
             elif status == "IN_PROGRESS":
-                from hydra.ticket_workflow import mark_ticket_in_progress
+                from hydra.tickets.ticket_status import mark_ticket_in_progress
 
                 mark_ticket_in_progress(file_path, ticket_id)
 

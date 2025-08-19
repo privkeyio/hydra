@@ -1,0 +1,39 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=88]
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.6.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-PyYAML, types-requests]
+        args: [--ignore-missing-imports, --no-strict-optional]
+
+  - repo: local
+    hooks:
+      - id: pytest-unit
+        name: pytest-unit
+        entry: python -m pytest tests/unit/ -x --tb=short -q
+        language: system
+        pass_filenames: false
+        stages: [commit]
+
+      - id: coverage-check
+        name: coverage-check
+        entry: bash -c "python -m pytest tests/unit/ --cov=src/hydra --cov-report=term | grep 'TOTAL.*%' | awk '{if(+$4 < 30) exit 1}'"
+        language: system
+        pass_filenames: false
+        stages: [commit]
+
+default_language_version:
+  python: python3.11

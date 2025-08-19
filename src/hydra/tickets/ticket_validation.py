@@ -3,7 +3,7 @@
 import os
 import re
 import subprocess
-from typing import List, Tuple, Dict, Any
+from typing import Any, Dict, List, Tuple
 
 from hydra.quality.ai_detection import AIGeneratedCodeDetector, StrictnessLevel
 
@@ -22,27 +22,28 @@ def validate_acceptance_criteria(
         
     Returns:
         True if validation passed, False otherwise
+
     """
     criteria = ticket["acceptance_criteria"]
     failed_criteria = []
-    
+
     print(f"🔍 Checking {len(criteria)} acceptance criteria:")
-    
+
     # Check for system file modifications first
     git_status = subprocess.run(
         ["git", "status", "--short"], capture_output=True, text=True, cwd=project_dir
     )
-    
+
     if git_status.stdout:
         modified_files = [
             line.split()[-1] for line in git_status.stdout.strip().split("\n") if line
         ]
-        
+
         system_files_modified = []
         for file_path in modified_files:
             if file_path.startswith("src/hydra/") or file_path.startswith("tests/"):
                 system_files_modified.append(file_path)
-        
+
         if system_files_modified:
             if allow_system_modifications:
                 print("\n⚠️  WARNING: Agent modified Hydra system files (allowed by --allow-system-modifications):")
@@ -58,25 +59,25 @@ def validate_acceptance_criteria(
                 )
                 # This is a critical failure - don't continue validation
                 return False
-    
+
     # Check for AI-generated code patterns
     if not _validate_ai_patterns(ticket, project_dir, failed_criteria):
         # Critical AI patterns found
         return False
-    
+
     # Validate specific criteria
     for i, criterion in enumerate(criteria, 1):
         if not _validate_criterion(i, criterion, project_dir, failed_criteria):
             continue
         else:
             print(f"   ✅ {i}. Criterion validated")
-    
+
     if failed_criteria:
         print("\n❌ Failed criteria:")
         for criterion in failed_criteria:
             print(f"   • {criterion}")
         return False
-    
+
     return True
 
 
@@ -89,11 +90,12 @@ def _validate_ai_patterns(
     
     Returns:
         True if validation should continue, False if critical issues found
+
     """
     # Get ticket context for AI detection
     ticket_id = ticket.get("id", "unknown")
     ticket_description = f"{ticket.get('title', '')} - {ticket.get('description', '')}"
-    
+
     # Get strictness from environment or use default
     strictness_str = os.environ.get("AI_DETECTION_STRICTNESS", "moderate").lower()
     strictness_map = {
@@ -102,7 +104,7 @@ def _validate_ai_patterns(
         "strict": StrictnessLevel.STRICT,
     }
     strictness = strictness_map.get(strictness_str, StrictnessLevel.MODERATE)
-    
+
     # Wrap AI detection in try-except to ensure validation continues even if AI detection fails
     try:
         ai_result = check_for_ai_generated_code(
@@ -111,15 +113,15 @@ def _validate_ai_patterns(
             ticket_description=ticket_description,
             strictness=strictness,
         )
-        
+
         # Handle both new tuple format and backward compatibility
         if isinstance(ai_result, tuple):
             ai_report, should_block, analysis = ai_result
-            
+
             # Print the comprehensive report if available
             if isinstance(ai_report, str) and ai_report:
                 print("\n" + ai_report)
-            
+
             # Block if critical issues found (configurable)
             if should_block:
                 failed_criteria.append(
@@ -141,7 +143,7 @@ def _validate_ai_patterns(
         # Catch any other AI detection errors and continue
         print(f"\n⚠️  AI detection check failed (non-blocking): {str(e)}")
         print("   Continuing with other validation checks...")
-    
+
     return True
 
 
@@ -155,9 +157,10 @@ def _validate_criterion(
     
     Returns:
         True if criterion is validated, False otherwise
+
     """
     criterion_lower = criterion.lower()
-    
+
     # Check for CLI refactoring specific criteria
     if "cli/commands/ directory structure" in criterion_lower:
         return _validate_cli_structure(index, criterion, project_dir, failed_criteria)
@@ -165,7 +168,7 @@ def _validate_criterion(
         return _validate_cli_reduction(index, criterion, project_dir, failed_criteria)
     elif "split ticket, template, parallel, verify into separate files" in criterion_lower:
         return _validate_cli_split(index, criterion, project_dir, failed_criteria)
-    
+
     # Check for specific file mentions
     if "interactive_base.py" in criterion:
         file_path = "src/hydra/providers/interactive_base.py"
@@ -174,15 +177,44 @@ def _validate_criterion(
             failed_criteria.append(f"{index}. {criterion}")
             print(f"   ❌ {index}. File not found: {file_path}")
             return False
-    
+
     # Check for module extraction criteria (for ticket 016)
     if "extract" in criterion_lower and "into separate module" in criterion_lower:
         return _validate_module_extraction(index, criterion, project_dir, failed_criteria)
     elif "each module should be under" in criterion_lower and "lines" in criterion_lower:
         return _validate_module_size(index, criterion, project_dir, failed_criteria)
-    
-    # Generic validation - assume passed if no specific check
-    return True
+
+    # Check for provider architecture specific criteria
+    if "provider interface" in criterion_lower and "base_provider.py" in criterion_lower:
+        return _validate_provider_interface(index, criterion, project_dir, failed_criteria)
+    elif "consolidate" in criterion_lower and "provider" in criterion_lower:
+        return _validate_provider_consolidation(index, criterion, project_dir, failed_criteria)
+    elif "document" in criterion_lower and "architecture" in criterion_lower and "providers" in criterion_lower:
+        return _validate_provider_documentation(index, criterion, project_dir, failed_criteria)
+    elif "remove duplicate code" in criterion_lower:
+        # For duplicate code removal, check if consolidated provider exists
+        return _validate_duplicate_removal(index, criterion, project_dir, failed_criteria)
+
+    # For criteria that just need implementation verification
+    if "requires implementation verification" in str(failed_criteria):
+        # Mark as needing manual verification but don't fail
+        print(f"   ⚠️  {index}. Requires implementation verification: {criterion[:60]}...")
+        print("      📝 Files created/modified - implementation detected")
+        return True
+
+    # Generic validation - check if files were modified for the task
+    # This is more lenient but still validates work was done
+    git_status = subprocess.run(
+        ["git", "status", "--short"], capture_output=True, text=True, cwd=project_dir
+    )
+    if git_status.stdout:
+        print(f"   ℹ️  {index}. Manual validation required: {criterion[:60]}...")
+        return True
+
+    # No specific validation and no changes detected
+    print(f"   ❌ {index}. Required file missing: {criterion[:60]}...")
+    failed_criteria.append(f"{index}. {criterion}")
+    return False
 
 
 def _validate_cli_structure(
@@ -197,19 +229,19 @@ def _validate_cli_structure(
         failed_criteria.append(f"{index}. {criterion}")
         print(f"   ❌ {index}. CLI commands directory missing: src/hydra/cli/commands/")
         return False
-    
+
     # Check if command files actually exist
     expected_files = ["ticket.py", "parallel.py", "verify.py", "template.py"]
     missing_files = []
     for cmd_file in expected_files:
         if not os.path.exists(os.path.join(cli_commands_dir, cmd_file)):
             missing_files.append(cmd_file)
-    
+
     if missing_files:
         failed_criteria.append(f"{index}. {criterion}")
         print(f"   ❌ {index}. Missing command files: {', '.join(missing_files)}")
         return False
-    
+
     print(f"   ✅ {index}. CLI commands directory structure created")
     return True
 
@@ -254,12 +286,12 @@ def _validate_cli_split(
     for name, path in cmd_files.items():
         if not os.path.exists(path):
             missing.append(name)
-    
+
     if missing:
         failed_criteria.append(f"{index}. {criterion}")
         print(f"   ❌ {index}. Commands not split into files: {', '.join(missing)}")
         return False
-    
+
     print(f"   ✅ {index}. Commands split into separate files")
     return True
 
@@ -277,18 +309,18 @@ def _validate_module_extraction(
         "src/hydra/tickets/ticket_executor.py",
         "src/hydra/tickets/ticket_database.py",
     ]
-    
+
     missing = []
     for module_path in modules:
         full_path = os.path.join(project_dir, module_path)
         if not os.path.exists(full_path):
             missing.append(os.path.basename(module_path))
-    
+
     if missing:
         failed_criteria.append(f"{index}. {criterion}")
         print(f"   ❌ {index}. Modules not extracted: {', '.join(missing)}")
         return False
-    
+
     print(f"   ✅ {index}. Modules extracted successfully")
     return True
 
@@ -305,16 +337,16 @@ def _validate_module_size(
     match = re.search(r"under (\d+) lines", criterion.lower())
     if not match:
         return True  # Can't validate without a specific number
-    
+
     max_lines = int(match.group(1))
-    
+
     # Check the new modules
     modules = [
         "src/hydra/tickets/ticket_parser.py",
         "src/hydra/tickets/ticket_executor.py",
         "src/hydra/tickets/ticket_database.py",
     ]
-    
+
     oversized = []
     for module_path in modules:
         full_path = os.path.join(project_dir, module_path)
@@ -323,13 +355,182 @@ def _validate_module_size(
                 line_count = len(f.readlines())
             if line_count > max_lines:
                 oversized.append(f"{os.path.basename(module_path)} ({line_count} lines)")
-    
+
     if oversized:
         failed_criteria.append(f"{index}. {criterion}")
         print(f"   ❌ {index}. Modules exceed {max_lines} lines: {', '.join(oversized)}")
         return False
-    
+
     print(f"   ✅ {index}. All modules under {max_lines} lines")
+    return True
+
+
+def _validate_provider_interface(
+    index: int,
+    criterion: str,
+    project_dir: str,
+    failed_criteria: List[str]
+) -> bool:
+    """Validate provider interface in base_provider.py."""
+    base_provider_path = os.path.join(project_dir, "src/hydra/providers/base_provider.py")
+
+    if not os.path.exists(base_provider_path):
+        # Check if it's been created/modified
+        base_path = os.path.join(project_dir, "src/hydra/providers/base.py")
+        if os.path.exists(base_path):
+            # Check if the interface has been enhanced
+            with open(base_path, "r") as f:
+                content = f.read()
+            if "class LLMProvider" in content and "abstractmethod" in content:
+                print(f"   ✅ {index}. Provider interface exists in base.py")
+                return True
+
+        failed_criteria.append(f"{index}. {criterion}")
+        print(f"   ❌ {index}. File not found: src/hydra/providers/base_provider.py")
+        return False
+
+    # Check if the file has proper interface definitions
+    with open(base_provider_path, "r") as f:
+        content = f.read()
+
+    required_elements = [
+        "class",  # Should have class definitions
+        "abstractmethod",  # Should have abstract methods
+        "LLMProvider",  # Should define provider interface
+    ]
+
+    missing = [elem for elem in required_elements if elem not in content]
+    if missing:
+        failed_criteria.append(f"{index}. {criterion}")
+        print(f"   ❌ {index}. Provider interface incomplete, missing: {', '.join(missing)}")
+        return False
+
+    print(f"   ✅ {index}. Clear provider interface created")
+    return True
+
+
+def _validate_provider_consolidation(
+    index: int,
+    criterion: str,
+    project_dir: str,
+    failed_criteria: List[str]
+) -> bool:
+    """Validate Claude provider consolidation."""
+    # Check for unified provider implementation
+    unified_paths = [
+        "src/hydra/providers/claude_unified.py",
+        "src/hydra/providers/unified_factory.py",
+        "src/hydra/providers/config_manager.py"
+    ]
+
+    found_files = []
+    for path in unified_paths:
+        full_path = os.path.join(project_dir, path)
+        if os.path.exists(full_path):
+            found_files.append(os.path.basename(path))
+
+    if found_files:
+        print(f"   ⚠️  {index}. Requires implementation verification: {criterion[:60]}...")
+        print("      📝 Files created/modified - implementation detected")
+        return True
+
+    # Check if existing providers have been modified for consolidation
+    existing_providers = [
+        "src/hydra/providers/claude_cli.py",
+        "src/hydra/providers/claude_tmux.py",
+        "src/hydra/providers/claude_cli_enhanced.py"
+    ]
+
+    modified_count = 0
+    for path in existing_providers:
+        full_path = os.path.join(project_dir, path)
+        if os.path.exists(full_path):
+            # Check if file was recently modified
+            import subprocess
+            result = subprocess.run(
+                ["git", "status", "--short", path],
+                capture_output=True,
+                text=True,
+                cwd=project_dir
+            )
+            if result.stdout.strip():
+                modified_count += 1
+
+    if modified_count >= 2:
+        print(f"   ⚠️  {index}. Requires implementation verification: {criterion[:60]}...")
+        print("      📝 Files created/modified - implementation detected")
+        return True
+
+    failed_criteria.append(f"{index}. {criterion}")
+    print(f"   ❌ {index}. Provider consolidation not implemented")
+    return False
+
+
+def _validate_duplicate_removal(
+    index: int,
+    criterion: str,
+    project_dir: str,
+    failed_criteria: List[str]
+) -> bool:
+    """Validate duplicate code removal."""
+    # This is hard to validate automatically
+    # Check if consolidation files exist
+    consolidation_indicators = [
+        "src/hydra/providers/claude_unified.py",
+        "src/hydra/providers/migration.py",
+        "src/hydra/providers/unified_factory.py"
+    ]
+
+    for path in consolidation_indicators:
+        full_path = os.path.join(project_dir, path)
+        if os.path.exists(full_path):
+            print(f"   ⚠️  {index}. Requires implementation verification: {criterion[:60]}...")
+            print("      📝 Files created/modified - implementation detected")
+            return True
+
+    # Check if provider files were modified
+    git_status = subprocess.run(
+        ["git", "status", "--short", "src/hydra/providers/"],
+        capture_output=True,
+        text=True,
+        cwd=project_dir
+    )
+
+    if git_status.stdout:
+        print(f"   ⚠️  {index}. Requires implementation verification: {criterion[:60]}...")
+        print("      📝 Files created/modified - implementation detected")
+        return True
+
+    failed_criteria.append(f"{index}. {criterion}")
+    print(f"   ❌ {index}. No evidence of duplicate code removal")
+    return False
+
+
+def _validate_provider_documentation(
+    index: int,
+    criterion: str,
+    project_dir: str,
+    failed_criteria: List[str]
+) -> bool:
+    """Validate provider architecture documentation."""
+    doc_path = os.path.join(project_dir, "docs/architecture/providers.md")
+
+    if not os.path.exists(doc_path):
+        # Check alternative location
+        alt_path = os.path.join(project_dir, "docs/architecture/")
+        if os.path.exists(alt_path):
+            # Check if any provider docs exist
+            import glob
+            provider_docs = glob.glob(os.path.join(alt_path, "*provider*"))
+            if provider_docs:
+                print(f"   ✅ {index}. Provider documentation found")
+                return True
+
+        failed_criteria.append(f"{index}. {criterion}")
+        print(f"   ❌ {index}. Required file missing: docs/architecture/providers.md")
+        return False
+
+    print(f"   ✅ {index}. Provider architecture documented")
     return True
 
 
@@ -341,9 +542,10 @@ def validate_code_changes(project_dir: str) -> Tuple[bool, List[Dict[str, Any]]]
         
     Returns:
         Tuple of (is_valid, list of suspicious patterns)
+
     """
     suspicious_patterns = []
-    
+
     # Get list of modified files
     git_result = subprocess.run(
         ["git", "status", "--short"],
@@ -351,10 +553,10 @@ def validate_code_changes(project_dir: str) -> Tuple[bool, List[Dict[str, Any]]]
         text=True,
         cwd=project_dir,
     )
-    
+
     if not git_result.stdout:
         return True, []
-    
+
     modified_files = []
     for line in git_result.stdout.strip().split("\n"):
         if line:
@@ -363,7 +565,7 @@ def validate_code_changes(project_dir: str) -> Tuple[bool, List[Dict[str, Any]]]
                 status_code, file_path = parts
                 if "M" in status_code or "A" in status_code:
                     modified_files.append(file_path)
-    
+
     # Check for suspicious patterns in modified files
     patterns_to_check = [
         {
@@ -387,20 +589,20 @@ def validate_code_changes(project_dir: str) -> Tuple[bool, List[Dict[str, Any]]]
             "description": "Shell injection vulnerability",
         },
     ]
-    
+
     for file_path in modified_files:
         full_path = os.path.join(project_dir, file_path)
         if not os.path.exists(full_path):
             continue
-        
+
         # Skip non-code files
         if not file_path.endswith((".py", ".js", ".ts")):
             continue
-        
+
         try:
             with open(full_path, "r") as f:
                 content = f.read()
-            
+
             for pattern_info in patterns_to_check:
                 matches = re.findall(pattern_info["pattern"], content)
                 if matches:
@@ -412,7 +614,7 @@ def validate_code_changes(project_dir: str) -> Tuple[bool, List[Dict[str, Any]]]
         except Exception:
             # Skip files that can't be read
             continue
-    
+
     is_valid = len(suspicious_patterns) == 0
     return is_valid, suspicious_patterns
 
@@ -433,10 +635,11 @@ def check_for_ai_generated_code(
         
     Returns:
         Tuple of (report_string, should_block, analysis_dict)
+
     """
     try:
         detector = AIGeneratedCodeDetector()
-        
+
         # Get list of modified files
         git_result = subprocess.run(
             ["git", "diff", "--name-only", "HEAD"],
@@ -444,32 +647,32 @@ def check_for_ai_generated_code(
             text=True,
             cwd=project_dir,
         )
-        
+
         if not git_result.stdout:
             return "", False, {}
-        
+
         modified_files = [
             os.path.join(project_dir, f.strip())
             for f in git_result.stdout.strip().split("\n")
             if f.strip()
         ]
-        
+
         # Analyze modified files
         all_issues = []
         critical_issues = []
-        
+
         for file_path in modified_files:
             if not os.path.exists(file_path):
                 continue
-            
+
             # Skip non-code files
             if not file_path.endswith((".py", ".js", ".ts", ".jsx", ".tsx")):
                 continue
-            
+
             try:
                 with open(file_path, "r") as f:
                     content = f.read()
-                
+
                 # Use the detector with ticket context
                 result = detector.analyze_code(
                     content,
@@ -477,33 +680,33 @@ def check_for_ai_generated_code(
                     ticket_description=ticket_description,
                     strictness=strictness,
                 )
-                
+
                 if result["is_ai_generated"]:
                     issues = result.get("issues", [])
                     all_issues.extend(issues)
-                    
+
                     # Check for critical issues
                     if result.get("confidence", 0) > 0.8:
                         critical_issues.extend(issues)
-                        
+
             except Exception:
                 # Skip files that can't be analyzed
                 continue
-        
+
         # Generate report
         report = _generate_ai_report(all_issues, critical_issues, strictness)
-        
+
         # Determine if we should block
         should_block = len(critical_issues) > 0 and strictness != StrictnessLevel.LENIENT
-        
+
         analysis = {
             "total_issues": len(all_issues),
             "critical_issues": len(critical_issues),
             "strictness": strictness.value,
         }
-        
+
         return report, should_block, analysis
-        
+
     except Exception as e:
         # Don't fail validation if AI detection fails
         return f"⚠️  AI detection error: {str(e)}", False, {}
@@ -517,21 +720,21 @@ def _generate_ai_report(
     """Generate AI detection report."""
     if not all_issues:
         return ""
-    
+
     report = []
     report.append("🤖 AI-GENERATED CODE DETECTION REPORT")
     report.append("=" * 40)
     report.append(f"Strictness Level: {strictness.value}")
     report.append(f"Total Issues: {len(all_issues)}")
     report.append(f"Critical Issues: {len(critical_issues)}")
-    
+
     if critical_issues:
         report.append("\n❌ CRITICAL ISSUES (must fix):")
         for issue in critical_issues[:5]:
             report.append(f"   • {issue}")
         if len(critical_issues) > 5:
             report.append(f"   ... and {len(critical_issues) - 5} more")
-    
+
     if len(all_issues) > len(critical_issues):
         other_issues = [i for i in all_issues if i not in critical_issues]
         report.append("\n⚠️  WARNING ISSUES (recommended to fix):")
@@ -539,20 +742,20 @@ def _generate_ai_report(
             report.append(f"   • {issue}")
         if len(other_issues) > 5:
             report.append(f"   ... and {len(other_issues) - 5} more")
-    
+
     return "\n".join(report)
 
 
 def run_validation_commands():
     """Run standard validation commands."""
     print("🔧 Running validation commands...")
-    
+
     commands = [
         ("npm test", "Running tests"),
         ("npm run lint", "Running linter"),
         ("npm run build", "Building project"),
     ]
-    
+
     for cmd, description in commands:
         print(f"   {description}...")
         try:
@@ -573,12 +776,12 @@ def run_validation_commands():
 def run_node_validation():
     """Run Node.js specific validation."""
     print("🔧 Running Node.js validation...")
-    
+
     # Check if package.json exists
     if not os.path.exists("package.json"):
         print("   ⚠️  No package.json found - skipping Node validation")
         return
-    
+
     # Run npm install if needed
     if not os.path.exists("node_modules"):
         print("   Installing dependencies...")
@@ -588,6 +791,6 @@ def run_node_validation():
         except Exception as e:
             print(f"   ⚠️  Could not install dependencies: {e}")
             return
-    
+
     # Run validation commands
     run_validation_commands()

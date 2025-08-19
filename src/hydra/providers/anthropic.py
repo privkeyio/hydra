@@ -8,6 +8,8 @@ from anthropic import Anthropic
 from hydra.token_tracker import get_token_tracker
 
 from .base import LLMConfig, LLMProvider
+from .error_handler import ErrorCategory, get_error_handler
+from .retry_utils import CircuitBreaker, with_retry
 from .session_manager import get_session_manager
 
 
@@ -26,6 +28,10 @@ class AnthropicProvider(LLMProvider):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
 
+        # Initialize error handling
+        self.error_handler = get_error_handler()
+        self.circuit_breaker = CircuitBreaker("anthropic", failure_threshold=5, recovery_timeout=30.0)
+
         # Use shared session manager for HTTP connections
         session_manager = get_session_manager()
         http_client = session_manager.get_session("anthropic")
@@ -41,8 +47,13 @@ class AnthropicProvider(LLMProvider):
     def name(self) -> str:
         return "anthropic"
 
+    @with_retry(max_retries=3, retry_on=[ErrorCategory.NETWORK, ErrorCategory.API_LIMIT, ErrorCategory.TIMEOUT])
     def generate(self, prompt: str, **kwargs) -> str:
-        """Generate a response from Claude."""
+        """Generate a response from Claude with retry logic and error handling."""
+        return self.circuit_breaker.call(self._generate_impl, prompt, **kwargs)
+
+    def _generate_impl(self, prompt: str, **kwargs) -> str:
+        """Internal implementation of generate with proper error handling."""
         try:
             # Check budget before making request
             estimated_tokens = (
@@ -86,6 +97,16 @@ class AnthropicProvider(LLMProvider):
             return response_text
 
         except Exception as e:
+            # Log error with context for telemetry
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "operation": "generate",
+                    "model": self.config.model,
+                    "prompt_length": len(prompt)
+                }
+            )
             raise Exception(f"Anthropic API error: {str(e)}") from e
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:

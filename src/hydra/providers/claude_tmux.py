@@ -1,8 +1,29 @@
-"""Claude tmux Provider - Runs Claude Code in tmux sessions for full interactivity."""
+"""Claude tmux Provider - Runs Claude Code in tmux sessions for full interactivity.
+
+DEPRECATED: This module is deprecated and will be removed in v2.0.
+Use hydra.providers.claude_unified.ClaudeUnifiedProvider with mode='tmux' instead.
+
+Migration example:
+    # Old code:
+    from hydra.providers.claude_tmux import ClaudeTmuxProvider
+    provider = ClaudeTmuxProvider(config)
+    
+    # New code:
+    from hydra.providers.unified_factory import create_provider
+    provider = create_provider("claude_tmux")
+"""
 
 import os
 import re
 import subprocess
+import warnings
+
+# Issue deprecation warning on import
+warnings.warn(
+    "ClaudeTmuxProvider is deprecated. Use ClaudeUnifiedProvider with mode='tmux' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 import time
 import uuid
 from datetime import datetime
@@ -22,10 +43,18 @@ from .base_provider import (
     Session,
     SessionState,
 )
+from .error_handler import ErrorCategory, get_error_handler
+from .retry_utils import CircuitBreaker, with_retry
 
 
 class ClaudeTmuxProvider(BaseProvider):
     """Run Claude Code in tmux sessions with full interactive capabilities."""
+
+    def __init__(self, config):
+        """Initialize provider with circuit breaker."""
+        super().__init__(config)
+        self.circuit_breaker = CircuitBreaker("claude_tmux", failure_threshold=3)
+        self.error_handler = get_error_handler()
 
     def validate_config(self):
         """Validate Claude CLI and tmux configuration."""
@@ -62,11 +91,30 @@ class ClaudeTmuxProvider(BaseProvider):
         return result.returncode == 0
 
     def _kill_session(self, session_name: str):
-        """Kill a tmux session if it exists."""
+        """Kill a tmux session if it exists with proper error handling."""
         if self._session_exists(session_name):
-            subprocess.run(
-                ["tmux", "kill-session", "-t", session_name], capture_output=True
-            )
+            try:
+                result = subprocess.run(
+                    ["tmux", "kill-session", "-t", session_name],
+                    capture_output=True,
+                    timeout=10
+                )
+                if result.returncode != 0:
+                    # Log warning but don't fail - session might already be dead
+                    print(f"Warning: Failed to kill tmux session {session_name}")
+            except subprocess.TimeoutExpired:
+                # Force kill if needed
+                try:
+                    subprocess.run(
+                        ["pkill", "-f", f"tmux.*{session_name}"],
+                        capture_output=True,
+                        timeout=5
+                    )
+                except Exception:
+                    pass  # Best effort cleanup
+            except Exception as e:
+                # Log but don't propagate - cleanup should be robust
+                print(f"Warning: Error killing tmux session {session_name}: {e}")
 
     def _send_to_session(self, session_name: str, text: str):
         """Send text to a tmux session."""
@@ -113,8 +161,13 @@ class ClaudeTmuxProvider(BaseProvider):
         )
         return result.stdout if result.returncode == 0 else ""
 
+    @with_retry(max_retries=2, retry_on=[ErrorCategory.SESSION, ErrorCategory.TIMEOUT])
     def generate(self, prompt: str, **kwargs) -> str:
         """Execute Claude in a tmux session for file operations."""
+        return self.circuit_breaker.call(self._generate_impl, prompt, **kwargs)
+
+    def _generate_impl(self, prompt: str, **kwargs) -> str:
+        """Internal implementation of generate with proper resource management."""
         project_dir = kwargs.get("cwd", os.getcwd())
         ticket_id = kwargs.get("ticket_id", None)
         session_name = self._create_session_name(ticket_id)
@@ -166,11 +219,18 @@ class ClaudeTmuxProvider(BaseProvider):
         # Store as instance method for use throughout
         self._debug_log = debug_log
 
+        start_time = time.time()
+        session_created = False
+        error_occurred = None
+
         try:
             print(f"🖥️  Starting tmux session: {session_name}")
             print(f"📁 Working directory: {project_dir}")
             debug_log(f"Starting session: {session_name}")
             debug_log(f"Working directory: {project_dir}")
+
+            # Track session creation for telemetry
+            session_start = time.time()
 
             # Create a new tmux session with Claude
             # Check if we need to specify a model
@@ -218,7 +278,17 @@ class ClaudeTmuxProvider(BaseProvider):
             print(f"🤖 Starting Claude with {claude_model.upper()} model")
             debug_log(f"Starting Claude with model: {claude_model}")
 
-            subprocess.run(cmd, check=True)
+            # Create tmux session with timeout and error handling
+            try:
+                result = subprocess.run(cmd, check=True, timeout=60, capture_output=True, text=True)
+                session_created = True
+                debug_log(f"Tmux session created successfully in {time.time() - session_start:.2f}s")
+            except subprocess.TimeoutExpired:
+                raise Exception("Tmux session creation timed out after 60s")
+            except subprocess.CalledProcessError as e:
+                error_msg = f"Failed to create tmux session: {e.stderr or e.stdout or str(e)}"
+                debug_log(f"Session creation failed: {error_msg}")
+                raise Exception(error_msg)
 
             # Wait for Claude to initialize
             print("⏳ Waiting for Claude Code to initialize...")
@@ -798,16 +868,75 @@ class ClaudeTmuxProvider(BaseProvider):
                 )
 
         except subprocess.CalledProcessError as e:
+            error_occurred = e
+            # Log the error with context
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "session_name": session_name,
+                    "ticket_id": ticket_id,
+                    "project_dir": project_dir,
+                    "session_created": session_created
+                }
+            )
             raise Exception(f"tmux command failed: {str(e)}") from e
+        except subprocess.TimeoutExpired as e:
+            error_occurred = e
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "session_name": session_name,
+                    "timeout_type": "tmux_operation"
+                }
+            )
+            raise Exception(f"tmux operation timed out: {str(e)}") from e
         except Exception as e:
+            error_occurred = e
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "session_name": session_name,
+                    "ticket_id": ticket_id,
+                    "operation": "generate"
+                }
+            )
             raise Exception(f"Claude tmux error: {str(e)}") from e
         finally:
-            # Release all file locks for this agent
-            file_interceptor.release_agent_locks(agent_id)
-            # Kill the tmux session
-            self._kill_session(session_name)
-            # Clean up marker file
-            done_marker.unlink(missing_ok=True)
+            execution_time = time.time() - start_time
+
+            # Log execution telemetry
+            debug_log(f"Session execution completed in {execution_time:.2f}s")
+            if error_occurred:
+                debug_log(f"Session failed with error: {type(error_occurred).__name__}")
+
+            try:
+                # Release all file locks for this agent
+                file_interceptor.release_agent_locks(agent_id)
+                debug_log("File locks released successfully")
+            except Exception as e:
+                debug_log(f"Warning: Failed to release file locks: {e}")
+
+            try:
+                # Kill the tmux session with enhanced cleanup
+                if session_created or self._session_exists(session_name):
+                    self._kill_session(session_name)
+                    debug_log(f"Tmux session {session_name} cleaned up")
+            except Exception as e:
+                debug_log(f"Warning: Failed to clean up tmux session: {e}")
+
+            try:
+                # Clean up marker file
+                if 'done_marker' in locals():
+                    done_marker.unlink(missing_ok=True)
+                debug_log("Marker files cleaned up")
+            except Exception as e:
+                debug_log(f"Warning: Failed to clean up marker files: {e}")
+
+            # Log final telemetry
+            print(f"🏁 Session completed in {execution_time:.1f}s")
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Not used for tmux mode."""
@@ -896,9 +1025,9 @@ class ClaudeTmuxProvider(BaseProvider):
         # Kill any existing session with the same name
         self._kill_session(session_name)
 
-        # Create new tmux session with resource handling
+        # Create new tmux session with enhanced resource handling
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [
                     "tmux",
                     "new-session",
@@ -911,15 +1040,44 @@ class ClaudeTmuxProvider(BaseProvider):
                 ],
                 check=True,
                 timeout=30,
+                capture_output=True,
+                text=True
             )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-            if (
-                isinstance(e, OSError) and e.errno == 11
-            ):  # Resource temporarily unavailable
+        except subprocess.TimeoutExpired as e:
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={"operation": "create_session", "session_name": session_name}
+            )
+            raise ValueError(f"Tmux session creation timed out after 30s: {session_name}")
+        except subprocess.CalledProcessError as e:
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "operation": "create_session",
+                    "session_name": session_name,
+                    "stderr": e.stderr,
+                    "stdout": e.stdout
+                }
+            )
+            raise ValueError(f"Failed to create tmux session '{session_name}': {e.stderr or e.stdout or str(e)}")
+        except OSError as e:
+            if e.errno == 11:  # Resource temporarily unavailable
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": "create_session", "resource_exhausted": True}
+                )
                 raise ValueError(
                     f"Unable to create tmux session - system resources exhausted: {e}"
                 )
-            raise ValueError(f"Failed to create tmux session '{session_name}': {e}")
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={"operation": "create_session", "session_name": session_name}
+            )
+            raise ValueError(f"System error creating tmux session '{session_name}': {e}")
 
         # Create and store session object
         session = Session(

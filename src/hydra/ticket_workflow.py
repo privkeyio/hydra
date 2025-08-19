@@ -53,13 +53,3 @@ __all__ = [
     'validate_code_changes',
     'check_for_ai_generated_code',
 ]
-
-# Legacy function aliases for backwards compatibility
-def run_all_tickets(tickets_path: str, max_workers: int = 4, **kwargs):
-    """Legacy alias for execute_tickets_parallel."""
-    return execute_tickets_parallel(tickets_path, max_workers, **kwargs)
-
-def validate_tickets(tickets_path: str, **kwargs):
-    """Legacy alias for ticket validation."""
-    from hydra.tickets.ticket_validation import validate_all_tickets
-    return validate_all_tickets(tickets_path, **kwargs)

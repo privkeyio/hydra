@@ -424,6 +424,77 @@ class AIPatternDetector:
 
         return len(patterns) > 0, patterns
 
+    @staticmethod
+    def scan_file(file_path: str):
+        """Scan a single file for AI patterns.
+        
+        Args:
+            file_path: Path to file to scan
+            
+        Returns:
+            ScanResult object with passes, detected_patterns, and ai_score
+        """
+        from dataclasses import dataclass
+        from pathlib import Path
+        
+        @dataclass
+        class ScanResult:
+            passes: bool
+            detected_patterns: List[Dict[str, str]]
+            ai_score: float
+        
+        try:
+            content = Path(file_path).read_text()
+        except Exception:
+            return ScanResult(passes=True, detected_patterns=[], ai_score=0.0)
+        
+        has_patterns, pattern_list = AIPatternDetector.detect_ai_patterns(content)
+        
+        # Convert pattern list to expected format
+        detected_patterns = []
+        for pattern in pattern_list:
+            if "Emoji" in pattern:
+                detected_patterns.append({"type": "emoji", "description": pattern})
+            elif "AI word" in pattern:
+                detected_patterns.append({"type": "ai_word", "description": pattern})
+            elif "Generic naming" in pattern:
+                detected_patterns.append({"type": "generic_name", "description": pattern})
+            elif "AI comment" in pattern:
+                detected_patterns.append({"type": "verbose_comment", "description": pattern})
+            else:
+                detected_patterns.append({"type": "other", "description": pattern})
+        
+        # Calculate AI score based on number of patterns
+        ai_score = min(1.0, len(detected_patterns) * 0.2)
+        
+        return ScanResult(
+            passes=not has_patterns,
+            detected_patterns=detected_patterns,
+            ai_score=ai_score
+        )
+
+    @staticmethod
+    def scan_directory(directory_path: str) -> List:
+        """Scan all Python files in a directory for AI patterns.
+        
+        Args:
+            directory_path: Path to directory to scan
+            
+        Returns:
+            List of scan results for each file
+        """
+        from pathlib import Path
+        
+        results = []
+        path = Path(directory_path)
+        
+        for file_path in path.glob("**/*.py"):
+            if file_path.is_file():
+                result = AIPatternDetector.scan_file(str(file_path))
+                results.append(result)
+        
+        return results
+
 
 class ExecutionStrategies:
     """Different execution strategies."""

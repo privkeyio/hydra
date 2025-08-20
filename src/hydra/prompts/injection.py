@@ -455,6 +455,17 @@ class InjectorRegistry:
 
         return result
 
+    def apply_all(self, prompt: str, context: Dict[str, Any]) -> str:
+        """Apply all registered injectors with simplified context."""
+        injection_context = InjectionContext(
+            operation=context.get("stage", "unknown"),
+            provider=context.get("provider", "unknown"),
+            model=context.get("model", "unknown"),
+            user_prompt=prompt,
+            metadata=context
+        )
+        return self.inject_all(injection_context)
+
 
 # Initialize default injectors
 def initialize_default_injectors():

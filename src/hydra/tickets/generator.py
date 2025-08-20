@@ -292,13 +292,26 @@ class TicketGenerator:
                         ticket["acceptance_criteria"] = fixed_criteria
                         print(f"   ✅ Fixed {len(fixed_criteria)} acceptance criteria")
 
-                # Ensure model is valid
-                if ticket.get("model") not in ["fast", "balanced", "smart"]:
-                    ticket["model"] = (
-                        "fast"
-                        if "simple" in project_description.lower()
-                        else "balanced"
-                    )
+                # Reassign model based on project complexity (even if already set)
+                desc_lower = project_description.lower()
+                
+                # Complex projects should use smart model
+                complex_keywords = [
+                    "production-grade", "rest api", "authentication", "jwt", 
+                    "database", "rate limiting", "caching", "comprehensive", 
+                    "docker", "deployment", "multi-component", "enterprise",
+                    "full stack", "backend", "frontend"
+                ]
+                
+                simple_keywords = ["simple", "basic", "minimal", "calculator"]
+                
+                if any(keyword in desc_lower for keyword in complex_keywords):
+                    ticket["model"] = "smart"
+                elif any(keyword in desc_lower for keyword in simple_keywords):
+                    ticket["model"] = "fast"
+                elif ticket.get("model") not in ["fast", "balanced", "smart"]:
+                    # Only assign balanced if model is invalid
+                    ticket["model"] = "balanced"
 
                 # Ensure status is valid
                 if not ticket.get("status"):

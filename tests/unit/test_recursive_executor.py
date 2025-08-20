@@ -466,20 +466,25 @@ class TestRecursiveExecutor:
     
     def test_synchronous_wrapper(self):
         """Test synchronous execution wrapper."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch('hydra.workflow.recursive_executor.parse_ticket') as mock_parse:
-                mock_parse.return_value = {"id": "TEST-001", "title": "Test"}
-                
-                with patch('hydra.workflow.recursive_executor.execute_single_ticket') as mock_exec:
-                    mock_exec.return_value = True
+        import os
+        from unittest.mock import patch
+        
+        # Ensure TEST_MODE is set to avoid threading issues
+        with patch.dict(os.environ, {"TESTING": "1"}):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                with patch('hydra.workflow.recursive_executor.parse_ticket') as mock_parse:
+                    mock_parse.return_value = {"id": "TEST-001", "title": "Test"}
                     
-                    success, result = execute_with_retry(
-                        "tickets.yaml",
-                        "TEST-001",
-                        max_retries=2
-                    )
-                    
-                    assert success
-                    assert result["success"]
-                    assert "metrics" in result
-                    assert "history" in result
+                    with patch('hydra.workflow.recursive_executor.execute_single_ticket') as mock_exec:
+                        mock_exec.return_value = True
+                        
+                        success, result = execute_with_retry(
+                            "tickets.yaml",
+                            "TEST-001",
+                            max_retries=2
+                        )
+                        
+                        assert success
+                        assert result["success"]
+                        assert "metrics" in result
+                        assert "history" in result

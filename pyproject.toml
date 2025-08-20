@@ -106,7 +106,7 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
-addopts = "-v --cov=hydra --cov-report=html --cov-report=term --timeout=30 --tb=short"
+addopts = "-v --cov=hydra --cov-report=html --cov-report=term --timeout=30 --tb=short --maxfail=10 --disable-warnings -x"
 asyncio_mode = "auto"
 markers = [
     "integration: marks tests as integration tests",

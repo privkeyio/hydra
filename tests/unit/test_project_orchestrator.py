@@ -327,27 +327,29 @@ class TestProjectOrchestrator:
 
     @pytest.mark.asyncio
     async def test_execute_task_success(self, simple_spec, mock_config):
-        orchestrator = ProjectOrchestrator(simple_spec, mock_config)
-        task = simple_spec.tasks[0]
+        # Ensure TEST_MODE is set for this test
+        with patch.dict(os.environ, {"TESTING": "1"}):
+            orchestrator = ProjectOrchestrator(simple_spec, mock_config)
+            task = simple_spec.tasks[0]
 
-        with patch("hydra.orchestrator.project_orchestrator.CodeAgent") as MockAgent:
-            mock_agent = Mock()
-            mock_agent.complete_task.return_value = {
-                "success": True,
-                "generated_code": "def test(): pass",
-            }
-            MockAgent.return_value = mock_agent
+            with patch("hydra.orchestrator.project_orchestrator.CodeAgent") as MockAgent:
+                mock_agent = Mock()
+                mock_agent.complete_task.return_value = {
+                    "success": True,
+                    "generated_code": "def test(): pass",
+                }
+                MockAgent.return_value = mock_agent
 
-            result = await orchestrator._execute_task(task)
+                result = await orchestrator._execute_task(task)
 
-            assert task.status == TaskStatus.COMPLETED
-            assert task.result == {
-                "success": True,
-                "generated_code": "def test(): pass",
-            }
-            assert task.id in orchestrator.completed_tasks
-            assert task.start_time is not None
-            assert task.end_time is not None
+                assert task.status == TaskStatus.COMPLETED
+                assert task.result == {
+                    "success": True,
+                    "generated_code": "def test(): pass",
+                }
+                assert task.id in orchestrator.completed_tasks
+                assert task.start_time is not None
+                assert task.end_time is not None
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
@@ -373,20 +375,22 @@ class TestProjectOrchestrator:
 
     @pytest.mark.asyncio
     async def test_execute_task_failure(self, simple_spec, mock_config):
-        orchestrator = ProjectOrchestrator(simple_spec, mock_config)
-        task = simple_spec.tasks[0]
+        # Ensure TEST_MODE is set for this test
+        with patch.dict(os.environ, {"TESTING": "1"}):
+            orchestrator = ProjectOrchestrator(simple_spec, mock_config)
+            task = simple_spec.tasks[0]
 
-        with patch("hydra.orchestrator.project_orchestrator.CodeAgent") as MockAgent:
-            mock_agent = Mock()
-            mock_agent.complete_task.side_effect = Exception("Test error")
-            MockAgent.return_value = mock_agent
+            with patch("hydra.orchestrator.project_orchestrator.CodeAgent") as MockAgent:
+                mock_agent = Mock()
+                mock_agent.complete_task.side_effect = Exception("Test error")
+                MockAgent.return_value = mock_agent
 
-            with pytest.raises(Exception):
-                await orchestrator._execute_task(task)
+                with pytest.raises(Exception):
+                    await orchestrator._execute_task(task)
 
-            assert task.status == TaskStatus.FAILED
-            assert task.error == "Test error"
-            assert task.id in orchestrator.failed_tasks
+                assert task.status == TaskStatus.FAILED
+                assert task.error == "Test error"
+                assert task.id in orchestrator.failed_tasks
 
     def test_build_task_prompt(self, simple_spec, mock_config):
         orchestrator = ProjectOrchestrator(simple_spec, mock_config)

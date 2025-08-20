@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
-from test_runner_config import (
+from tests.integration.test_runner_config import (
     test_config, 
     DeterministicTestResults, 
     deterministic_temp_project,

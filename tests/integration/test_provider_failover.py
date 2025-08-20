@@ -19,7 +19,7 @@ import pytest
 
 from hydra.providers.base import LLMConfig
 from hydra.providers.mock_provider import MockProvider
-from hydra.providers.factory import ProviderFactory
+from hydra.providers.provider_factory import ProviderFactory
 
 
 class FailingProvider(MockProvider):

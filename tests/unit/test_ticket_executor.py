@@ -102,10 +102,10 @@ class TestTicketExecution(unittest.TestCase):
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
     
-    @patch("hydra.tickets.ticket_executor.parse_ticket")
+    @patch("hydra.tickets.ticket_parser.parse_ticket")
     @patch("hydra.tickets.ticket_executor.update_ticket_in_database")
     @patch("hydra.tickets.ticket_executor.mark_ticket_in_progress")
-    @patch("hydra.tickets.ticket_executor.create_provider_from_environment")
+    @patch("hydra.providers.provider_factory.ProviderFactory")
     def test_execute_single_ticket_already_completed(
         self, mock_provider_factory, mock_mark_progress, mock_update_db, mock_parse
     ):
@@ -127,7 +127,7 @@ class TestTicketExecution(unittest.TestCase):
         mock_mark_progress.assert_not_called()
         mock_provider_factory.assert_not_called()
     
-    @patch("hydra.tickets.ticket_executor.parse_ticket")
+    @patch("hydra.tickets.ticket_parser.parse_ticket")
     def test_execute_single_ticket_not_found(self, mock_parse):
         """Test executing a ticket that doesn't exist."""
         mock_parse.return_value = None
@@ -136,8 +136,8 @@ class TestTicketExecution(unittest.TestCase):
         
         self.assertFalse(result)
     
-    @patch("hydra.tickets.ticket_executor.PreflightChecker")
-    @patch("hydra.tickets.ticket_executor.parse_ticket")
+    @patch("hydra.preflight.preflight_checker.PreflightChecker")
+    @patch("hydra.tickets.ticket_parser.parse_ticket")
     def test_execute_single_ticket_preflight_failure(self, mock_parse, mock_preflight):
         """Test ticket execution with preflight failures."""
         # Mock a valid ticket

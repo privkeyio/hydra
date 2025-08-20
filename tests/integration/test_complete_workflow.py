@@ -25,12 +25,12 @@ from hydra.ticket_workflow import (
     validate_acceptance_criteria,
 )
 from hydra.tickets.generator import TicketGenerator
-from hydra.verification_system.ai_detector import AIPatternDetector
+from hydra.prompts.execution_prompts import AIPatternDetector
 from hydra.verification_system.boss_agent import BossAgent, StrictnessLevel
 from hydra.verification_system.criteria_templates import (
     CriteriaTemplateFactory,
-    ProjectType,
 )
+from hydra.templates.project_templates import ProjectType
 from hydra.workflow.recursive_executor import RecursiveExecutor
 
 

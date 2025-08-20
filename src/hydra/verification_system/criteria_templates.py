@@ -523,7 +523,7 @@ class CriteriaTemplateFactory:
     This is the main entry point for creating criteria templates for different
     project types with configurable strictness levels.
     """
-    
+
     def __init__(self):
         self.composer = CriteriaComposer()
         self.templates = {
@@ -535,10 +535,10 @@ class CriteriaTemplateFactory:
             "cli_tool": CLIToolTemplate,
             "web_app": WebAppTemplate
         }
-    
+
     def create(
-        self, 
-        project_type: str, 
+        self,
+        project_type: str,
         strictness: Union[str, StrictnessLevel] = StrictnessLevel.BALANCED
     ) -> CriteriaTemplate:
         """Create a criteria template for the specified project type.
@@ -549,18 +549,19 @@ class CriteriaTemplateFactory:
             
         Returns:
             CriteriaTemplate configured for the project type
+
         """
         if isinstance(strictness, str):
             strictness = StrictnessLevel(strictness)
-        
+
         if project_type not in self.templates:
             # Fall back to composer for unknown types
             return self.composer.create_template(project_type, strictness)
-        
+
         template_class = self.templates[project_type]
         template_instance = template_class(strictness)
         return template_instance.get_template()
-    
+
     def create_custom(
         self,
         name: str,
@@ -576,9 +577,10 @@ class CriteriaTemplateFactory:
             
         Returns:
             Custom CriteriaTemplate
+
         """
         return self.composer.compose_custom_template(name, description, criteria)
-    
+
     def merge(
         self,
         templates: List[CriteriaTemplate],
@@ -594,14 +596,16 @@ class CriteriaTemplateFactory:
             
         Returns:
             Merged CriteriaTemplate
+
         """
         return self.composer.merge_templates(templates, name, description)
-    
+
     def list_available(self) -> List[str]:
         """Get list of available template types.
         
         Returns:
             List of available template type names
+
         """
         return list(self.templates.keys())
 
@@ -616,6 +620,7 @@ def get_template(project_type: str, strictness: str = "balanced") -> CriteriaTem
         
     Returns:
         CriteriaTemplate for the project type
+
     """
     factory = CriteriaTemplateFactory()
     return factory.create(project_type, strictness)

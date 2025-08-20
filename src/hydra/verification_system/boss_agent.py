@@ -80,10 +80,10 @@ class BossAgent:
         self.coverage_analyzer = None  # Created per verification
         self.quality_checker = None  # Created per verification
         self.metrics_analyzer = QualityMetricsAnalyzer()
-        
+
         # Use basic quality checking for CI compatibility
         # ProductionScorer integration disabled for test stability
-        
+
         self.report_generator = None  # Created per verification
         self.retry_count = {}
         self.verification_history = []
@@ -160,19 +160,19 @@ class BossAgent:
             if self.config.check_production_quality:
                 # Use basic quality check for CI compatibility
                 quality_result = self._verify_production_quality(project_path)
-                
+
                 result.metadata['quality_score'] = quality_result.get('score', 7.0)
                 result.metadata['production_ready'] = quality_result.get('production_ready', True)
-                
+
                 # Check if production ready
                 if not quality_result.get('production_ready', True):
                     result.failure_reasons.append(
                         f"NOT PRODUCTION READY: Score {quality_result.get('score', 0):.1f}/10"
                     )
-                    
+
                     # Add suggestions
                     result.suggestions.extend(quality_result.get('suggestions', [])[:5])
-                
+
                 # Also check against configured minimum
                 if quality_result.get('score', 10) < self.config.min_quality_score:
                     result.failure_reasons.append(

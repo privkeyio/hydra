@@ -212,7 +212,11 @@ class ProjectOrchestrator:
         self.failed_tasks = set()
         self.running_tasks = set()
         self.task_queue = deque()
-        self.executor = ThreadPoolExecutor(max_workers=specification.max_parallel)
+        # In test mode, avoid ThreadPoolExecutor to prevent "can't start new thread" errors
+        if TEST_MODE:
+            self.executor = None
+        else:
+            self.executor = ThreadPoolExecutor(max_workers=specification.max_parallel)
         self.start_time = None
         self.end_time = None
         self.execution_log = []
@@ -538,5 +542,6 @@ class ProjectOrchestrator:
         return "\n".join(lines)
 
     def cleanup(self):
-        self.executor.shutdown(wait=True)
+        if self.executor is not None:
+            self.executor.shutdown(wait=True)
         self.agents.clear()

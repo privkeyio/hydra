@@ -471,7 +471,7 @@ class TestRecursiveExecutor:
                 mock_parse.return_value = {"id": "TEST-001", "title": "Test"}
                 
                 with patch('hydra.workflow.recursive_executor.execute_single_ticket') as mock_exec:
-                    mock_exec.return_value = {"success": True}
+                    mock_exec.return_value = True
                     
                     success, result = execute_with_retry(
                         "tickets.yaml",

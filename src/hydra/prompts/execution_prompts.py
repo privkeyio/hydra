@@ -328,11 +328,11 @@ class ExecutionValidator:
 
 class AIPatternDetector:
     """Detect AI-generated code patterns with ZERO tolerance."""
-    
+
     # BANNED patterns - immediate failure
     BANNED_PATTERNS = {
         'emojis': ['🎉', '🚀', '✨', '💡', '🔧', '⚡', '🎯', '🏆', '👍', '💪', '📝', '🔥', '⭐'],
-        'ai_words': ['comprehensive', 'robust', 'elegant', 'sophisticated', 'delightful', 
+        'ai_words': ['comprehensive', 'robust', 'elegant', 'sophisticated', 'delightful',
                      'seamless', 'powerful', 'flexible', 'scalable', 'intuitive', 'innovative'],
         'verbose_patterns': [r'DataManager\w+Helper', r'Process\w+Handler', r'Service\w+Factory'],
         'placeholder': ['TODO', 'FIXME', 'XXX', 'HACK', 'NOTE:', 'placeholder', 'dummy', 'temp'],
@@ -357,37 +357,37 @@ class AIPatternDetector:
         for emoji in AIPatternDetector.BANNED_PATTERNS['emojis']:
             if emoji in code:
                 patterns.append(f"BANNED: Emoji '{emoji}' detected")
-        
+
         # Check for banned AI words
         code_lower = code.lower()
         for word in AIPatternDetector.BANNED_PATTERNS['ai_words']:
             if word in code_lower:
                 patterns.append(f"BANNED: AI word '{word}' detected")
-        
+
         # Check for verbose naming patterns
         for pattern_str in AIPatternDetector.BANNED_PATTERNS['verbose_patterns']:
             pattern = re.compile(pattern_str)
             if pattern.search(code):
                 patterns.append(f"BANNED: Verbose pattern '{pattern_str}' detected")
-        
+
         # Check for placeholder text
         for placeholder in AIPatternDetector.BANNED_PATTERNS['placeholder']:
             if placeholder in code or placeholder.lower() in code_lower:
                 patterns.append(f"BANNED: Placeholder '{placeholder}' detected")
-        
+
         # Check for excessive comments
         for comment_pattern_str in AIPatternDetector.BANNED_PATTERNS['excessive_comments']:
             comment_pattern = re.compile(comment_pattern_str, re.IGNORECASE)
             if comment_pattern.search(code):
-                patterns.append(f"BANNED: Excessive comment pattern detected")
+                patterns.append("BANNED: Excessive comment pattern detected")
 
         # Additional strict checks
         # Check for verbose generic naming
         generic_names = ["Manager", "Helper", "Processor", "Handler", "Service", "Provider", "Factory", "Utility", "Wrapper", "Adapter"]
         for name in generic_names:
             # Use regex to catch compound names like DataHelper, ServiceManager, etc.
-            if (re.search(rf'\b\w*{name}\b', code) or 
-                f"def {name.lower()}" in code or 
+            if (re.search(rf'\b\w*{name}\b', code) or
+                f"def {name.lower()}" in code or
                 f"{name}(" in code):
                 patterns.append(f"Generic naming: {name}")
 
@@ -401,14 +401,14 @@ class AIPatternDetector:
         for pattern in ai_comment_patterns:
             if pattern in code or pattern.lower() in code_lower:
                 patterns.append(f"AI comment: {pattern}")
-        
+
         # Check for excessive commenting (more than 25% of lines)
         lines = code.strip().split('\n')
         if lines:
             comment_lines = sum(1 for line in lines if line.strip().startswith('#') or line.strip().startswith('//'))
             if comment_lines / len(lines) > 0.25:
                 patterns.append(f"Excessive commenting: {comment_lines}/{len(lines)} lines ({100*comment_lines/len(lines):.1f}%)")
-        
+
         # Check for unnecessary docstrings explaining obvious things
         obvious_docstring_patterns = [
             r'""".*[Gg]et.*\."""\.?\s*def get',

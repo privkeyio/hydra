@@ -621,7 +621,7 @@ class SecurityAnalyzer:
                         placeholder_pattern = r'(password|secret|key|token)\s*=\s*["\'](<.*?>|\$\{.*\}|xxx|placeholder|test|example|dummy|env_)["\']'
                         # If we find secrets but they're not ALL placeholders, flag as having secrets
                         all_matches = re.findall(secret_pattern, source, re.IGNORECASE)
-                        placeholder_matches = re.findall(placeholder_pattern, source, re.IGNORECASE) 
+                        placeholder_matches = re.findall(placeholder_pattern, source, re.IGNORECASE)
                         # If we have fewer placeholders than total matches, there are real secrets
                         if len(placeholder_matches) < len(all_matches):
                             metrics.secrets_in_code = True

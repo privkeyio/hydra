@@ -25,11 +25,15 @@ def update_ticket_in_database(
 
         # Set database URL to project-specific location if we're in a project
         if project_path and os.path.exists(os.path.join(project_path, "tickets.yaml")):
-            os.environ["DATABASE_URL"] = (
-                f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
-            )
+            db_url = f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
+            os.environ["DATABASE_URL"] = db_url
+            
+            # Ensure the directory structure exists
+            db_path = f"{project_path}/.hydra/dashboard/hydra.db"
+            db_dir = os.path.dirname(db_path)
+            os.makedirs(db_dir, exist_ok=True)
 
-        # Get database manager
+        # Get database manager and ensure tables are created
         db_manager = get_db_manager()
 
         # Normalize ticket ID
@@ -104,6 +108,7 @@ def update_ticket_in_database(
                     ticket.completed_at = datetime.now()
 
                 db.add(ticket)
+                db.flush()  # Ensure ticket gets an ID before creating execution
 
             # Create execution record for status changes
             execution = Execution(
@@ -111,8 +116,6 @@ def update_ticket_in_database(
                 status="success" if status == "DONE" else "running",
                 started_at=datetime.now(),
                 completed_at=datetime.now() if status == "DONE" else None,
-                model=ticket_info.get("model", "balanced") if ticket_info else "balanced",
-                provider=os.environ.get("LLM_PROVIDER", "unknown"),
             )
             db.add(execution)
 
@@ -146,11 +149,15 @@ def get_ticket_from_database(
 
         # Set database URL to project-specific location if we're in a project
         if project_path and os.path.exists(os.path.join(project_path, "tickets.yaml")):
-            os.environ["DATABASE_URL"] = (
-                f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
-            )
+            db_url = f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
+            os.environ["DATABASE_URL"] = db_url
+            
+            # Ensure the directory structure exists
+            db_path = f"{project_path}/.hydra/dashboard/hydra.db"
+            db_dir = os.path.dirname(db_path)
+            os.makedirs(db_dir, exist_ok=True)
 
-        # Get database manager
+        # Get database manager and ensure tables are created
         db_manager = get_db_manager()
 
         # Normalize ticket ID
@@ -225,9 +232,13 @@ def sync_tickets_to_database(
 
         # Set database URL to project-specific location
         if os.path.exists(os.path.join(project_path, "tickets.yaml")):
-            os.environ["DATABASE_URL"] = (
-                f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
-            )
+            db_url = f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
+            os.environ["DATABASE_URL"] = db_url
+            
+            # Ensure the directory structure exists
+            db_path = f"{project_path}/.hydra/dashboard/hydra.db"
+            db_dir = os.path.dirname(db_path)
+            os.makedirs(db_dir, exist_ok=True)
 
         # Parse all tickets
         tickets = parse_all_tickets(tickets_path)
@@ -341,9 +352,13 @@ def get_project_summary(project_path: Optional[str] = None) -> Dict[str, Any]:
 
         # Set database URL to project-specific location
         if os.path.exists(os.path.join(project_path, "tickets.yaml")):
-            os.environ["DATABASE_URL"] = (
-                f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
-            )
+            db_url = f"sqlite:///{project_path}/.hydra/dashboard/hydra.db"
+            os.environ["DATABASE_URL"] = db_url
+            
+            # Ensure the directory structure exists
+            db_path = f"{project_path}/.hydra/dashboard/hydra.db"
+            db_dir = os.path.dirname(db_path)
+            os.makedirs(db_dir, exist_ok=True)
 
         # Get database manager
         db_manager = get_db_manager()

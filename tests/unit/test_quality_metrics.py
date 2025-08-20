@@ -668,10 +668,10 @@ def test_example():
         
     def test_production_readiness_check(self):
         """Test production readiness determination"""
-        # Not production ready due to low coverage
+        # Not production ready due to low coverage (even in test mode)
         report = QualityReport(
             complexity=ComplexityMetrics(cyclomatic_complexity=5),
-            coverage=CoverageMetrics(line_coverage=40),
+            coverage=CoverageMetrics(line_coverage=20),  # Below test mode threshold of 30
             documentation=DocumentationMetrics(),
             error_handling=ErrorHandlingMetrics(try_except_coverage=60),
             performance=PerformanceMetrics(),

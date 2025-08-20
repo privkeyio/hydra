@@ -6,7 +6,13 @@ import orjson
 from openai import OpenAI
 
 from hydra.caching import lru_cache_with_bypass
-from hydra.prompts import get_system_prompt, optimize_prompt
+from hydra.prompts.injection import (
+    InjectionContext,
+    InjectorRegistry,
+    initialize_default_injectors,
+)
+from hydra.prompts.optimization import optimize_prompt
+from hydra.prompts.system_prompts import get_system_prompt
 from hydra.token_tracker import get_token_tracker
 
 from .base import LLMConfig, LLMProvider
@@ -43,6 +49,11 @@ class OpenAIProvider(LLMProvider):
         self.ticket_id: Optional[int] = None
         self.session_id: Optional[int] = None
 
+        # Initialize prompt injection system
+        self._injector_registry = InjectorRegistry()
+        if not self._injector_registry.injectors:
+            initialize_default_injectors()
+
     @property
     def name(self) -> str:
         return "openai"
@@ -62,10 +73,21 @@ class OpenAIProvider(LLMProvider):
             temperature = kwargs.get("temperature", self.config.temperature)
             max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
 
-            # Add concise system message
+            # Use injection system to prepare prompt
+            injection_context = InjectionContext(
+                operation="code_execution",
+                provider=self.name,
+                model=self.config.model,
+                user_prompt=prompt,
+                metadata={"temperature": temperature, "max_tokens": max_tokens}
+            )
+
+            injected_prompt = self._inject_prompts(injection_context)
+
+            # Add system message and user prompt
             messages = [
                 {"role": "system", "content": get_system_prompt("code")},
-                {"role": "user", "content": optimize_prompt(prompt, "code_gen")},
+                {"role": "user", "content": injected_prompt},
             ]
 
             response = self.client.chat.completions.create(
@@ -112,13 +134,24 @@ class OpenAIProvider(LLMProvider):
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from OpenAI."""
+        # Use injection system for JSON generation
+        injection_context = InjectionContext(
+            operation="json_generation",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"format": "json"}
+        )
+
+        injected_prompt = self._inject_prompts(injection_context)
+
         # Use response_format for better JSON generation
         try:
             response = self.client.chat.completions.create(
                 model=self.config.model,
                 messages=[
                     {"role": "system", "content": get_system_prompt("json")},
-                    {"role": "user", "content": optimize_prompt(prompt, "json_gen")},
+                    {"role": "user", "content": injected_prompt},
                 ],
                 response_format={"type": "json_object"},
                 max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
@@ -179,3 +212,24 @@ class OpenAIProvider(LLMProvider):
         # Close HTTP session for this provider
         session_manager = get_session_manager()
         session_manager.close_session("openai")
+
+    def _inject_prompts(self, context: InjectionContext) -> str:
+        """Apply prompt injection based on context."""
+        # Get appropriate injector for operation
+        if "execution" in context.operation:
+            injector = self._injector_registry.get("production")
+        elif "verification" in context.operation:
+            injector = self._injector_registry.get("verification")
+        elif "ticket" in context.operation:
+            injector = self._injector_registry.get("ticket")
+        elif "json" in context.operation:
+            # Apply minimal injection for JSON to preserve format
+            return context.user_prompt + "\nJSON only."
+        else:
+            # Use production as default for safety
+            injector = self._injector_registry.get("production")
+
+        if injector:
+            return injector.inject(context)
+
+        return context.user_prompt

@@ -8,6 +8,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from hydra.prompts.injection import initialize_default_injectors
 from hydra.providers.base_provider import BaseProvider
 from hydra.providers.error_handler import get_error_handler
 from hydra.providers.provider_config import (
@@ -33,6 +34,9 @@ class ProviderFactory:
         self.registry = get_registry()
         self.config_manager = get_config_manager()
         self.error_handler = get_error_handler()
+
+        # Initialize default prompt injectors
+        initialize_default_injectors()
 
     def create(
         self, provider_type: str, config: Optional[Dict[str, Any]] = None, **kwargs

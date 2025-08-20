@@ -76,7 +76,7 @@ def validate_ticket_dependencies(tickets_path: str) -> bool:
     """
     tickets = parse_tickets_from_file(tickets_path)
     ticket_ids = set(ticket.get('id', ticket.get('ticket_number', '')) for ticket in tickets)
-    
+
     for ticket in tickets:
         dependencies = ticket.get('dependencies', [])
         for dep in dependencies:
@@ -308,11 +308,21 @@ def build_dependency_graph(
 
     for ticket_id, ticket_data in tickets.items():
         normalized_id = ticket_id.zfill(3)
+        # Ensure all tickets are present in deps dict
+        deps[normalized_id]  # This creates an empty set if not already present
         for dep in ticket_data.get("dependencies", []):
             normalized_dep = dep.zfill(3)
             deps[normalized_id].add(normalized_dep)
             reverse_deps[normalized_dep].add(normalized_id)
 
+    # Ensure all ticket IDs are present in deps dictionary
+    for ticket_id in tickets.keys():
+        normalized_id = ticket_id.zfill(3)
+        if normalized_id not in deps:
+            deps[normalized_id] = set()
+
+    # For reverse_deps, only include tickets that actually have dependents
+    # (don't add empty entries)
     return dict(deps), dict(reverse_deps)
 
 

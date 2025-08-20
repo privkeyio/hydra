@@ -21,7 +21,12 @@ from hydra.action_executor import (
     FileOperationsExecutor,
     ResponseParser,
 )
-from hydra.prompts import get_system_prompt, optimize_prompt
+from hydra.prompts.injection import (
+    InjectionContext,
+    InjectorRegistry,
+    initialize_default_injectors,
+)
+from hydra.prompts.system_prompts import get_system_prompt
 from hydra.providers.base import LLMConfig
 from hydra.providers.base_provider import (
     BaseProvider,
@@ -214,6 +219,11 @@ class VeniceProvider(BaseProvider):
             "total_tokens": 0,
         }
 
+        # Initialize prompt injection system
+        self._injector_registry = InjectorRegistry()
+        if not self._injector_registry.injectors:
+            initialize_default_injectors()
+
         logger.info(f"Venice provider initialized with model: {self.config.model}")
 
     def _resolve_model_name(self) -> None:
@@ -250,10 +260,21 @@ class VeniceProvider(BaseProvider):
         temperature = kwargs.get("temperature", self.config.temperature)
         max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
 
-        # Add concise system message
+        # Use injection system to prepare prompt
+        injection_context = InjectionContext(
+            operation="code_execution",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"temperature": temperature, "max_tokens": max_tokens}
+        )
+
+        injected_prompt = self._inject_prompts(injection_context)
+
+        # Add system message and user prompt
         messages = [
             {"role": "system", "content": get_system_prompt("code")},
-            {"role": "user", "content": optimize_prompt(prompt, "code_gen")},
+            {"role": "user", "content": injected_prompt},
         ]
 
         # Log request if enabled
@@ -493,10 +514,17 @@ class VeniceProvider(BaseProvider):
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from Venice AI."""
-        # Add JSON instruction to prompt
-        json_prompt = optimize_prompt(f"{prompt}\nJSON only.", "json_gen")
+        # Use injection system for JSON generation
+        injection_context = InjectionContext(
+            operation="json_generation",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"format": "json"}
+        )
 
-        response = self.generate(json_prompt, **kwargs)
+        injected_prompt = self._inject_prompts(injection_context)
+        response = self.generate(injected_prompt, **kwargs)
 
         # Try to extract JSON from response
         try:
@@ -1049,9 +1077,20 @@ class VeniceProvider(BaseProvider):
         temperature = kwargs.get("temperature", self.config.temperature)
         max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
 
+        # Use injection system for async generation
+        injection_context = InjectionContext(
+            operation="async_code_execution",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"temperature": temperature, "max_tokens": max_tokens, "async": True}
+        )
+
+        injected_prompt = self._inject_prompts(injection_context)
+
         messages = [
             {"role": "system", "content": get_system_prompt("code")},
-            {"role": "user", "content": optimize_prompt(prompt, "code_gen")},
+            {"role": "user", "content": injected_prompt},
         ]
 
         # Log request if enabled
@@ -1641,3 +1680,24 @@ class VeniceProvider(BaseProvider):
             "retries": 0,
             "total_tokens": 0,
         }
+
+    def _inject_prompts(self, context: InjectionContext) -> str:
+        """Apply prompt injection based on context."""
+        # Get appropriate injector for operation
+        if "execution" in context.operation:
+            injector = self._injector_registry.get("production")
+        elif "verification" in context.operation:
+            injector = self._injector_registry.get("verification")
+        elif "ticket" in context.operation:
+            injector = self._injector_registry.get("ticket")
+        elif "json" in context.operation:
+            # Apply minimal injection for JSON to preserve format
+            return context.user_prompt + "\nJSON only."
+        else:
+            # Use production as default for safety
+            injector = self._injector_registry.get("production")
+
+        if injector:
+            return injector.inject(context)
+
+        return context.user_prompt

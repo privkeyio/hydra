@@ -411,7 +411,7 @@ class TicketGenerator:
         project_type: Optional[str],
         complexity: Dict[str, Any],
     ) -> str:
-        """Build prompt for ticket generation.
+        """Build prompt for ticket generation using new prompt system.
 
         Args:
             description: Project description
@@ -423,32 +423,38 @@ class TicketGenerator:
             Prompt string
 
         """
-        # Simple, clear prompt for Claude
-        return f"""Create tickets.yaml for: {description}
-
-Generate {complexity['recommended_tickets']} ticket(s).
-
-Use this YAML format and write to tickets.yaml:
-```yaml
-version: '1.0'
-project:
-  name: Project Name
-  description: {description}
-  created_at: '2025-08-15T00:00:00'
-  path: .
-tickets:
-- id: '001'
-  title: Build the application
-  status: TODO
-  priority: 1
-  model: fast
-  description: Implementation details
-  acceptance_criteria:
-  - Create index.html with UI elements
-  - Create styles.css with styling
-  - Create script.js with logic
-  dependencies: []
-```"""
+        from hydra.prompts.ticket_prompts import TicketPromptBuilder
+        from hydra.prompts.injection import InjectionContext, InjectorRegistry
+        import os
+        
+        # Use the new prompt generation system
+        prompt_builder = TicketPromptBuilder()
+        base_prompt = prompt_builder.build_generation_prompt(
+            project_description=description,
+            context=context,
+            project_type=project_type,
+            complexity=complexity
+        )
+        
+        # Create injection context
+        provider_type = os.environ.get("LLM_PROVIDER", "mock")
+        injection_context = InjectionContext(
+            operation="ticket_generation",
+            provider=provider_type,
+            model="smart",  # Ticket generation should use smart model
+            user_prompt=base_prompt,
+            metadata={
+                "project_type": project_type,
+                "complexity": complexity,
+                "recommended_tickets": complexity['recommended_tickets']
+            }
+        )
+        
+        # Apply injection for provider-specific optimizations
+        registry = InjectorRegistry()
+        final_prompt = registry.inject_prompt(injection_context)
+        
+        return final_prompt
 
     def _parse_response(self, content: str) -> List[Dict[str, Any]]:
         """Parse LLM response to extract tickets.

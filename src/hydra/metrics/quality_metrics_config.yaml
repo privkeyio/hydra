@@ -1,0 +1,87 @@
+# Quality Metrics Configuration
+# Configure thresholds and settings for production quality analysis
+
+# Code Complexity Thresholds
+complexity:
+  max_cyclomatic_complexity: 15     # Maximum cyclomatic complexity per function
+  max_cognitive_complexity: 20      # Maximum cognitive complexity per function  
+  max_nesting_depth: 4              # Maximum nesting depth
+  max_function_length: 50           # Maximum lines per function
+  max_duplicate_ratio: 0.1          # Maximum duplicate code ratio (10%)
+  max_lines_per_file: 500           # Maximum lines per file
+
+# Test Coverage Requirements
+coverage:
+  min_line_coverage: 70.0           # Minimum line coverage percentage
+  min_branch_coverage: 60.0         # Minimum branch coverage percentage
+  min_function_coverage: 80.0       # Minimum function coverage percentage
+  min_test_to_code_ratio: 0.5       # Minimum test-to-code ratio
+  require_test_files: true          # Require test files to exist
+
+# Documentation Requirements
+documentation:
+  min_docstring_coverage: 60.0      # Minimum docstring coverage percentage
+  min_public_api_documentation: 80.0 # Minimum public API documentation
+  require_readme: true              # Require README file
+  require_api_docs: false           # Require API documentation
+  min_inline_comment_ratio: 0.1     # Minimum inline comment ratio
+
+# Error Handling Requirements
+error_handling:
+  min_try_except_coverage: 50.0     # Minimum try/except coverage
+  require_error_logging: true       # Require error logging
+  require_custom_exceptions: false  # Require custom exceptions
+  min_validation_coverage: 30.0     # Minimum input validation
+  require_input_sanitization: true  # Require input sanitization
+
+# Performance Requirements
+performance:
+  max_response_time_ms: 1000.0      # Maximum response time in milliseconds
+  max_memory_usage_mb: 100.0        # Maximum memory usage in MB
+  require_caching: false            # Require caching implementation
+  require_async_operations: false   # Require async operations
+  require_connection_pooling: false # Require connection pooling
+
+# Security Requirements
+security:
+  allow_secrets_in_code: false      # Allow hardcoded secrets (should be false)
+  require_sql_injection_safe: true  # Require SQL injection protection
+  require_xss_protection: true      # Require XSS protection
+  require_input_validation: true    # Require input validation
+  require_authentication: false     # Require authentication
+  require_authorization: false      # Require authorization
+  require_audit_logging: false      # Require audit logging
+
+# Quality Gates
+quality_gates:
+  min_overall_score: 70.0           # Minimum overall quality score
+  require_production_ready: true    # Must pass production readiness check
+  max_critical_issues: 0            # Maximum critical issues allowed
+  max_major_issues: 5               # Maximum major issues allowed
+  max_minor_issues: 20              # Maximum minor issues allowed
+
+# Global Settings
+strict_mode: false                  # Enable strict mode
+enable_ai_detection: true          # Enable AI pattern detection
+enable_performance_benchmarks: true # Enable performance benchmarking
+include_test_files: true           # Include test files in analysis
+timeout_seconds: 300               # Analysis timeout in seconds
+
+# Exclusion Patterns
+exclude_patterns:
+  - "*/venv/*"
+  - "*/node_modules/*"
+  - "*/__pycache__/*"
+  - "*/build/*"
+  - "*/dist/*"
+  - "*/.git/*"
+  - "*/coverage/*"
+  - "*/.pytest_cache/*"
+
+# Environment-specific overrides can be applied via environment variables:
+# HYDRA_MIN_OVERALL_SCORE=80 - Override minimum overall score
+# HYDRA_MIN_COVERAGE=75 - Override minimum coverage
+# HYDRA_MAX_COMPLEXITY=10 - Override maximum complexity
+# HYDRA_STRICT_MODE=true - Enable strict mode
+# HYDRA_ALLOW_SECRETS=false - Allow/disallow secrets in code
+# HYDRA_ENABLE_AI_DETECTION=true - Enable/disable AI detection

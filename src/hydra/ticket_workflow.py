@@ -5,37 +5,40 @@ while delegating to the refactored modules in the tickets/ directory.
 """
 
 # Import main functions from refactored modules
-from hydra.tickets.ticket_parser import (
-    parse_ticket,
-    parse_tickets_from_file,
-    get_ticket_dependencies,
-    validate_ticket_dependencies,
+from hydra.tickets.generator import TicketGenerator
+from hydra.tickets.ticket_database import (
+    get_ticket_from_database,
+    update_ticket_in_database,
 )
-
 from hydra.tickets.ticket_executor import (
+    SharedWorkspace,
     execute_single_ticket,
     execute_tickets_parallel,
-    SharedWorkspace,
 )
-
-from hydra.tickets.ticket_database import (
-    update_ticket_in_database,
-    get_ticket_from_database,
+from hydra.tickets.ticket_parser import (
+    get_ticket_dependencies,
+    parse_ticket,
+    parse_tickets_from_file,
+    parse_all_tickets,
+    validate_ticket_dependencies,
 )
-
 from hydra.tickets.ticket_status import (
     mark_ticket_completed,
     mark_ticket_in_progress,
     mark_ticket_quality_failed,
 )
-
 from hydra.tickets.ticket_validation import (
+    check_for_ai_generated_code,
     validate_acceptance_criteria,
     validate_code_changes,
-    check_for_ai_generated_code,
 )
 
-from hydra.tickets.generator import TicketGenerator
+
+# Export key functions for compatibility
+def generate_tickets(description: str, output_path: str) -> bool:
+    """Generate tickets from description."""
+    generator = TicketGenerator()
+    return generator.generate_tickets_yaml(description, output_path)
 
 # Missing functions needed by CLI
 def generate_tickets_md(description: str, output_path: str = "tickets.md", project_type: str = None) -> bool:
@@ -48,13 +51,14 @@ def generate_tickets_md(description: str, output_path: str = "tickets.md", proje
         
     Returns:
         True if successful
+
     """
     # Convert .md to .yaml for modern format
     if output_path.endswith('.md'):
         yaml_path = output_path.replace('.md', '.yaml')
     else:
         yaml_path = output_path
-        
+
     generator = TicketGenerator()
     return generator.generate_tickets_yaml(description, yaml_path, project_type)
 
@@ -66,7 +70,8 @@ def run_all_tickets(tickets_path: str = "tickets.md", max_parallel: int = 3, ski
 # Re-export main functions for backwards compatibility
 __all__ = [
     'parse_ticket',
-    'parse_tickets_from_file', 
+    'parse_tickets_from_file',
+    'parse_all_tickets',
     'get_ticket_dependencies',
     'validate_ticket_dependencies',
     'execute_single_ticket',

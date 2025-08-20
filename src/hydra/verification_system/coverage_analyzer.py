@@ -310,6 +310,44 @@ class CoverageAnalyzer:
         except (subprocess.SubprocessError, subprocess.TimeoutExpired, FileNotFoundError):
             return {"available": False, "reason": "pytest or coverage not available"}
 
+    def analyze(self, project_path: str) -> float:
+        """Simple coverage analysis method for boss_agent.
+        
+        Returns a coverage percentage (0-100).
+        """
+        self.project_root = Path(project_path)
+
+        # Try to get real coverage from pytest first
+        pytest_result = self.try_run_pytest_coverage()
+
+        if pytest_result and pytest_result.get("available") and pytest_result.get("coverage_data"):
+            totals = pytest_result["coverage_data"].get("totals", {})
+            if "percent_covered" in totals:
+                return float(totals["percent_covered"])
+
+        # Fall back to static analysis
+        # Find all Python files
+        py_files = list(self.project_root.rglob("*.py"))
+
+        # Filter out test files and __pycache__
+        source_files = [
+            f for f in py_files
+            if not any(part in str(f) for part in ['test_', '_test.py', '__pycache__', 'tests/'])
+        ]
+
+        if not source_files:
+            return 100.0  # No source files means 100% coverage
+
+        # Analyze each file
+        total_coverage = 0.0
+        for source_file in source_files:
+            rel_path = str(source_file.relative_to(self.project_root))
+            coverage_info = self.estimate_line_coverage(rel_path)
+            total_coverage += coverage_info.get("estimated_coverage", 0.0) * 100
+
+        # Return average coverage
+        return total_coverage / len(source_files) if source_files else 100.0
+
     def comprehensive_coverage_analysis(self, artifacts: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Run comprehensive coverage analysis combining static and dynamic methods."""
         static_analysis = self.run_coverage_analysis(artifacts)

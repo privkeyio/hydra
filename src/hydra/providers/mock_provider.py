@@ -3,6 +3,12 @@
 from datetime import datetime
 from typing import Any, Dict, Iterator, List
 
+from hydra.prompts.injection import (
+    InjectionContext,
+    InjectorRegistry,
+    initialize_default_injectors,
+)
+
 from .base import LLMConfig
 from .base_provider import (
     BaseProvider,
@@ -33,6 +39,11 @@ class MockProvider(BaseProvider):
         self._mock_sessions: Dict[str, Session] = {}
         self._current_model = "mock-model-1"
 
+        # Initialize prompt injection system for testing
+        self._injector_registry = InjectorRegistry()
+        if not self._injector_registry.injectors:
+            initialize_default_injectors()
+
         # Now call super().__init__() which will call validate_config()
         super().__init__(config)
 
@@ -43,6 +54,19 @@ class MockProvider(BaseProvider):
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a mock response."""
+        # Apply injection system for consistency with real providers
+        injection_context = InjectionContext(
+            operation=kwargs.get("operation", "mock_execution"),
+            provider="mock",
+            model=self._current_model,
+            user_prompt=prompt,
+            metadata=kwargs
+        )
+
+        # Use injection if enabled, otherwise use original prompt
+        if kwargs.get("test_injection", False):
+            prompt = self._inject_prompts(injection_context)
+
         # Track call
         self.call_history.append(
             {"method": "generate", "prompt": prompt, "kwargs": kwargs}
@@ -186,6 +210,18 @@ tickets:
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a mock JSON response."""
+        # Apply injection for JSON generation testing
+        injection_context = InjectionContext(
+            operation="json_generation",
+            provider="mock",
+            model=self._current_model,
+            user_prompt=prompt,
+            metadata={"format": "json", **kwargs}
+        )
+
+        if kwargs.get("test_injection", False):
+            prompt = self._inject_prompts(injection_context)
+
         self.call_history.append(
             {"method": "generate_json", "prompt": prompt, "kwargs": kwargs}
         )
@@ -474,3 +510,35 @@ tickets:
         self.fail_mode = False
         self._mock_sessions.clear()
         self._current_model = "mock-model-1"
+
+    def _inject_prompts(self, context: InjectionContext) -> str:
+        """Apply prompt injection for testing - records injection in call history."""
+        # Record that injection was attempted for testing
+        self.call_history.append({
+            "method": "_inject_prompts",
+            "context": {
+                "operation": context.operation,
+                "provider": context.provider,
+                "model": context.model,
+                "metadata": context.metadata
+            }
+        })
+
+        # Get appropriate injector for operation
+        if "execution" in context.operation:
+            injector = self._injector_registry.get("production")
+        elif "verification" in context.operation:
+            injector = self._injector_registry.get("verification")
+        elif "ticket" in context.operation:
+            injector = self._injector_registry.get("ticket")
+        elif "json" in context.operation:
+            # Apply minimal injection for JSON to preserve format
+            return context.user_prompt + "\nJSON only."
+        else:
+            # Use production as default for safety
+            injector = self._injector_registry.get("production")
+
+        if injector:
+            return injector.inject(context)
+
+        return context.user_prompt

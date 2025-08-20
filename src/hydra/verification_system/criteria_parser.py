@@ -135,6 +135,81 @@ class CriteriaParser:
 
         return list(set(validation_rules))
 
+    def parse(self, criterion_text: str) -> Dict[str, Any]:
+        """Parse a single criterion text and return parsed information.
+        
+        This method is used by boss_agent for quick parsing.
+        """
+        text_lower = criterion_text.lower()
+
+        # Determine type based on content
+        if 'create' in text_lower and any(ext in criterion_text for ext in ['.py', '.yaml', '.json']):
+            return {
+                'type': 'file_exists',
+                'path': self._extract_file_path(criterion_text)
+            }
+        elif 'function' in text_lower or 'def ' in text_lower:
+            return {
+                'type': 'function_exists',
+                'function_name': self._extract_function_name(criterion_text)
+            }
+        elif 'test' in text_lower:
+            return {
+                'type': 'test_exists',
+                'test_pattern': self._extract_test_pattern(criterion_text)
+            }
+        elif any(word in text_lower for word in ['implement', 'feature', 'functionality']):
+            return {
+                'type': 'feature_implemented',
+                'feature': criterion_text
+            }
+        else:
+            return {
+                'type': 'unknown',
+                'text': criterion_text
+            }
+
+    def _extract_file_path(self, text: str) -> str:
+        """Extract file path from criterion text."""
+        for pattern in self.file_patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1)
+        return ''
+
+    def _extract_function_name(self, text: str) -> str:
+        """Extract function name from criterion text."""
+        # Look for function name patterns
+        patterns = [
+            r'function\s+(\w+)',
+            r'def\s+(\w+)',
+            r'method\s+(\w+)',
+            r'`(\w+)`\s*function',
+            r'(\w+)\s*function'
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        return ''
+
+    def _extract_test_pattern(self, text: str) -> str:
+        """Extract test pattern from criterion text."""
+        if 'test' in text.lower():
+            # Extract what should be tested
+            patterns = [
+                r'test\s+(?:for\s+)?(\w+)',
+                r'tests?\s+(?:for\s+)?(\w+)',
+                r'(\w+)\s+tests?'
+            ]
+
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    return match.group(1)
+        return 'test'
+
     def determine_verification_method(self, criterion_text: str, requirements: List[str]) -> str:
         """Determine the appropriate verification method for a criterion."""
         text_lower = criterion_text.lower()

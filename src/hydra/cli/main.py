@@ -12,6 +12,13 @@ from hydra.cli.commands.dashboard import add_dashboard_parser, handle_dashboard_
 from hydra.cli.commands.template import add_template_parser, handle_template_command
 from hydra.cli.commands.ticket import add_ticket_parser, handle_ticket_command
 
+# Import boss command if available
+try:
+    from hydra.cli.commands.boss import add_boss_parser, handle_boss_command
+except ImportError:
+    add_boss_parser = None
+    handle_boss_command = None
+
 # Load environment variables from .env file if it exists
 try:
     from dotenv import load_dotenv
@@ -154,6 +161,10 @@ def create_parser() -> argparse.ArgumentParser:
     add_context_parser(subparsers)
     add_dashboard_parser(subparsers)
 
+    # Add boss command if available
+    if add_boss_parser:
+        add_boss_parser(subparsers)
+
     # Task execution subcommand (legacy support)
     task_parser = subparsers.add_parser("run", help="Execute a task (legacy command)")
     task_parser.add_argument("task", help="Task description for the agent system")
@@ -272,6 +283,12 @@ def main() -> int:
         return handle_context_command(args)
     elif args.command == "dashboard":
         return handle_dashboard_command(args)
+    elif args.command == "boss":
+        if handle_boss_command:
+            return handle_boss_command(args)
+        else:
+            print("Boss command not available", file=sys.stderr)
+            return 1
     elif args.command == "run":
         return handle_run_command(args)
     else:

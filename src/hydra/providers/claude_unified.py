@@ -20,6 +20,11 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import orjson
 
+from hydra.prompts.injection import (
+    InjectionContext,
+    InjectorRegistry,
+    initialize_default_injectors,
+)
 from hydra.safety.claude_file_interceptor import ClaudeFileInterceptor
 from hydra.utils.claude_path import get_claude_cli_path
 
@@ -89,6 +94,11 @@ class ClaudeUnifiedProvider(BaseProvider):
         self._file_interceptor: Optional[ClaudeFileInterceptor] = None
         self._output_thread: Optional[threading.Thread] = None
         self._stop_output = threading.Event()
+
+        # Initialize prompt injection system
+        self._injector_registry = InjectorRegistry()
+        if not self._injector_registry.injectors:
+            initialize_default_injectors()
 
         # Now call super().__init__ which will validate
         super().__init__(config)
@@ -369,34 +379,32 @@ class ClaudeUnifiedProvider(BaseProvider):
 
     def generate_code(self, prompt: str, context: Dict[str, Any], **kwargs) -> str:
         """Generate code with context awareness."""
-        # Add code generation specific instructions
-        code_prompt = f"""Generate code for the following request:
+        # Use injection system for code generation prompts
+        injection_context = InjectionContext(
+            operation="code_generation",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            variables=context,
+            metadata={"context": context}
+        )
 
-{prompt}
-
-Requirements:
-- Provide complete, working code
-- Include necessary imports
-- Add appropriate error handling
-- Follow best practices
-
-Context:
-{orjson.dumps(context).decode() if context else 'No additional context'}
-"""
-        return self.generate(code_prompt, **kwargs)
+        injected_prompt = self._inject_prompts(injection_context)
+        return self.generate(injected_prompt, **kwargs)
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from the LLM."""
-        json_prompt = f"""Generate a JSON response for the following request:
+        # Use injection system for JSON generation
+        injection_context = InjectionContext(
+            operation="json_generation",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"format": "json"}
+        )
 
-{prompt}
-
-Requirements:
-- Return valid JSON only
-- No markdown formatting or code blocks
-- Just the raw JSON object
-"""
-        response = self.generate(json_prompt, **kwargs)
+        injected_prompt = self._inject_prompts(injection_context)
+        response = self.generate(injected_prompt, **kwargs)
 
         # Try to parse the response as JSON
         try:
@@ -830,3 +838,21 @@ Requirements:
             self._file_interceptor.cleanup()
 
         super().cleanup()
+
+    def _inject_prompts(self, context: InjectionContext) -> str:
+        """Apply prompt injection based on context."""
+        # Get production injector for execution operations
+        if "execution" in context.operation:
+            injector = self._injector_registry.get("production")
+        elif "verification" in context.operation:
+            injector = self._injector_registry.get("verification")
+        elif "ticket" in context.operation:
+            injector = self._injector_registry.get("ticket")
+        else:
+            # Use production as default for safety
+            injector = self._injector_registry.get("production")
+
+        if injector:
+            return injector.inject(context)
+
+        return context.user_prompt

@@ -58,7 +58,7 @@ class AsyncAnthropicProvider(AsyncLLMProvider):
             ) as response:
                 response.raise_for_status()
                 return await response.json()
-    
+
     async def _make_stream_request(
         self,
         endpoint: str,

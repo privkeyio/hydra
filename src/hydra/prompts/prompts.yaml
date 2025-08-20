@@ -1,0 +1,232 @@
+version: '1.0.0'
+metadata:
+  description: 'Hydra prompt configuration'
+  created: '2025-08-19T00:00:00'
+  author: 'Hydra System'
+
+prompts:
+  # Ticket Generation Prompts
+  ticket_generation:
+    template: |
+      Generate implementation tickets in task language for Claude Code to execute.
+      Each ticket MUST have:
+      - Acceptance criteria as [ ] checklist items that are specific and testable
+      - Dependencies listed by ticket ID
+      - Model: sonnet-4 for standard tasks, opus-4 for complex/critical tasks
+
+      Be minimalistic, surgical, and future-proof. No fluff. No AI language.
+      Format: YAML with id, title, description, acceptance_criteria, dependencies, model, status.
+
+      Project description: {description}
+    variables: ['description']
+    category: 'ticket'
+    description: 'Generates tickets from project description'
+    version: '1.0.0'
+
+  # Base Ticket Prompt (used by execution)
+  ticket:
+    template: |
+      Get it done! Don't overengineer.
+
+      Be minimalistic, surgical, and future-proof. Avoid ANY code or comments that may be construed as AI-generated. No emojis. The simpler and less code the better!
+
+      Make sure you do a good job because other LLMs said your code sucked!
+
+      When finished, be critical, brutally honest, and transparent:
+      - Ensure acceptance criteria is met
+      - Run lint, build, test etc before moving on
+      - DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time
+
+      When you think you're finished, ask yourself:
+      - Did we test all these?
+      - Do we need all these files?
+      - Is this production grade?
+      - Are you being dishonest?
+      - Am I being critical?
+      - Was any value added here?
+      - Does this look like AI code?
+      - Am I cutting corners when I know I shouldn't?
+
+      Execute ticket: {id} - {title}
+      Description: {description}
+      Acceptance criteria: {criteria}
+      Project directory: {dir}
+      Dependencies: {deps}
+    variables: ['id', 'title', 'description', 'criteria', 'dir', 'deps']
+    category: 'execution'
+    description: 'Base ticket execution prompt'
+    version: '1.0.0'
+
+  # Ticket Execution Prompts
+  ticket_execution:
+    template: |
+      Get it done! Don't overengineer.
+
+      Be minimalistic, surgical, and future-proof. Avoid ANY code or comments that may be construed as AI-generated. No emojis. The simpler and less code the better!
+
+      Make sure you do a good job because other LLMs said your code sucked!
+
+      When finished, be critical, brutally honest, and transparent:
+      - Ensure acceptance criteria is met
+      - Run lint, build, test etc before moving on
+      - DO NOT TAKE ANY SHORTCUTS OR WORKAROUNDS OR MOCKS! This has to be production quality, take your time
+
+      When you think you're finished, ask yourself:
+      - Did we test all these?
+      - Do we need all these files?
+      - Is this production grade?
+      - Are you being dishonest?
+      - Am I being critical?
+      - Was any value added here?
+      - Does this look like AI code?
+      - Am I cutting corners when I know I shouldn't?
+
+      Execute ticket: {ticket_id} - {title}
+      Description: {description}
+      Acceptance criteria: {criteria}
+    variables: ['ticket_id', 'title', 'description', 'criteria']
+    category: 'execution'
+    description: 'Executes individual tickets'
+    version: '1.0.0'
+
+  # Verification Prompts
+  verification:
+    template: |
+      Boss agent verification - be brutally honest and critical.
+
+      Check:
+      - Did we test all these?
+      - Do we need all these files?
+      - Is this production grade?
+      - Are you being dishonest?
+      - Am I being critical?
+      - Was any value added here?
+      - Does this look like AI code?
+      - Am I cutting corners when I know I shouldn't?
+      - All acceptance criteria actually met?
+      - Tests comprehensive and passing?
+
+      Return: PASS or FAIL with specific reasons.
+      If FAIL, provide actionable feedback for retry.
+
+      Verify completion of: {criteria}
+      Files created: {files}
+      Tests run: {test_results}
+    variables: ['criteria', 'files', 'test_results']
+    category: 'verification'
+    description: 'Verifies ticket completion'
+    version: '1.0.0'
+
+  # Code Review Prompts
+  code_review:
+    template: |
+      Review code with extreme criticism.
+
+      No AI patterns allowed:
+      - No verbose variable names
+      - No excessive comments
+      - No placeholder text
+      - No emojis
+      - No boilerplate
+
+      Focus on:
+      - Does it work correctly?
+      - Is it production ready?
+      - Are tests comprehensive?
+      - Is it maintainable?
+      - Does it look human-written?
+
+      Be brutally honest. Call out any BS.
+
+      Review code: {code}
+      File: {file_path}
+    variables: ['code', 'file_path']
+    category: 'review'
+    description: 'Reviews code quality'
+    version: '1.0.0'
+
+  # Complexity Estimation
+  estimate_complexity:
+    template: |
+      Estimate ticket complexity.
+      Return: low/medium/high/critical
+      Factors: code changes, testing needs, dependencies, risk
+
+      Analyze: {description}
+      Dependencies: {dependencies}
+    variables: ['description', 'dependencies']
+    category: 'analysis'
+    description: 'Estimates implementation complexity'
+    version: '1.0.0'
+
+  # AI Pattern Detection
+  detect_ai_patterns:
+    template: |
+      Scan code for AI-generated patterns:
+      - Overly verbose variable names
+      - Excessive comments
+      - Generic placeholder text
+      - Emoji usage
+      - Boilerplate patterns
+      Return: List of detected patterns or NONE.
+
+      Analyze code: {code}
+    variables: ['code']
+    category: 'verification'
+    description: 'Detects AI-generated code patterns'
+    version: '1.0.0'
+
+  # Production Quality Assessment
+  assess_production_quality:
+    template: |
+      Assess production readiness:
+      - Error handling: adequate?
+      - Tests: comprehensive?
+      - Performance: optimized?
+      - Security: best practices?
+      - Documentation: sufficient?
+      Rate: READY, NEEDS_WORK, or NOT_READY with reasons.
+
+      Assess: {code}
+      Tests: {test_coverage}
+    variables: ['code', 'test_coverage']
+    category: 'verification'
+    description: 'Assesses production readiness'
+    version: '1.0.0'
+
+provider_overrides:
+  claude_tmux:
+    ticket_execution: |
+      Execute ticket via tmux session. Production quality only. Run all tests.
+      
+      Ticket: {ticket_id} - {title}
+      Use tmux for long-running processes.
+    
+  venice:
+    ticket_execution: |
+      Implement ticket using Venice provider. Clean code. Full test coverage.
+      
+      Ticket: {ticket_id} - {title}
+      Follow Venice best practices.
+    
+  anthropic:
+    ticket_execution: |
+      Complete ticket using Anthropic provider. No shortcuts. Production ready.
+      
+      Ticket: {ticket_id} - {title}
+      Anthropic execution mode.
+
+  mock:
+    ticket_execution: |
+      Mock execution for testing purposes.
+      
+      Ticket: {ticket_id} - {title}
+      Return test response.
+
+settings:
+  hot_reload: false
+  validation_strict: true
+  version_retention: 10
+  default_provider: null
+  prompt_timeout: 30
+  max_template_size: 10000

@@ -5,6 +5,11 @@ from typing import Any, Dict, List, Optional
 import orjson
 from anthropic import Anthropic
 
+from hydra.prompts.injection import (
+    InjectionContext,
+    InjectorRegistry,
+    initialize_default_injectors,
+)
 from hydra.token_tracker import get_token_tracker
 
 from .base import LLMConfig, LLMProvider
@@ -43,6 +48,11 @@ class AnthropicProvider(LLMProvider):
         self.ticket_id: Optional[int] = None
         self.session_id: Optional[int] = None
 
+        # Initialize prompt injection system
+        self._injector_registry = InjectorRegistry()
+        if not self._injector_registry.injectors:
+            initialize_default_injectors()
+
     @property
     def name(self) -> str:
         return "anthropic"
@@ -69,9 +79,20 @@ class AnthropicProvider(LLMProvider):
             temperature = kwargs.get("temperature", self.config.temperature)
             max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
 
+            # Use injection system to prepare prompt
+            injection_context = InjectionContext(
+                operation="code_execution",
+                provider=self.name,
+                model=self.config.model,
+                user_prompt=prompt,
+                metadata={"temperature": temperature, "max_tokens": max_tokens}
+            )
+
+            injected_prompt = self._inject_prompts(injection_context)
+
             response = self.client.messages.create(
                 model=self.config.model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": injected_prompt}],
                 max_tokens=max_tokens,
                 temperature=temperature,
                 **self.config.extra_params,
@@ -111,12 +132,17 @@ class AnthropicProvider(LLMProvider):
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from Claude."""
-        # Add JSON instruction to prompt
-        json_prompt = (
-            f"{prompt}\n\nRespond with ONLY valid JSON, no other text or formatting."
+        # Use injection system for JSON generation
+        injection_context = InjectionContext(
+            operation="json_generation",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"format": "json"}
         )
 
-        response = self.generate(json_prompt, **kwargs)
+        injected_prompt = self._inject_prompts(injection_context)
+        response = self.generate(injected_prompt, **kwargs)
 
         # Try to parse JSON
         try:
@@ -163,3 +189,24 @@ class AnthropicProvider(LLMProvider):
         # Close HTTP session for this provider
         session_manager = get_session_manager()
         session_manager.close_session("anthropic")
+
+    def _inject_prompts(self, context: InjectionContext) -> str:
+        """Apply prompt injection based on context."""
+        # Get appropriate injector for operation
+        if "execution" in context.operation:
+            injector = self._injector_registry.get("production")
+        elif "verification" in context.operation:
+            injector = self._injector_registry.get("verification")
+        elif "ticket" in context.operation:
+            injector = self._injector_registry.get("ticket")
+        elif "json" in context.operation:
+            # Apply minimal injection for JSON to preserve format
+            return context.user_prompt + "\n\nRespond with ONLY valid JSON, no other text or formatting."
+        else:
+            # Use production as default for safety
+            injector = self._injector_registry.get("production")
+
+        if injector:
+            return injector.inject(context)
+
+        return context.user_prompt

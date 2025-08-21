@@ -69,7 +69,9 @@ class RealTimeDashboard:
     
     def _setup_database(self):
         """Setup dashboard database."""
-        os.environ["DATABASE_URL"] = f"sqlite:///{self.database_path}"
+        # Create a temporary database in a writable location
+        db_file = tempfile.mktemp(suffix='.db')
+        os.environ["DATABASE_URL"] = f"sqlite:///{db_file}"
         
         # Initialize database with test data
         db_manager = get_db_manager()

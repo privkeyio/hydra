@@ -167,7 +167,15 @@ class RecursiveExecutor:
             self.MAX_ALLOWED_RETRIES
         )
         self.base_backoff = base_backoff
-        self.workspace_dir = Path(workspace_dir) if workspace_dir else Path.cwd() / ".hydra_workspace"
+        if workspace_dir:
+            self.workspace_dir = Path(workspace_dir)
+        else:
+            try:
+                self.workspace_dir = Path.cwd() / ".hydra_workspace"
+            except (FileNotFoundError, OSError):
+                # Fallback to temp directory if cwd doesn't exist
+                import tempfile
+                self.workspace_dir = Path(tempfile.gettempdir()) / ".hydra_workspace"
         self.enable_learning = enable_learning
         self.enable_metrics = enable_metrics
 

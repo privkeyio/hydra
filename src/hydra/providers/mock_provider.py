@@ -38,6 +38,7 @@ class MockProvider(BaseProvider):
         self.response_overrides: Dict[str, str] = {}
         self._mock_sessions: Dict[str, Session] = {}
         self._current_model = "mock-model-1"
+        self._call_count = 0
 
         # Initialize prompt injection system for testing
         self._injector_registry = InjectorRegistry()
@@ -46,6 +47,11 @@ class MockProvider(BaseProvider):
 
         # Now call super().__init__() which will call validate_config()
         super().__init__(config)
+
+    @property
+    def call_count(self) -> int:
+        """Get the number of generate calls made."""
+        return self._call_count
 
     def validate_config(self):
         """Mock provider always validates successfully."""
@@ -68,6 +74,7 @@ class MockProvider(BaseProvider):
             prompt = self._inject_prompts(injection_context)
 
         # Track call
+        self._call_count += 1
         self.call_history.append(
             {"method": "generate", "prompt": prompt, "kwargs": kwargs}
         )

@@ -30,11 +30,21 @@ class HydraConfig:
     def _find_config_file(self) -> str:
         """Find the configuration file."""
         # Look for config in multiple locations
-        search_paths = [
-            Path.cwd() / "config" / "default.yaml",
-            Path.cwd() / "hydra.yaml",
-            Path(__file__).parent.parent.parent / "config" / "default.yaml",
-        ]
+        search_paths = []
+        
+        # Try to get current working directory, fall back to safe defaults
+        try:
+            cwd = Path.cwd()
+            search_paths.extend([
+                cwd / "config" / "default.yaml",
+                cwd / "hydra.yaml",
+            ])
+        except (FileNotFoundError, OSError):
+            # In CI or restricted environments where cwd doesn't exist
+            pass
+        
+        # Always add the package default config path
+        search_paths.append(Path(__file__).parent.parent.parent / "config" / "default.yaml")
 
         for path in search_paths:
             if path.exists():

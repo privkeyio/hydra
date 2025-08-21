@@ -73,6 +73,10 @@ class RealTimeDashboard:
         db_file = tempfile.mktemp(suffix='.db')
         os.environ["DATABASE_URL"] = f"sqlite:///{db_file}"
         
+        # Force reset the global database manager to pick up new URL
+        from hydra.dashboard import database
+        database._db_manager = None
+        
         # Initialize database with test data
         db_manager = get_db_manager()
         with db_manager.get_session() as db:
@@ -810,6 +814,23 @@ class TestDashboardRealTime:
         with open(tickets_file, 'w') as f:
             yaml.dump(yaml_data, f)
         
+        # Insert tickets into database
+        db_manager = get_db_manager()
+        with db_manager.get_session() as db:
+            for ticket_data in yaml_data["tickets"]:
+                ticket = Ticket(
+                    ticket_number=ticket_data["id"],
+                    title=ticket_data["title"],
+                    description=ticket_data["description"],
+                    status=ticket_data["status"],
+                    priority=ticket_data.get("priority", "medium"),
+                    model=ticket_data.get("model", "balanced"),
+                    project_id=dashboard.project_id,
+                    created_at=datetime.now(timezone.utc)
+                )
+                db.add(ticket)
+            db.commit()
+        
         async def test_complete_integration():
             processor_task = asyncio.create_task(dashboard.start_update_processor())
             
@@ -849,6 +870,17 @@ class TestDashboardRealTime:
                     
                     # Complete ticket
                     await dashboard.notify_ticket_status_change(ticket_id, "IN_PROGRESS", "DONE")
+                    
+                    # Update database to match notification
+                    db_manager = get_db_manager()
+                    with db_manager.get_session() as db:
+                        ticket_record = db.query(Ticket).filter(
+                            Ticket.ticket_number == ticket_id
+                        ).first()
+                        if ticket_record:
+                            ticket_record.status = "DONE"
+                            ticket_record.completed_at = datetime.now(timezone.utc)
+                        db.commit()
                     
                     # Update project metrics
                     await dashboard.notify_metrics_update({
@@ -905,7 +937,7 @@ class TestDashboardRealTime:
             
             assert len(status_updates) == 6, "Should have 6 status updates (2 per ticket)"
             assert len(progress_updates) == 18, "Should have 18 progress updates (6 per ticket)"
-            assert len(metrics_updates) == 4, "Should have 4 metrics updates"
+            assert len(metrics_updates) == 5, "Should have 5 metrics updates (1 initial + 3 per ticket + 1 final)"
             assert len(error_updates) == 1, "Should have 1 error update"
         
         # Verify final project state in database

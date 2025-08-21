@@ -639,6 +639,17 @@ class RecursiveExecutor:
         """
         # Simple implementation for test compatibility
         if TEST_MODE:
+            # Check circuit breaker first
+            try:
+                self._check_circuit_breaker(ticket_id)
+            except Exception as e:
+                return {
+                    "success": False,
+                    "attempts": 0,
+                    "final_score": 0.0,
+                    "failure_reason": str(e)
+                }
+            
             # Check if we're in a mocked scenario by trying to call _verify_ticket
             # If it's been mocked, let the test control the behavior
             try:

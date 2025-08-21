@@ -12,6 +12,12 @@ class ProjectType(str, Enum):
     FEATURE = "feature"
     BUGFIX = "bugfix"
     REFACTOR = "refactor"
+    
+    # Verification template types
+    API = "api"
+    CLI = "cli"
+    LIBRARY = "library"
+    WEB_APP = "web_app"
 
 
 class ProjectTemplateManager:

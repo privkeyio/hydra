@@ -163,8 +163,8 @@ class FailureAnalyzer:
                 ],
                 keywords={"ModuleNotFoundError", "ImportError", "cannot import"},
                 suggested_solutions=[
-                    "Check if module is installed: pip list | grep {module}",
                     "Install missing module: pip install {module}",
+                    "Check if module is installed: pip list | grep {module}",
                     "Check import path and module name spelling",
                     "Verify PYTHONPATH includes required directories"
                 ]

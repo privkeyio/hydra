@@ -99,7 +99,11 @@ class BossAgent:
     def _setup_logging(self):
         """Setup audit logging."""
         if self.config.log_to_file:
-            log_path = Path(self.config.audit_log_path)
+            # Use project_root for log path to avoid permission issues in CI
+            if self.project_root and not Path(self.config.audit_log_path).is_absolute():
+                log_path = Path(self.project_root) / self.config.audit_log_path
+            else:
+                log_path = Path(self.config.audit_log_path)
             log_path.parent.mkdir(parents=True, exist_ok=True)
 
             file_handler = logging.FileHandler(log_path)
@@ -121,6 +125,9 @@ class BossAgent:
         
         No shortcuts, no excuses, no AI nonsense.
         """
+        import time
+        start_time = time.time()
+        
         logger.info(f"Boss Agent starting verification for ticket {ticket_id}")
 
         result = VerificationResult(
@@ -229,6 +236,10 @@ class BossAgent:
             logger.error(f"Error during verification: {str(e)}")
             result.status = VerificationStatus.ERROR
             result.failure_reasons.append(f"Verification error: {str(e)}")
+
+        # Add timing metadata
+        verification_time = time.time() - start_time
+        result.metadata["verification_time"] = verification_time
 
         return result
 
@@ -517,7 +528,15 @@ class BossAgent:
 
         # Also save to file if configured
         if self.config.log_to_file:
-            audit_path = Path(self.config.audit_log_path)
+            # Use project_root for log path to avoid permission issues in CI
+            if self.project_root and not Path(self.config.audit_log_path).is_absolute():
+                audit_path = Path(self.project_root) / self.config.audit_log_path
+            else:
+                audit_path = Path(self.config.audit_log_path)
+            
+            # Ensure parent directory exists
+            audit_path.parent.mkdir(parents=True, exist_ok=True)
+            
             with open(audit_path, 'a') as f:
                 f.write(json.dumps(log_entry) + '\n')
 

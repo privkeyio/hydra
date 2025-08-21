@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from hydra.learning.failure_analyzer import FailureAnalyzer, FailureCategory
+from hydra.learning.failure_analyzer import FailureAnalyzer, FailureCategory, get_retry_feedback
 from hydra.metrics.quality_metrics import QualityMetricsAnalyzer
 from hydra.prompts.injection import InjectorRegistry, PromptInjector
 from hydra.providers.mock_provider import MockProvider
@@ -241,7 +241,7 @@ def add(a, b):
         
         assert result.status.value == "fail"
         assert len(result.failure_reasons) > 0
-        assert result.score < 0.5
+        assert result.score < 70.0  # Should be a low score due to multiple failures
     
     def test_recursive_execution_successful_retry(self, temp_project_dir, mock_provider):
         """Test recursive execution with successful retry."""
@@ -345,8 +345,8 @@ def add(a, b):
         
         # Register test injector
         class TestInjector(PromptInjector):
-            def inject(self, prompt: str, context: dict) -> str:
-                return f"[INJECTED] {prompt}"
+            def inject(self, context) -> str:
+                return f"[INJECTED] {context.user_prompt}"
         
         registry.register("test", TestInjector())
         

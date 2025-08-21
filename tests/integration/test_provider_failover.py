@@ -28,39 +28,42 @@ class FailingProvider(MockProvider):
     def __init__(self, config: LLMConfig, failure_mode: str = "none"):
         super().__init__(config)
         self.failure_mode = failure_mode
-        self.call_count = 0
         self.failure_count = 0
         
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate response with potential failures."""
-        self.call_count += 1
+        # Call parent first to increment call count and handle injection
+        result = super().generate(prompt, **kwargs)
+        
+        # Now check for failure modes based on current call count
+        current_calls = self.call_count
         
         if self.failure_mode == "always_fail":
             self.failure_count += 1
             raise ConnectionError("Provider always fails")
         
         elif self.failure_mode == "intermittent":
-            if self.call_count % 3 == 0:  # Fail every 3rd call
+            if current_calls % 3 == 0:  # Fail every 3rd call
                 self.failure_count += 1
                 raise TimeoutError("Provider timeout")
             
         elif self.failure_mode == "slow_degradation":
-            if self.call_count > 5:  # Start failing after 5 calls
+            if current_calls > 5:  # Start failing after 5 calls
                 self.failure_count += 1
                 raise RuntimeError("Provider degraded")
                 
         elif self.failure_mode == "rate_limit":
-            if self.call_count > 10:  # Rate limited after 10 calls
+            if current_calls > 10:  # Rate limited after 10 calls
                 self.failure_count += 1
                 raise Exception("Rate limit exceeded")
         
         elif self.failure_mode == "temporary_outage":
-            if 3 <= self.call_count <= 7:  # Fail calls 3-7
+            if 3 <= current_calls <= 7:  # Fail calls 3-7
                 self.failure_count += 1
                 raise ConnectionError("Temporary outage")
         
-        # Successful response
-        return f"Mock response from {self.config.provider_type} (call {self.call_count}): {prompt[:50]}..."
+        # Successful response - override the parent's generic response
+        return f"Mock response from {self.config.provider_type} (call {current_calls}): {prompt[:50]}..."
 
 
 class TestProviderFailover:

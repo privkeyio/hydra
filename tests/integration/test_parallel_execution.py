@@ -306,12 +306,12 @@ class IntegrationModule:
     def generate_report(self) -> str:
         """Generate integration report."""
         report = f"""Integration Report
-Worker ID: {self.worker_id}
-Created At: {self.created_at}
-Total Modules: {len(self.modules)}
-Modules: {list(self.modules.keys())}
+Worker ID: {{self.worker_id}}
+Created At: {{self.created_at}}
+Total Modules: {{len(self.modules)}}
+Modules: {{list(self.modules.keys())}}
 
-Integration Status: {"SUCCESS" if self.modules else "NO_MODULES"}
+Integration Status: {{"SUCCESS" if self.modules else "NO_MODULES"}}
 """
         return report
 

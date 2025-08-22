@@ -33,22 +33,37 @@ class TicketFormatHandler:
             else:
                 return "yaml"
 
-        with open(path, "r", encoding="utf-8") as f:
-            first_line = f.readline().strip()
-
-        if first_line.startswith("#"):
-            return "md"
-        elif first_line.startswith("version:") or first_line.startswith("tickets:"):
+        # First check file extension - more reliable
+        if path.suffix in [".yml", ".yaml"]:
             return "yaml"
-        else:
-            try:
-                import yaml
-
-                with open(path, "r") as f:
-                    yaml.safe_load(f)
+        elif path.suffix == ".md":
+            return "md"
+        
+        # If no clear extension, check content
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read(500)  # Read first 500 chars
+            
+        # Skip comment lines for detection
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # First non-comment line
+            if line.startswith("version:") or line.startswith("tickets:") or line.startswith("project:"):
                 return "yaml"
-            except:
+            elif line.startswith("##"):
                 return "md"
+            break
+        
+        # Try to parse as YAML as fallback
+        try:
+            import yaml
+            with open(path, "r") as f:
+                yaml.safe_load(f)
+            return "yaml"
+        except:
+            return "md"
 
     def parse_ticket(self, file_path: str, ticket_id: str) -> Optional[Dict[str, Any]]:
         """Parse a single ticket from either format.

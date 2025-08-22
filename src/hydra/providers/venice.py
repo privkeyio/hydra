@@ -190,7 +190,18 @@ class VeniceProvider(BaseProvider):
         self.log_responses = config.extra_params.get("log_responses", False)
         self.log_dir = Path(config.extra_params.get("log_dir", ".hydra/logs"))
         if self.log_requests or self.log_responses:
-            self.log_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.log_dir.mkdir(parents=True, exist_ok=True)
+            except (PermissionError, OSError) as e:
+                # Fall back to /tmp if .hydra directory creation fails (e.g., in CI)
+                logger.warning(f"Failed to create {self.log_dir}: {e}, falling back to /tmp/hydra_logs")
+                self.log_dir = Path("/tmp/hydra_logs")
+                self.log_dir.mkdir(parents=True, exist_ok=True)
+                # Disable logging if even /tmp fails
+                if not self.log_dir.exists():
+                    logger.warning("Failed to create any log directory, disabling logging")
+                    self.log_requests = False
+                    self.log_responses = False
 
         # Timeout settings
         self.request_timeout = config.extra_params.get("request_timeout", 120)
@@ -473,7 +484,19 @@ class VeniceProvider(BaseProvider):
 
     def _log_request(self, messages: List[Dict], temperature: float, max_tokens: int):
         """Log request details for debugging and monitoring."""
+        if not self.log_requests:
+            return
+            
         try:
+            # Ensure log directory exists
+            if not self.log_dir.exists():
+                try:
+                    self.log_dir.mkdir(parents=True, exist_ok=True)
+                except (PermissionError, OSError):
+                    # Silently disable logging if directory creation fails
+                    self.log_requests = False
+                    return
+                    
             timestamp = datetime.now().isoformat()
             log_entry = {
                 "timestamp": timestamp,
@@ -494,7 +517,19 @@ class VeniceProvider(BaseProvider):
 
     def _log_response(self, content: str):
         """Log response details for debugging and monitoring."""
+        if not self.log_responses:
+            return
+            
         try:
+            # Ensure log directory exists
+            if not self.log_dir.exists():
+                try:
+                    self.log_dir.mkdir(parents=True, exist_ok=True)
+                except (PermissionError, OSError):
+                    # Silently disable logging if directory creation fails
+                    self.log_responses = False
+                    return
+                    
             timestamp = datetime.now().isoformat()
             log_entry = {
                 "timestamp": timestamp,

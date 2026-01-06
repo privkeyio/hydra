@@ -12,9 +12,7 @@
 ╩ ╩ ╩ ═╩╝╩╚═╩ ╩
 ```
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Claude](https://img.shields.io/badge/claude-opus%204.1-purple.svg)]()
-[![Production Ready](https://img.shields.io/badge/production-ready-green.svg)]()
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 ---
 
@@ -26,7 +24,7 @@ Hydra orchestrates multiple AI agents to build production software in parallel. 
 
 ### Installation
 
-**Requirements:** Python 3.11+, tmux, Redis (for distributed features)
+**Requirements:** Python 3.12+, tmux, Redis (for distributed features)
 
 #### Option 1: pipx (Recommended)
 ```bash
@@ -40,7 +38,7 @@ pipx ensurepath
 # Restart terminal or: source ~/.bashrc
 
 # Install Hydra
-git clone https://github.com/username/hydra.git
+git clone https://github.com/privkeyio/hydra.git
 cd hydra
 pipx install .
 
@@ -50,7 +48,7 @@ pipx install -e .
 
 #### Option 2: Virtual Environment
 ```bash
-git clone https://github.com/username/hydra.git
+git clone https://github.com/privkeyio/hydra.git
 cd hydra
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
@@ -59,7 +57,7 @@ pip install -e .
 
 #### Option 3: Direct pip install
 ```bash
-git clone https://github.com/username/hydra.git
+git clone https://github.com/privkeyio/hydra.git
 cd hydra
 pip install -e .
 ```
@@ -225,7 +223,7 @@ cat tickets.yaml
 
 ## License
 
-Proprietary software. All rights reserved.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE) for details.
 
 ---
 

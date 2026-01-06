@@ -8,16 +8,16 @@ version = "1.0.0"
 description = "Self-replicating AI agent system for autonomous code generation"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = {text = "AGPL-3.0"}
 authors = [
-    {name = "Hydra Team", email = "team@hydra.internal"}
+    {name = "PrivKey LLC", email = "information@privkey.io"}
 ]
 keywords = ["ai", "agents", "code-generation", "automation"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Code Generators",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

@@ -89,7 +89,7 @@ security_task:
     - bandit -r src -f json -o bandit-report.json || true
   bandit_artifacts:
     path: bandit-report.json
-    type: text/json
+    type: application/json
 
 build_task:
   depends_on:

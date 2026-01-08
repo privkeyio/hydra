@@ -1,7 +1,7 @@
 env:
   PIP_CACHE_DIR: /tmp/pip-cache
   LLM_PROVIDER: mock
-  REDIS_URL: redis://localhost:6379/0
+  REDIS_URL: redis://redis:6379/0
   DATABASE_URL: sqlite:///test.db
   TESTING: "1"
   CI: "true"
@@ -23,9 +23,10 @@ test_unit_task:
     - lint
   container:
     image: python:3.11-slim
-  redis_background_script:
-    - apt-get update && apt-get install -y redis-server
-    - redis-server --daemonize yes
+    additional_containers:
+      - name: redis
+        image: redis:7-alpine
+        port: 6379
   pip_cache:
     folder: $PIP_CACHE_DIR
   install_script:
@@ -40,9 +41,10 @@ test_integration_task:
     - lint
   container:
     image: python:3.11-slim
-  redis_background_script:
-    - apt-get update && apt-get install -y redis-server
-    - redis-server --daemonize yes
+    additional_containers:
+      - name: redis
+        image: redis:7-alpine
+        port: 6379
   pip_cache:
     folder: $PIP_CACHE_DIR
   install_script:
@@ -57,9 +59,10 @@ test_workflow_task:
     - test_unit
   container:
     image: python:3.11-slim
-  redis_background_script:
-    - apt-get update && apt-get install -y redis-server
-    - redis-server --daemonize yes
+    additional_containers:
+      - name: redis
+        image: redis:7-alpine
+        port: 6379
   pip_cache:
     folder: $PIP_CACHE_DIR
   install_script:

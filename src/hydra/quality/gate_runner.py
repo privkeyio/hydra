@@ -64,7 +64,7 @@ class QualityGateRunner:
         config_file = self.project_root / ".hydra" / "quality.json"
 
         if config_file.exists():
-            with open(config_file, 'r') as f:
+            with open(config_file, "r") as f:
                 return json.load(f)
 
         # Default configuration
@@ -76,11 +76,11 @@ class QualityGateRunner:
                 "security": {"enabled": False, "blocking": True},
                 "coverage": {"enabled": True, "blocking": False, "threshold": 80},
                 "ai_detection": {"enabled": True, "blocking": False},
-                "format": {"enabled": True, "blocking": True, "auto_fix": True}
+                "format": {"enabled": True, "blocking": True, "auto_fix": True},
             },
             "timeout": 300,
             "fail_fast": False,
-            "emergency_override": False
+            "emergency_override": False,
         }
 
     def _detect_available_tools(self) -> Dict[str, Dict]:
@@ -95,7 +95,7 @@ class QualityGateRunner:
                 "lint": self._detect_python_linter(),
                 "test": self._detect_python_test_runner(),
                 "typecheck": self._detect_python_typechecker(),
-                "format": self._detect_python_formatter()
+                "format": self._detect_python_formatter(),
             }
 
         # JavaScript/TypeScript tools
@@ -104,7 +104,7 @@ class QualityGateRunner:
                 "lint": self._detect_js_linter(),
                 "test": self._detect_js_test_runner(),
                 "typecheck": self._detect_js_typechecker(),
-                "build": self._detect_js_build_tool()
+                "build": self._detect_js_build_tool(),
             }
 
         # Rust tools
@@ -113,7 +113,7 @@ class QualityGateRunner:
                 "lint": ["cargo", "clippy"],
                 "test": ["cargo", "test"],
                 "build": ["cargo", "build"],
-                "format": ["cargo", "fmt", "--check"]
+                "format": ["cargo", "fmt", "--check"],
             }
 
         # Go tools
@@ -122,7 +122,7 @@ class QualityGateRunner:
                 "lint": ["golangci-lint", "run"],
                 "test": ["go", "test", "./..."],
                 "build": ["go", "build"],
-                "format": ["go", "fmt", "./..."]
+                "format": ["go", "fmt", "./..."],
             }
 
         return tools
@@ -134,7 +134,7 @@ class QualityGateRunner:
             (["flake8"], "flake8"),
             (["pylint"], "pylint"),
             (["python", "-m", "flake8"], "flake8"),
-            (["python", "-m", "pylint"], "pylint")
+            (["python", "-m", "pylint"], "pylint"),
         ]
 
         for cmd, name in linters:
@@ -152,7 +152,7 @@ class QualityGateRunner:
             (["pytest"], "pytest"),
             (["python", "-m", "pytest"], "pytest"),
             (["python", "-m", "unittest", "discover"], "unittest"),
-            (["nose2"], "nose2")
+            (["nose2"], "nose2"),
         ]
 
         for cmd, name in runners:
@@ -166,7 +166,7 @@ class QualityGateRunner:
         checkers = [
             (["mypy"], "mypy"),
             (["python", "-m", "mypy"], "mypy"),
-            (["pyright"], "pyright")
+            (["pyright"], "pyright"),
         ]
 
         for cmd, _name in checkers:
@@ -180,7 +180,7 @@ class QualityGateRunner:
         formatters = [
             (["black", "--check"], "black"),
             (["python", "-m", "black", "--check"], "black"),
-            (["autopep8", "--diff"], "autopep8")
+            (["autopep8", "--diff"], "autopep8"),
         ]
 
         for cmd, _name in formatters:
@@ -194,7 +194,7 @@ class QualityGateRunner:
         package_json = self.project_root / "package.json"
 
         if package_json.exists():
-            with open(package_json, 'r') as f:
+            with open(package_json, "r") as f:
                 pkg = json.load(f)
                 scripts = pkg.get("scripts", {})
 
@@ -213,7 +213,7 @@ class QualityGateRunner:
         package_json = self.project_root / "package.json"
 
         if package_json.exists():
-            with open(package_json, 'r') as f:
+            with open(package_json, "r") as f:
                 pkg = json.load(f)
                 scripts = pkg.get("scripts", {})
 
@@ -234,7 +234,7 @@ class QualityGateRunner:
         package_json = self.project_root / "package.json"
 
         if package_json.exists():
-            with open(package_json, 'r') as f:
+            with open(package_json, "r") as f:
                 pkg = json.load(f)
                 scripts = pkg.get("scripts", {})
 
@@ -246,18 +246,16 @@ class QualityGateRunner:
     def _command_exists(self, command: str) -> bool:
         """Check if a command exists."""
         try:
-            subprocess.run(
-                ["which", command],
-                capture_output=True,
-                check=False
-            )
+            subprocess.run(["which", command], capture_output=True, check=False)
             return True
         except Exception:
             return False
 
-    def run_quality_gates(self, ticket_id: str, emergency_override: bool = False) -> QualityGateReport:
+    def run_quality_gates(
+        self, ticket_id: str, emergency_override: bool = False
+    ) -> QualityGateReport:
         """Run all quality gates for a ticket.
-        
+
         Args:
             ticket_id: The ticket ID to run quality gates for
             emergency_override: Skip blocking checks for emergency situations
@@ -268,7 +266,9 @@ class QualityGateRunner:
 
         # Check for emergency override
         if emergency_override or self.config.get("emergency_override", False):
-            print("🚨 EMERGENCY OVERRIDE ACTIVATED - Quality gates will not block completion!")
+            print(
+                "🚨 EMERGENCY OVERRIDE ACTIVATED - Quality gates will not block completion!"
+            )
             print("   Use only in production emergencies or critical hotfixes")
 
         # Determine which language tools to use
@@ -287,7 +287,7 @@ class QualityGateRunner:
                 skipped=0,
                 duration=0,
                 results=[],
-                overall_status=CheckStatus.SKIPPED
+                overall_status=CheckStatus.SKIPPED,
             )
 
         # Run checks for each language
@@ -368,13 +368,17 @@ class QualityGateRunner:
             skipped=skipped,
             duration=time.time() - start_time,
             results=results,
-            overall_status=overall_status
+            overall_status=overall_status,
         )
 
-    def _run_check_with_autofix(self, check_name: str, command: List[str], language: str) -> CheckResult:
+    def _run_check_with_autofix(
+        self, check_name: str, command: List[str], language: str
+    ) -> CheckResult:
         """Run a quality check with auto-fix capability."""
         # Check if auto-fix is enabled for this check
-        auto_fix_enabled = self.config["checks"].get(check_name, {}).get("auto_fix", False)
+        auto_fix_enabled = (
+            self.config["checks"].get(check_name, {}).get("auto_fix", False)
+        )
 
         if not auto_fix_enabled:
             return self._run_check(check_name, command, language)
@@ -389,13 +393,15 @@ class QualityGateRunner:
                     capture_output=True,
                     text=True,
                     timeout=self.config["timeout"],
-                    cwd=self.project_root
+                    cwd=self.project_root,
                 )
 
                 if fix_result.returncode == 0:
                     print(f"✅ Auto-fix applied for {check_name}")
                 else:
-                    print(f"⚠️  Auto-fix failed for {check_name}: {fix_result.stderr[:200]}")
+                    print(
+                        f"⚠️  Auto-fix failed for {check_name}: {fix_result.stderr[:200]}"
+                    )
 
             except Exception as e:
                 print(f"⚠️  Auto-fix error for {check_name}: {e}")
@@ -403,7 +409,9 @@ class QualityGateRunner:
         # Now run the original check to verify
         return self._run_check(check_name, command, language)
 
-    def _get_autofix_command(self, check_name: str, original_command: List[str], language: str) -> Optional[List[str]]:
+    def _get_autofix_command(
+        self, check_name: str, original_command: List[str], language: str
+    ) -> Optional[List[str]]:
         """Get the auto-fix command for a check."""
         if language == "python":
             if check_name == "lint" and "ruff" in original_command[0]:
@@ -414,7 +422,9 @@ class QualityGateRunner:
                 elif "ruff" in str(original_command):
                     return ["ruff", "format", "."]
         elif language == "javascript":
-            if check_name == "lint" and ("eslint" in str(original_command) or "npm" in str(original_command)):
+            if check_name == "lint" and (
+                "eslint" in str(original_command) or "npm" in str(original_command)
+            ):
                 return ["npx", "eslint", ".", "--fix", "--ext", ".js,.jsx,.ts,.tsx"]
             elif check_name == "format":
                 return ["npx", "prettier", "--write", "."]
@@ -427,7 +437,9 @@ class QualityGateRunner:
 
         return None
 
-    def _run_check(self, check_name: str, command: List[str], language: str) -> CheckResult:
+    def _run_check(
+        self, check_name: str, command: List[str], language: str
+    ) -> CheckResult:
         """Run a single quality check."""
         start_time = time.time()
         full_name = f"{language}:{check_name}"
@@ -438,7 +450,7 @@ class QualityGateRunner:
                 capture_output=True,
                 text=True,
                 timeout=self.config["timeout"],
-                cwd=self.project_root
+                cwd=self.project_root,
             )
 
             duration = time.time() - start_time
@@ -449,11 +461,13 @@ class QualityGateRunner:
                     status=CheckStatus.PASSED,
                     duration=duration,
                     output=result.stdout[:5000],
-                    command=" ".join(command)
+                    command=" ".join(command),
                 )
             else:
                 # Determine if it's a warning or failure
-                is_blocking = self.config["checks"].get(check_name, {}).get("blocking", False)
+                is_blocking = (
+                    self.config["checks"].get(check_name, {}).get("blocking", False)
+                )
                 status = CheckStatus.FAILED if is_blocking else CheckStatus.WARNING
 
                 return CheckResult(
@@ -462,7 +476,7 @@ class QualityGateRunner:
                     duration=duration,
                     output=result.stdout[:5000],
                     error=result.stderr[:5000],
-                    command=" ".join(command)
+                    command=" ".join(command),
                 )
 
         except subprocess.TimeoutExpired:
@@ -472,7 +486,7 @@ class QualityGateRunner:
                 duration=self.config["timeout"],
                 output="",
                 error=f"Check timed out after {self.config['timeout']}s",
-                command=" ".join(command)
+                command=" ".join(command),
             )
 
         except Exception as e:
@@ -482,7 +496,7 @@ class QualityGateRunner:
                 duration=time.time() - start_time,
                 output="",
                 error=str(e),
-                command=" ".join(command)
+                command=" ".join(command),
             )
 
     def _run_ticket_verification(self, ticket_id: str) -> CheckResult:
@@ -497,11 +511,12 @@ class QualityGateRunner:
                     name="ticket:verification",
                     status=CheckStatus.SKIPPED,
                     duration=0,
-                    output="No tickets.md file found"
+                    output="No tickets.md file found",
                 )
 
             # Late import to avoid circular dependency
             from hydra.ticket_workflow import parse_ticket
+
             ticket = parse_ticket(str(tickets_file), ticket_id)
 
             if not ticket:
@@ -509,17 +524,17 @@ class QualityGateRunner:
                     name="ticket:verification",
                     status=CheckStatus.FAILED,
                     duration=time.time() - start_time,
-                    output=f"Could not parse ticket {ticket_id}"
+                    output=f"Could not parse ticket {ticket_id}",
                 )
 
             # Programmatic verification of acceptance criteria
-            criteria = ticket.get('acceptance_criteria', [])
+            criteria = ticket.get("acceptance_criteria", [])
             if not criteria:
                 return CheckResult(
                     name="ticket:verification",
                     status=CheckStatus.WARNING,
                     duration=time.time() - start_time,
-                    output="No acceptance criteria defined"
+                    output="No acceptance criteria defined",
                 )
 
             verified_count = 0
@@ -527,7 +542,7 @@ class QualityGateRunner:
 
             for i, criterion in enumerate(criteria, 1):
                 # Check if criterion is already marked as completed (contains [x])
-                if '[x]' in criterion or '✅' in criterion:
+                if "[x]" in criterion or "✅" in criterion:
                     verified_count += 1
                     continue
 
@@ -548,7 +563,9 @@ class QualityGateRunner:
                 status = CheckStatus.WARNING
             else:
                 # Check if blocking is configured for verification
-                is_blocking = self.config["checks"].get("verification", {}).get("blocking", True)
+                is_blocking = (
+                    self.config["checks"].get("verification", {}).get("blocking", True)
+                )
                 status = CheckStatus.FAILED if is_blocking else CheckStatus.WARNING
 
             output = "Acceptance Criteria Verification:\n"
@@ -566,7 +583,7 @@ class QualityGateRunner:
                 name="ticket:verification",
                 status=status,
                 duration=time.time() - start_time,
-                output=output
+                output=output,
             )
 
         except Exception as e:
@@ -575,16 +592,16 @@ class QualityGateRunner:
                 status=CheckStatus.SKIPPED,
                 duration=time.time() - start_time,
                 output="",
-                error=str(e)
+                error=str(e),
             )
 
     def _verify_criterion_programmatically(self, criterion: str, ticket: dict) -> bool:
         """Programmatically verify an acceptance criterion.
-        
+
         Args:
             criterion: The acceptance criterion to verify
             ticket: The ticket data dictionary
-            
+
         Returns:
             True if the criterion can be verified as completed
 
@@ -592,14 +609,21 @@ class QualityGateRunner:
         criterion_lower = criterion.lower().strip()
 
         # Skip already completed criteria
-        if '[x]' in criterion or '✅' in criterion or 'done' in criterion_lower:
+        if "[x]" in criterion or "✅" in criterion or "done" in criterion_lower:
             return True
 
         # Check for file existence criteria
-        if any(keyword in criterion_lower for keyword in ['create file', 'add file', 'implement file']):
+        if any(
+            keyword in criterion_lower
+            for keyword in ["create file", "add file", "implement file"]
+        ):
             # Extract potential file paths from criterion
             import re
-            file_patterns = re.findall(r'[\w/.-]+\.(py|js|ts|go|rs|java|cpp|c|h|md|json|yaml|yml|toml|txt)', criterion)
+
+            file_patterns = re.findall(
+                r"[\w/.-]+\.(py|js|ts|go|rs|java|cpp|c|h|md|json|yaml|yml|toml|txt)",
+                criterion,
+            )
             for file_pattern in file_patterns:
                 file_path = self.project_root / file_pattern
                 if not file_path.exists():
@@ -607,18 +631,33 @@ class QualityGateRunner:
             return len(file_patterns) > 0
 
         # Check for function/class implementation
-        if any(keyword in criterion_lower for keyword in ['implement function', 'add function', 'create function', 'implement class', 'add class']):
+        if any(
+            keyword in criterion_lower
+            for keyword in [
+                "implement function",
+                "add function",
+                "create function",
+                "implement class",
+                "add class",
+            ]
+        ):
             # Extract function/class names
             import re
-            func_matches = re.findall(r'(?:function|class)\s+(\w+)', criterion_lower)
+
+            func_matches = re.findall(r"(?:function|class)\s+(\w+)", criterion_lower)
             for func_name in func_matches:
                 # Search for function/class definition in Python files
                 try:
                     result = subprocess.run(
-                        ["grep", "-r", f"def {func_name}\\|class {func_name}", str(self.project_root)],
+                        [
+                            "grep",
+                            "-r",
+                            f"def {func_name}\\|class {func_name}",
+                            str(self.project_root),
+                        ],
                         capture_output=True,
                         text=True,
-                        timeout=30
+                        timeout=30,
                     )
                     if result.returncode != 0:
                         return False
@@ -627,15 +666,27 @@ class QualityGateRunner:
             return len(func_matches) > 0
 
         # Check for test-related criteria
-        if any(keyword in criterion_lower for keyword in ['test', 'unittest', 'pytest']):
+        if any(
+            keyword in criterion_lower for keyword in ["test", "unittest", "pytest"]
+        ):
             # Look for test files or test functions
-            test_files = list(self.project_root.rglob("test_*.py")) + list(self.project_root.rglob("*_test.py"))
+            test_files = list(self.project_root.rglob("test_*.py")) + list(
+                self.project_root.rglob("*_test.py")
+            )
             return len(test_files) > 0
 
         # Check for installation/setup criteria
-        if any(keyword in criterion_lower for keyword in ['install', 'setup', 'configure']):
+        if any(
+            keyword in criterion_lower for keyword in ["install", "setup", "configure"]
+        ):
             # Check common config files
-            config_files = ['requirements.txt', 'package.json', 'Cargo.toml', 'go.mod', 'pyproject.toml']
+            config_files = [
+                "requirements.txt",
+                "package.json",
+                "Cargo.toml",
+                "go.mod",
+                "pyproject.toml",
+            ]
             for config_file in config_files:
                 if (self.project_root / config_file).exists():
                     return True
@@ -646,7 +697,7 @@ class QualityGateRunner:
 
     def _run_ai_detection(self, ticket_id: Optional[str] = None) -> CheckResult:
         """Run AI-generated code detection check with enhanced analysis.
-        
+
         Args:
             ticket_id: Optional ticket ID for context-aware detection
 
@@ -656,14 +707,20 @@ class QualityGateRunner:
         try:
             # Get strictness from config or environment
             import os
-            strictness_str = self.config.get("checks", {}).get("ai_detection", {}).get(
-                "strictness", os.environ.get('AI_DETECTION_STRICTNESS', 'moderate')
-            ).lower()
+
+            strictness_str = (
+                self.config.get("checks", {})
+                .get("ai_detection", {})
+                .get(
+                    "strictness", os.environ.get("AI_DETECTION_STRICTNESS", "moderate")
+                )
+                .lower()
+            )
 
             strictness_map = {
-                'lenient': StrictnessLevel.LENIENT,
-                'moderate': StrictnessLevel.MODERATE,
-                'strict': StrictnessLevel.STRICT
+                "lenient": StrictnessLevel.LENIENT,
+                "moderate": StrictnessLevel.MODERATE,
+                "strict": StrictnessLevel.STRICT,
             }
             strictness = strictness_map.get(strictness_str, StrictnessLevel.MODERATE)
 
@@ -678,6 +735,7 @@ class QualityGateRunner:
                     try:
                         # Late import to avoid circular dependency
                         from hydra.ticket_workflow import parse_ticket
+
                         ticket = parse_ticket(str(tickets_file), ticket_id)
                         if ticket:
                             ticket_description = f"{ticket.get('title', '')} - {ticket.get('description', '')}"
@@ -685,7 +743,9 @@ class QualityGateRunner:
                         pass
 
                 # Perform comprehensive analysis
-                analysis = detector.analyze_diff_comprehensively(ticket_id, ticket_description)
+                analysis = detector.analyze_diff_comprehensively(
+                    ticket_id, ticket_description
+                )
                 report = detector.generate_comprehensive_report(analysis, ticket_id)
 
                 # Determine status based on analysis
@@ -705,21 +765,24 @@ class QualityGateRunner:
                 # Check Python files
                 for py_file in self.project_root.rglob("*.py"):
                     # Skip virtual environments and build directories
-                    if any(skip in str(py_file) for skip in ['venv', '.venv', 'build', 'dist', '__pycache__']):
+                    if any(
+                        skip in str(py_file)
+                        for skip in ["venv", ".venv", "build", "dist", "__pycache__"]
+                    ):
                         continue
                     issues = detector.detect_in_file(py_file)
                     all_issues.extend(issues)
 
                 # Check JavaScript/TypeScript files
-                for ext in ['*.js', '*.jsx', '*.ts', '*.tsx']:
+                for ext in ["*.js", "*.jsx", "*.ts", "*.tsx"]:
                     for js_file in self.project_root.rglob(ext):
-                        if 'node_modules' in str(js_file):
+                        if "node_modules" in str(js_file):
                             continue
                         issues = detector.detect_in_file(js_file)
                         all_issues.extend(issues)
 
                 # Check other source files
-                for ext in ['*.go', '*.rs', '*.java', '*.cpp', '*.c', '*.rb']:
+                for ext in ["*.go", "*.rs", "*.java", "*.cpp", "*.c", "*.rb"]:
                     for src_file in self.project_root.rglob(ext):
                         issues = detector.detect_in_file(src_file)
                         all_issues.extend(issues)
@@ -728,8 +791,10 @@ class QualityGateRunner:
                 report_text = detector.generate_report(all_issues)
 
                 # Count severities
-                errors = [i for i in all_issues if i.get('severity') == 'error']
-                warnings = [i for i in all_issues if i.get('severity', 'warning') == 'warning']
+                errors = [i for i in all_issues if i.get("severity") == "error"]
+                warnings = [
+                    i for i in all_issues if i.get("severity", "warning") == "warning"
+                ]
 
                 # Determine status - NEVER FAIL, only warn
                 if errors:
@@ -747,7 +812,9 @@ class QualityGateRunner:
                 if len(all_issues) > 0:
                     output += "Top issues (see full report for details):\n"
                     for issue in all_issues[:3]:  # Show first 3 issues
-                        output += f"- {issue['file']}:{issue['line']} - {issue['pattern']}\n"
+                        output += (
+                            f"- {issue['file']}:{issue['line']} - {issue['pattern']}\n"
+                        )
 
             duration = time.time() - start_time
 
@@ -755,7 +822,7 @@ class QualityGateRunner:
                 name="quality:ai_detection",
                 status=status,
                 duration=duration,
-                output=output[:5000]  # Limit output size
+                output=output[:5000],  # Limit output size
             )
 
         except Exception as e:
@@ -764,7 +831,7 @@ class QualityGateRunner:
                 status=CheckStatus.SKIPPED,
                 duration=time.time() - start_time,
                 output="",
-                error=str(e)
+                error=str(e),
             )
 
     def generate_report(self, report: QualityGateReport) -> str:
@@ -790,7 +857,7 @@ class QualityGateRunner:
                 CheckStatus.PASSED: "✅",
                 CheckStatus.FAILED: "❌",
                 CheckStatus.WARNING: "⚠️",
-                CheckStatus.SKIPPED: "⏭️"
+                CheckStatus.SKIPPED: "⏭️",
             }.get(result.status, "")
 
             lines.append(f"  {status_icon} {result.name} ({result.duration:.2f}s)")
@@ -798,13 +865,17 @@ class QualityGateRunner:
             if result.error and result.status == CheckStatus.FAILED:
                 lines.append(f"     Error: {result.error[:100]}")
 
-        lines.extend([
-            "",
-            f"📋 Overall Status: {report.overall_status.value.upper()}",
-        ])
+        lines.extend(
+            [
+                "",
+                f"📋 Overall Status: {report.overall_status.value.upper()}",
+            ]
+        )
 
         if report.overall_status == CheckStatus.FAILED:
-            lines.append("❌ Quality gates failed - please fix issues before proceeding")
+            lines.append(
+                "❌ Quality gates failed - please fix issues before proceeding"
+            )
         elif report.overall_status == CheckStatus.WARNING:
             lines.append("⚠️  Quality gates passed with warnings")
         elif report.overall_status == CheckStatus.PASSED:
@@ -822,7 +893,9 @@ class QualityGateRunner:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Save JSON report
-        report_file = output_dir / f"quality_gate_{report.ticket_id}_{int(time.time())}.json"
+        report_file = (
+            output_dir / f"quality_gate_{report.ticket_id}_{int(time.time())}.json"
+        )
 
         report_dict = {
             "ticket_id": report.ticket_id,
@@ -841,13 +914,13 @@ class QualityGateRunner:
                     "duration": r.duration,
                     "output": r.output[:1000],
                     "error": r.error[:1000] if r.error else None,
-                    "command": r.command
+                    "command": r.command,
                 }
                 for r in report.results
-            ]
+            ],
         }
 
-        with open(report_file, 'w') as f:
+        with open(report_file, "w") as f:
             json.dump(report_dict, f, indent=2)
 
         return str(report_file)

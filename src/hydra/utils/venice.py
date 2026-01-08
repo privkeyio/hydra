@@ -18,10 +18,7 @@ def venice_call(prompt):
     base_url = "https://api.venice.ai/api/v1"
 
     # Create OpenAI client pointing to Venice
-    client = OpenAI(
-        api_key=api_key,
-        base_url=base_url
-    )
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     try:
         # Use a coding-optimized model
@@ -33,12 +30,12 @@ def venice_call(prompt):
                     "content": (
                         "You are an expert Python programmer. "
                         "Always respond with clean, well-structured code."
-                    )
+                    ),
                 },
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             max_tokens=2048,
-            temperature=0.2  # Lower temperature for more consistent code generation
+            temperature=0.2,  # Lower temperature for more consistent code generation
         )
 
         return response.choices[0].message.content

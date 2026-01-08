@@ -2,4 +2,4 @@
 
 from .resource_tracker import ResourceDashboard, ResourceTracker
 
-__all__ = ['ResourceTracker', 'ResourceDashboard']
+__all__ = ["ResourceTracker", "ResourceDashboard"]

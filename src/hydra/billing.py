@@ -24,27 +24,27 @@ PROVIDER_PRICING: Dict[str, ModelPricing] = {
     "gpt-4": ModelPricing(
         input_cost_per_1k=Decimal("0.03"),
         output_cost_per_1k=Decimal("0.06"),
-        provider="openai"
+        provider="openai",
     ),
     "gpt-4-turbo": ModelPricing(
         input_cost_per_1k=Decimal("0.01"),
         output_cost_per_1k=Decimal("0.03"),
-        provider="openai"
+        provider="openai",
     ),
     "gpt-3.5-turbo": ModelPricing(
         input_cost_per_1k=Decimal("0.001"),
         output_cost_per_1k=Decimal("0.002"),
-        provider="openai"
+        provider="openai",
     ),
     "claude-3-opus": ModelPricing(
         input_cost_per_1k=Decimal("0.015"),
         output_cost_per_1k=Decimal("0.075"),
-        provider="anthropic"
+        provider="anthropic",
     ),
     "claude-3-sonnet": ModelPricing(
         input_cost_per_1k=Decimal("0.003"),
         output_cost_per_1k=Decimal("0.015"),
-        provider="anthropic"
+        provider="anthropic",
     ),
 }
 
@@ -89,9 +89,7 @@ class TokenCounter:
         input_tokens = TokenCounter.count_tokens(prompt, model)
         output_tokens = TokenCounter.count_tokens(response, model)
         return TokenUsage(
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            model=model
+            input_tokens=input_tokens, output_tokens=output_tokens, model=model
         )
 
 
@@ -109,7 +107,7 @@ class CostCalculator:
             pricing = ModelPricing(
                 input_cost_per_1k=Decimal("0.001"),
                 output_cost_per_1k=Decimal("0.002"),
-                provider="unknown"
+                provider="unknown",
             )
 
         input_cost = (
@@ -126,7 +124,7 @@ class CostCalculator:
             total_cost=total_cost,
             model=token_usage.model,
             provider=pricing.provider,
-            tokens_used=token_usage.total_tokens
+            tokens_used=token_usage.total_tokens,
         )
 
 
@@ -136,9 +134,15 @@ class BillingService:
     def __init__(self, db_session: Optional[Session] = None):
         self.db = db_session or get_db()
 
-    def track_usage(self, api_key_id: int, endpoint: str,
-                   prompt: str, response: str, model: str,
-                   task_id: Optional[str] = None) -> CostBreakdown:
+    def track_usage(
+        self,
+        api_key_id: int,
+        endpoint: str,
+        prompt: str,
+        response: str,
+        model: str,
+        task_id: Optional[str] = None,
+    ) -> CostBreakdown:
         """Track usage and calculate costs for a request."""
         token_usage = TokenCounter.count_request_tokens(prompt, response, model)
         cost_breakdown = CostCalculator.calculate_cost(token_usage)
@@ -154,7 +158,7 @@ class BillingService:
             provider=cost_breakdown.provider,
             input_tokens=token_usage.input_tokens,
             output_tokens=token_usage.output_tokens,
-            cost=cost_breakdown.total_cost
+            cost=cost_breakdown.total_cost,
         )
 
         self.db.add(usage_record)
@@ -162,13 +166,14 @@ class BillingService:
 
         return cost_breakdown
 
-    def get_usage_for_api_key(self, api_key: str,
-                             start_date: Optional[datetime] = None,
-                             end_date: Optional[datetime] = None) -> List[Dict]:
+    def get_usage_for_api_key(
+        self,
+        api_key: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> List[Dict]:
         """Get usage records for an API key."""
-        query = (self.db.query(Usage)
-                .join(APIKey)
-                .filter(APIKey.key == api_key))
+        query = self.db.query(Usage).join(APIKey).filter(APIKey.key == api_key)
 
         if start_date:
             query = query.filter(Usage.timestamp >= start_date)
@@ -187,20 +192,22 @@ class BillingService:
                 token_usage = TokenUsage(
                     input_tokens=record.input_tokens or record.tokens_used // 2,
                     output_tokens=record.output_tokens or record.tokens_used // 2,
-                    model=record.model or "gpt-3.5-turbo"
+                    model=record.model or "gpt-3.5-turbo",
                 )
                 cost = CostCalculator.calculate_cost(token_usage)
                 cost_value = float(cost.total_cost)
 
-            results.append({
-                "timestamp": record.timestamp,
-                "endpoint": record.endpoint,
-                "tokens_used": record.tokens_used,
-                "estimated_cost": cost_value,
-                "task_id": record.task_id,
-                "model": record.model,
-                "provider": record.provider
-            })
+            results.append(
+                {
+                    "timestamp": record.timestamp,
+                    "endpoint": record.endpoint,
+                    "tokens_used": record.tokens_used,
+                    "estimated_cost": cost_value,
+                    "task_id": record.task_id,
+                    "model": record.model,
+                    "provider": record.provider,
+                }
+            )
 
         return results
 
@@ -221,11 +228,7 @@ class BillingService:
         for record in usage_records:
             endpoint = record["endpoint"]
             if endpoint not in endpoint_breakdown:
-                endpoint_breakdown[endpoint] = {
-                    "requests": 0,
-                    "tokens": 0,
-                    "cost": 0.0
-                }
+                endpoint_breakdown[endpoint] = {"requests": 0, "tokens": 0, "cost": 0.0}
             endpoint_breakdown[endpoint]["requests"] += 1
             endpoint_breakdown[endpoint]["tokens"] += record["tokens_used"]
             endpoint_breakdown[endpoint]["cost"] += record["estimated_cost"]
@@ -237,7 +240,7 @@ class BillingService:
             "total_tokens": total_tokens,
             "total_cost": total_cost,
             "endpoint_breakdown": endpoint_breakdown,
-            "usage_records": usage_records
+            "usage_records": usage_records,
         }
 
     def check_usage_limits(
@@ -256,26 +259,29 @@ class BillingService:
             usage_percentage = (current_cost / monthly_limit) * 100
 
             if usage_percentage >= 90:
-                alerts.append({
-                    "level": "critical",
-                    "message": (
-                        f"Usage at {usage_percentage:.1f}% of monthly limit"
-                    )
-                })
+                alerts.append(
+                    {
+                        "level": "critical",
+                        "message": (
+                            f"Usage at {usage_percentage:.1f}% of monthly limit"
+                        ),
+                    }
+                )
             elif usage_percentage >= 75:
-                alerts.append({
-                    "level": "warning",
-                    "message": (
-                        f"Usage at {usage_percentage:.1f}% of monthly limit"
-                    )
-                })
+                alerts.append(
+                    {
+                        "level": "warning",
+                        "message": (
+                            f"Usage at {usage_percentage:.1f}% of monthly limit"
+                        ),
+                    }
+                )
 
         return {
             "current_cost": float(current_cost),
             "monthly_limit": float(monthly_limit) if monthly_limit else None,
-            "alerts": alerts
+            "alerts": alerts,
         }
-
 
     def send_usage_alert(self, api_key: str, alert_info: Dict) -> None:
         """Send usage alert (placeholder for notification system)."""
@@ -293,4 +299,3 @@ class BillingService:
 def get_billing_service() -> BillingService:
     """Get billing service instance."""
     return BillingService()
-

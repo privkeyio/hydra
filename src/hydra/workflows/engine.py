@@ -5,6 +5,7 @@ from typing import Any, Dict, List, TypedDict
 
 try:
     from langgraph.graph import END, StateGraph
+
     LANGGRAPH_AVAILABLE = True
 except ImportError:
     LANGGRAPH_AVAILABLE = False
@@ -42,12 +43,16 @@ def plan_node(state: WorkflowState) -> WorkflowState:
         task = state["task"]
 
         # Check if task is simple (doesn't need decomposition)
-        is_simple_task = (
-            len(task.split()) < 10 and
-            any(keyword in task.lower() for keyword in [
-                "write a function", "create a function", "implement",
-                "calculate", "compute", "generate code"
-            ])
+        is_simple_task = len(task.split()) < 10 and any(
+            keyword in task.lower()
+            for keyword in [
+                "write a function",
+                "create a function",
+                "implement",
+                "calculate",
+                "compute",
+                "generate code",
+            ]
         )
 
         if is_simple_task or state["depth"] >= 1:
@@ -62,7 +67,7 @@ def plan_node(state: WorkflowState) -> WorkflowState:
             reasoning = agent.reason(task)
             state["plan"] = reasoning.get("plan", "")
             state["subtasks"] = reasoning.get("subtasks", [])
-            subtask_count = len(state['subtasks'])
+            subtask_count = len(state["subtasks"])
             logger.info(
                 f"Agent {agent.name} created plan with {subtask_count} subtasks"
             )
@@ -108,14 +113,14 @@ def spawn_node(state: WorkflowState) -> WorkflowState:
             if result["success"]:
                 logger.info(f"Successfully completed subtask with {employee_name}")
             else:
-                error = result.get('error', 'Unknown error')
+                error = result.get("error", "Unknown error")
                 logger.error(f"Employee {employee_name} failed: {error}")
 
         except RecursionError as e:
             state["results"][employee_name] = {
                 "error": f"Recursion limit exceeded: {str(e)}",
                 "task": subtask,
-                "success": False
+                "success": False,
             }
             logger.error(f"Recursion limit exceeded for {employee_name}: {e}")
 
@@ -123,7 +128,7 @@ def spawn_node(state: WorkflowState) -> WorkflowState:
             state["results"][employee_name] = {
                 "error": f"Employee creation failed: {str(e)}",
                 "task": subtask,
-                "success": False
+                "success": False,
             }
             logger.error(f"Exception spawning {employee_name}: {e}")
 
@@ -164,7 +169,7 @@ def aggregate_node(state: WorkflowState) -> WorkflowState:
         "failed": len(failed_results),
         "max_depth": state["depth"],
         "code_generated": len(all_code) > 0,
-        "has_outputs": len(all_outputs) > 0
+        "has_outputs": len(all_outputs) > 0,
     }
 
     return state
@@ -189,12 +194,7 @@ def create_workflow():
     workflow.set_entry_point("plan")
 
     workflow.add_conditional_edges(
-        "plan",
-        should_spawn,
-        {
-            "spawn": "spawn",
-            "aggregate": "aggregate"
-        }
+        "plan", should_spawn, {"spawn": "spawn", "aggregate": "aggregate"}
     )
 
     workflow.add_edge("spawn", "aggregate")
@@ -213,9 +213,9 @@ def execute_workflow(
         "agents": [agent_name],
         "current_agent": agent_name,
         "subtasks": [],
-        "plan": ""
+        "plan": "",
     }
-    
+
     if not LANGGRAPH_AVAILABLE:
         # Fallback when langgraph is not available (e.g., in tests)
         logger.warning("Langgraph not available, using simplified workflow")
@@ -223,10 +223,10 @@ def execute_workflow(
         initial_state["results"][agent_name] = {
             "success": True,
             "task": task,
-            "generated_code": f"# Mock code for: {task}"
+            "generated_code": f"# Mock code for: {task}",
         }
         return initial_state
-    
+
     workflow = create_workflow()
 
     initial_state_typed = WorkflowState(
@@ -236,7 +236,7 @@ def execute_workflow(
         agents=[agent_name],
         current_agent=agent_name,
         subtasks=[],
-        plan=""
+        plan="",
     )
 
     try:
@@ -252,5 +252,5 @@ def execute_workflow(
             "error": str(e),
             "task": task,
             "agents": [agent_name],
-            "initial_state": dict(initial_state_typed)
+            "initial_state": dict(initial_state_typed),
         }

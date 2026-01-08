@@ -69,7 +69,7 @@ class WorkStealingScheduler:
         num_workers: int = 3,
         stealing_policy: StealingPolicy = StealingPolicy.BALANCED,
         rebalance_interval: float = 10.0,
-        efficiency_threshold: float = 0.7
+        efficiency_threshold: float = 0.7,
     ):
         self.num_workers = num_workers
         self.stealing_policy = stealing_policy
@@ -99,7 +99,7 @@ class WorkStealingScheduler:
         thresholds = {
             StealingPolicy.AGGRESSIVE: 1.5,
             StealingPolicy.CONSERVATIVE: 3.0,
-            StealingPolicy.BALANCED: 2.0
+            StealingPolicy.BALANCED: 2.0,
         }
         return thresholds[self.stealing_policy]
 
@@ -120,16 +120,18 @@ class WorkStealingScheduler:
 
         try:
             self.rebalance_thread = threading.Thread(
-                target=self._rebalance_loop,
-                daemon=True,
-                name="WorkStealingRebalancer"
+                target=self._rebalance_loop, daemon=True, name="WorkStealingRebalancer"
             )
             self.rebalance_thread.start()
-            self.running = True  # Only set running to True after successful thread start
+            self.running = (
+                True  # Only set running to True after successful thread start
+            )
             logger.info("Work stealing scheduler started")
         except RuntimeError as e:
             # Handle thread creation failures gracefully (e.g., in test environments)
-            logger.warning(f"Failed to start rebalance thread: {e}. Running in test mode without background rebalancing.")
+            logger.warning(
+                f"Failed to start rebalance thread: {e}. Running in test mode without background rebalancing."
+            )
             self.rebalance_thread = None
             # Still set running to True so scheduler functions work, just without background rebalancing
             self.running = True
@@ -213,7 +215,7 @@ class WorkStealingScheduler:
 
     def _find_least_loaded_worker(self) -> Optional[str]:
         """Find the worker with the least load."""
-        min_load = float('inf')
+        min_load = float("inf")
         target_worker = None
 
         for worker_id, metrics in self.worker_metrics.items():
@@ -271,7 +273,7 @@ class WorkStealingScheduler:
 
         # Sort by weight (higher weight = better candidate)
         candidates.sort(key=lambda x: x[1], reverse=True)
-        return [worker_id for worker_id, _ in candidates[:self.max_steal_count]]
+        return [worker_id for worker_id, _ in candidates[: self.max_steal_count]]
 
     def _rebalance_loop(self):
         """Run periodic rebalancing of work."""
@@ -322,20 +324,21 @@ class WorkStealingScheduler:
         imbalance_threshold = avg_load * 0.5  # 50% deviation from average
 
         overloaded = [
-            worker_id for worker_id, load in loads.items()
+            worker_id
+            for worker_id, load in loads.items()
             if load > avg_load + imbalance_threshold
         ]
 
         underloaded = [
-            worker_id for worker_id, load in loads.items()
+            worker_id
+            for worker_id, load in loads.items()
             if load < avg_load - imbalance_threshold
         ]
 
         imbalances = []
         for overloaded_worker in overloaded:
             available_targets = [
-                w for w in underloaded
-                if loads[w] < loads[overloaded_worker] * 0.8
+                w for w in underloaded if loads[w] < loads[overloaded_worker] * 0.8
             ]
             if available_targets:
                 imbalances.append((overloaded_worker, available_targets))
@@ -376,7 +379,9 @@ class WorkStealingScheduler:
     def get_metrics(self) -> Dict[str, Any]:
         """Get comprehensive scheduler metrics."""
         with self.global_lock:
-            total_completed = sum(m.completed_tasks for m in self.worker_metrics.values())
+            total_completed = sum(
+                m.completed_tasks for m in self.worker_metrics.values()
+            )
             total_failed = sum(m.failed_tasks for m in self.worker_metrics.values())
             total_active = sum(m.active_tasks for m in self.worker_metrics.values())
 
@@ -404,10 +409,10 @@ class WorkStealingScheduler:
                         "efficiency_score": metrics.efficiency_score,
                         "average_task_time": metrics.average_task_time,
                         "tasks_stolen_from": metrics.tasks_stolen_from,
-                        "tasks_stolen_to": metrics.tasks_stolen_to
+                        "tasks_stolen_to": metrics.tasks_stolen_to,
                     }
                     for worker_id, metrics in self.worker_metrics.items()
-                }
+                },
             }
 
     def _log_worker_status(self):
@@ -429,9 +434,7 @@ class WorkStealingScheduler:
         return 0.0
 
     def configure_stealing_policy(
-        self,
-        policy: StealingPolicy,
-        custom_threshold: Optional[float] = None
+        self, policy: StealingPolicy, custom_threshold: Optional[float] = None
     ):
         """Configure work stealing policy at runtime."""
         self.stealing_policy = policy

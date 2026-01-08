@@ -52,23 +52,31 @@ class TicketCompatibilityAnalyzer:
 
     def __init__(self):
         self.small_ticket_keywords = {
-            'fix typo', 'update', 'add comment', 'rename', 'refactor',
-            'cleanup', 'lint', 'format', 'import', 'export'
+            "fix typo",
+            "update",
+            "add comment",
+            "rename",
+            "refactor",
+            "cleanup",
+            "lint",
+            "format",
+            "import",
+            "export",
         }
 
     def calculate_complexity(self, ticket: dict) -> int:
         """Calculate complexity score for a ticket (0-100)."""
         score = 0
 
-        title = ticket.get('title', '').lower()
-        description = ticket.get('description', '').lower()
-        criteria_count = len(ticket.get('acceptance_criteria', []))
+        title = ticket.get("title", "").lower()
+        description = ticket.get("description", "").lower()
+        criteria_count = len(ticket.get("acceptance_criteria", []))
 
         # Base complexity from acceptance criteria
         score += criteria_count * 10
 
         # Complex operations indicators
-        complex_keywords = ['create', 'implement', 'build', 'design', 'architecture']
+        complex_keywords = ["create", "implement", "build", "design", "architecture"]
         for keyword in complex_keywords:
             if keyword in title or keyword in description:
                 score += 20
@@ -79,7 +87,7 @@ class TicketCompatibilityAnalyzer:
                 score = max(0, score - 15)
 
         # File creation typically more complex
-        if 'new file' in title or 'create file' in description:
+        if "new file" in title or "create file" in description:
             score += 15
 
         return min(score, 100)
@@ -87,7 +95,7 @@ class TicketCompatibilityAnalyzer:
     def are_tickets_compatible(self, ticket1: dict, ticket2: dict) -> bool:
         """Check if two tickets can be batched together."""
         # Must use same model
-        if ticket1.get('model') != ticket2.get('model'):
+        if ticket1.get("model") != ticket2.get("model"):
             return False
 
         # Check for file conflicts
@@ -106,13 +114,16 @@ class TicketCompatibilityAnalyzer:
 
     def _have_file_conflicts(self, ticket1: dict, ticket2: dict) -> bool:
         """Check if tickets modify overlapping files."""
+
         # Simple heuristic: look for file mentions in titles/descriptions
         def extract_file_mentions(ticket):
-            text = (ticket.get('title', '') + ' ' +
-                   ticket.get('description', '')).lower()
+            text = (
+                ticket.get("title", "") + " " + ticket.get("description", "")
+            ).lower()
             # Simple file pattern matching
             import re
-            files = re.findall(r'[\w/]+\.[\w]+', text)
+
+            files = re.findall(r"[\w/]+\.[\w]+", text)
             return set(files)
 
         files1 = extract_file_mentions(ticket1)
@@ -162,7 +173,7 @@ class BatchExecutor(AsyncParallelExecutor):
             if tickets[ticket_id].status != ExecutionStatus.PENDING:
                 continue
 
-            model = data.get('model', 'sonnet')
+            model = data.get("model", "sonnet")
             if model not in model_groups:
                 model_groups[model] = []
             model_groups[model].append((ticket_id, data))
@@ -201,8 +212,10 @@ class BatchExecutor(AsyncParallelExecutor):
 
             # Try to add compatible tickets
             i = 0
-            while (i < len(remaining_tickets) and
-                   len(current_batch) < self.batch_config.max_batch_size):
+            while (
+                i < len(remaining_tickets)
+                and len(current_batch) < self.batch_config.max_batch_size
+            ):
 
                 ticket_id, ticket_data = remaining_tickets[i]
                 ticket_complexity = self.analyzer.calculate_complexity(ticket_data)
@@ -235,7 +248,7 @@ class BatchExecutor(AsyncParallelExecutor):
                 ticket_ids = [tid for tid, _ in current_batch]
                 dependencies = set()
                 for _, ticket_data in current_batch:
-                    dependencies.update(ticket_data.get('dependencies', []))
+                    dependencies.update(ticket_data.get("dependencies", []))
 
                 batch = BatchGroup(
                     batch_id="",  # Will be set later
@@ -243,7 +256,7 @@ class BatchExecutor(AsyncParallelExecutor):
                     model=model,
                     combined_size=len(current_batch),
                     estimated_complexity=current_complexity,
-                    dependencies=dependencies
+                    dependencies=dependencies,
                 )
                 batches.append(batch)
             else:
@@ -260,7 +273,8 @@ class BatchExecutor(AsyncParallelExecutor):
         # Add batch groups to ready queue if their dependencies are met
         for batch_id, batch in self.batches.items():
             unresolved_deps = [
-                dep for dep in batch.dependencies
+                dep
+                for dep in batch.dependencies
                 if dep not in self.completed_tickets and dep in self.tickets
             ]
 
@@ -304,11 +318,11 @@ class BatchExecutor(AsyncParallelExecutor):
             )
 
             # Set model environment
-            original_model = os.environ.get('CLAUDE_MODEL')
-            if batch.model.lower() == 'opus':
-                os.environ['CLAUDE_MODEL'] = 'claude-opus-4-1-20250805'
+            original_model = os.environ.get("CLAUDE_MODEL")
+            if batch.model.lower() == "opus":
+                os.environ["CLAUDE_MODEL"] = "claude-opus-4-1-20250805"
             else:
-                os.environ['CLAUDE_MODEL'] = 'claude-sonnet-4-20250514'
+                os.environ["CLAUDE_MODEL"] = "claude-sonnet-4-20250514"
 
             orchestrator = ClaudeCodeOrchestrator()
 
@@ -318,7 +332,7 @@ class BatchExecutor(AsyncParallelExecutor):
                 prompt=combined_prompt,
                 working_directory=str(self.project_root),
                 timeout=600,  # Longer timeout for batch
-                task_id=batch_id
+                task_id=batch_id,
             )
 
             # Execute batch
@@ -339,8 +353,12 @@ class BatchExecutor(AsyncParallelExecutor):
 
                     # Validate acceptance criteria
                     from hydra.ticket_workflow import validate_acceptance_criteria
+
                     validation_passed = await asyncio.get_event_loop().run_in_executor(
-                        None, validate_acceptance_criteria, ticket_data, str(self.project_root)
+                        None,
+                        validate_acceptance_criteria,
+                        ticket_data,
+                        str(self.project_root),
                     )
 
                     if validation_passed:
@@ -355,7 +373,9 @@ class BatchExecutor(AsyncParallelExecutor):
                             self.completed_tickets.add(ticket_id)
                             await self._trigger_dependents(ticket_id)
                     else:
-                        logger.warning(f"❌ Ticket {ticket_id} validation failed in batch")
+                        logger.warning(
+                            f"❌ Ticket {ticket_id} validation failed in batch"
+                        )
                         batch_results[ticket_id] = False
 
                         # Update tracking
@@ -367,9 +387,9 @@ class BatchExecutor(AsyncParallelExecutor):
 
                 # Restore model setting
                 if original_model:
-                    os.environ['CLAUDE_MODEL'] = original_model
-                elif 'CLAUDE_MODEL' in os.environ:
-                    del os.environ['CLAUDE_MODEL']
+                    os.environ["CLAUDE_MODEL"] = original_model
+                elif "CLAUDE_MODEL" in os.environ:
+                    del os.environ["CLAUDE_MODEL"]
 
                 self.agent_pool.release_agent(agent_id)
                 return batch_results
@@ -400,14 +420,18 @@ class BatchExecutor(AsyncParallelExecutor):
                 None, parse_ticket, tickets_path, ticket_id
             )
 
-            criteria_text = "\n".join(f"  - {c}" for c in ticket_data.get('acceptance_criteria', []))
+            criteria_text = "\n".join(
+                f"  - {c}" for c in ticket_data.get("acceptance_criteria", [])
+            )
 
-            ticket_details.append(f"""
+            ticket_details.append(
+                f"""
 ## Ticket {ticket_id}: {ticket_data.get('title', '')}
 **Description:** {ticket_data.get('description', '')}
 **Acceptance Criteria:**
 {criteria_text}
-""")
+"""
+            )
 
         combined_prompt = f"""IMPORTANT: You are executing a BATCH of {len(batch.ticket_ids)} related tickets in a single session for efficiency.
 
@@ -473,7 +497,8 @@ REMINDER: Complete ALL {len(batch.ticket_ids)} tickets in this batch: {', '.join
             for batch_id, batch in self.batches.items():
                 if batch_id not in all_results:
                     unresolved_deps = [
-                        dep for dep in batch.dependencies
+                        dep
+                        for dep in batch.dependencies
                         if dep not in self.completed_tickets and dep in self.tickets
                     ]
 
@@ -486,13 +511,17 @@ REMINDER: Complete ALL {len(batch.ticket_ids)} tickets in this batch: {', '.join
                     ticket_id = self.ready_queue.get_nowait()
 
                     # Skip if it's part of a batch
-                    if any(ticket_id in batch.ticket_ids for batch in self.batches.values()):
+                    if any(
+                        ticket_id in batch.ticket_ids for batch in self.batches.values()
+                    ):
                         continue
 
                     # Skip if already processed
-                    if (ticket_id in self.completed_tickets or
-                        ticket_id in self.failed_tickets or
-                        ticket_id in self.running_tickets):
+                    if (
+                        ticket_id in self.completed_tickets
+                        or ticket_id in self.failed_tickets
+                        or ticket_id in self.running_tickets
+                    ):
                         continue
 
                     ready_items.append(ticket_id)
@@ -508,7 +537,9 @@ REMINDER: Complete ALL {len(batch.ticket_ids)} tickets in this batch: {', '.join
                 running_tasks.add(task)
 
                 if item_id in self.batches:
-                    logger.info(f"🚀 Started batch {item_id} ({len(self.batches[item_id].ticket_ids)} tickets)")
+                    logger.info(
+                        f"🚀 Started batch {item_id} ({len(self.batches[item_id].ticket_ids)} tickets)"
+                    )
                 else:
                     logger.info(f"🚀 Started individual ticket {item_id}")
 
@@ -528,20 +559,41 @@ REMINDER: Complete ALL {len(batch.ticket_ids)} tickets in this batch: {', '.join
 
                 if item_id in self.batches:
                     batch_count += 1
-                    successful_in_batch = sum(1 for success in result.values() if success)
-                    logger.info(f"✅ Completed batch {item_id}: {successful_in_batch}/{len(result)} tickets successful")
+                    successful_in_batch = sum(
+                        1 for success in result.values() if success
+                    )
+                    logger.info(
+                        f"✅ Completed batch {item_id}: {successful_in_batch}/{len(result)} tickets successful"
+                    )
                 else:
                     single_ticket_count += 1
                     logger.info(f"✅ Completed individual ticket {item_id}: {result}")
 
         # Calculate final statistics
         duration = time.time() - start_time
-        len([t for t in self.tickets.keys() if t in self.completed_tickets or t in self.failed_tickets])
+        len(
+            [
+                t
+                for t in self.tickets.keys()
+                if t in self.completed_tickets or t in self.failed_tickets
+            ]
+        )
 
         # Calculate overhead savings
         sessions_without_batching = len(self.tickets)
         sessions_with_batching = batch_count + single_ticket_count
-        overhead_reduction = max(0, ((sessions_without_batching - sessions_with_batching) / sessions_without_batching * 100)) if sessions_without_batching > 0 else 0
+        overhead_reduction = (
+            max(
+                0,
+                (
+                    (sessions_without_batching - sessions_with_batching)
+                    / sessions_without_batching
+                    * 100
+                ),
+            )
+            if sessions_without_batching > 0
+            else 0
+        )
 
         summary = {
             "total_tickets": len(self.tickets),
@@ -554,12 +606,15 @@ REMINDER: Complete ALL {len(batch.ticket_ids)} tickets in this batch: {', '.join
             "duration": duration,
             "success_rate": (
                 len(self.completed_tickets) / len(self.tickets) * 100
-                if len(self.tickets) > 0 else 0
+                if len(self.tickets) > 0
+                else 0
             ),
-            "results": all_results
+            "results": all_results,
         }
 
-        logger.info(f"📊 Batch execution summary: {overhead_reduction:.1f}% session overhead reduction")
+        logger.info(
+            f"📊 Batch execution summary: {overhead_reduction:.1f}% session overhead reduction"
+        )
         return summary
 
     def generate_report(self, summary: Dict[str, Any]) -> str:
@@ -567,18 +622,20 @@ REMINDER: Complete ALL {len(batch.ticket_ids)} tickets in this batch: {', '.join
         base_report = super().generate_report(summary)
 
         batch_stats = []
-        if summary.get('batches_executed', 0) > 0:
-            batch_stats.extend([
-                f"📦 Batches executed: {summary['batches_executed']}",
-                f"🎯 Individual tickets: {summary['individual_tickets']}",
-                f"💾 Sessions saved: {summary.get('sessions_saved', 0)}",
-                f"⚡ Overhead reduction: {summary.get('overhead_reduction', 0):.1f}%",
-                ""
-            ])
+        if summary.get("batches_executed", 0) > 0:
+            batch_stats.extend(
+                [
+                    f"📦 Batches executed: {summary['batches_executed']}",
+                    f"🎯 Individual tickets: {summary['individual_tickets']}",
+                    f"💾 Sessions saved: {summary.get('sessions_saved', 0)}",
+                    f"⚡ Overhead reduction: {summary.get('overhead_reduction', 0):.1f}%",
+                    "",
+                ]
+            )
 
         # Insert batch stats after the main summary
-        lines = base_report.split('\n')
+        lines = base_report.split("\n")
         insert_pos = 8  # After main stats
         lines[insert_pos:insert_pos] = batch_stats
 
-        return '\n'.join(lines)
+        return "\n".join(lines)

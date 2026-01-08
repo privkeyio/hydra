@@ -1,0 +1,17 @@
+# Act configuration file
+# Use GitHub's official Ubuntu runner image
+-P ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest
+
+# Set environment variables for local testing
+--env LLM_PROVIDER=mock
+--env REDIS_URL=redis://localhost:6379/0
+--env DATABASE_URL=sqlite:///test.db
+--env TESTING=1
+--env CI=true
+--env PYTHONPATH=src
+
+# Enable verbose logging
+--verbose
+
+# Use host networking for services like Redis
+--use-gitignore=false

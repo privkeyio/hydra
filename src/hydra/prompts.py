@@ -2,7 +2,10 @@
 
 from typing import Any, Dict, List, Optional
 
-import tiktoken
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
 
 
 class PromptTemplates:
@@ -13,7 +16,7 @@ class PromptTemplates:
         "code": "Expert coder. Clean code only.",
         "json": "Return valid JSON only.",
         "analysis": "Analyze and report concisely.",
-        "fix": "Fix issues efficiently."
+        "fix": "Fix issues efficiently.",
     }
 
     # Task templates - minimal instructions
@@ -24,26 +27,20 @@ Criteria: {criteria}
 Dir: {dir}
 {deps}
 Implement now.""",
-
         "verify": """Check Ticket {id} criteria:
 {criteria}
 Fix unmet items. Update status.""",
-
         "code_gen": "{task}\nReturn code only.",
-
         "json_gen": "{task}\nJSON only.",
-
         "test": "Write tests for:\n{code}\nPytest format.",
-
         "fix_error": "Error: {error}\nFile: {file}\nFix it.",
-
-        "review": "Review:\n{code}\nIssues only."
+        "review": "Review:\n{code}\nIssues only.",
     }
 
     @staticmethod
     def format_criteria(criteria: List[str]) -> str:
         """Format acceptance criteria minimally."""
-        return '\n'.join(f"- {c}" for c in criteria)
+        return "\n".join(f"- {c}" for c in criteria)
 
     @staticmethod
     def format_deps(deps: Dict[str, Any]) -> str:
@@ -64,7 +61,7 @@ class TokenCounter:
                 "gpt-4": "cl100k_base",
                 "gpt-3.5": "cl100k_base",
                 "claude": "cl100k_base",  # Approximate
-                "llama": "cl100k_base",   # Approximate
+                "llama": "cl100k_base",  # Approximate
             }
 
             # Get encoding name
@@ -98,7 +95,7 @@ class TokenCounter:
             "old_tokens": old_tokens,
             "new_tokens": new_tokens,
             "reduction_percent": round(reduction, 1),
-            "tokens_saved": old_tokens - new_tokens
+            "tokens_saved": old_tokens - new_tokens,
         }
 
 
@@ -111,16 +108,16 @@ class PromptOptimizer:
         self.stats = {
             "total_old_tokens": 0,
             "total_new_tokens": 0,
-            "prompts_optimized": 0
+            "prompts_optimized": 0,
         }
 
     def optimize(self, prompt: str, prompt_type: str = "general") -> str:
         """Optimize a prompt for minimal tokens.
-        
+
         Args:
             prompt: Original verbose prompt
             prompt_type: Type of prompt (ticket, verify, code_gen, etc.)
-            
+
         Returns:
             Optimized prompt with minimal tokens
 
@@ -201,24 +198,24 @@ class PromptOptimizer:
             optimized = optimized.replace(verbose, concise)
 
         # Remove redundant whitespace and blank lines
-        lines = [line.strip() for line in optimized.split('\n')]
+        lines = [line.strip() for line in optimized.split("\n")]
         lines = [line for line in lines if line]  # Remove empty lines
-        optimized = '\n'.join(lines)
+        optimized = "\n".join(lines)
 
         # Remove redundant punctuation
-        optimized = optimized.replace('..', '.')
-        optimized = optimized.replace('!!', '!')
-        optimized = optimized.replace('??', '?')
+        optimized = optimized.replace("..", ".")
+        optimized = optimized.replace("!!", "!")
+        optimized = optimized.replace("??", "?")
 
         return optimized
 
     def get_template(self, template_type: str, **kwargs) -> str:
         """Get an optimized prompt template.
-        
+
         Args:
             template_type: Type of template (ticket, verify, code_gen, etc.)
             **kwargs: Template variables
-            
+
         Returns:
             Formatted prompt from template
 
@@ -229,12 +226,12 @@ class PromptOptimizer:
         template = self.templates.TASK_TEMPLATES[template_type]
 
         # Format criteria if present
-        if 'criteria' in kwargs and isinstance(kwargs['criteria'], list):
-            kwargs['criteria'] = self.templates.format_criteria(kwargs['criteria'])
+        if "criteria" in kwargs and isinstance(kwargs["criteria"], list):
+            kwargs["criteria"] = self.templates.format_criteria(kwargs["criteria"])
 
         # Format deps if present
-        if 'deps' in kwargs and isinstance(kwargs['deps'], dict):
-            kwargs['deps'] = self.templates.format_deps(kwargs['deps'])
+        if "deps" in kwargs and isinstance(kwargs["deps"], dict):
+            kwargs["deps"] = self.templates.format_deps(kwargs["deps"])
 
         # Fill template
         try:
@@ -245,10 +242,10 @@ class PromptOptimizer:
 
     def get_system_prompt(self, prompt_type: str) -> str:
         """Get optimized system prompt.
-        
+
         Args:
             prompt_type: Type of system prompt (code, json, analysis, fix)
-            
+
         Returns:
             Optimized system prompt
 
@@ -257,7 +254,7 @@ class PromptOptimizer:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get optimization statistics.
-        
+
         Returns:
             Dictionary with token savings statistics
 
@@ -267,7 +264,8 @@ class PromptOptimizer:
         else:
             reduction = (
                 (self.stats["total_old_tokens"] - self.stats["total_new_tokens"])
-                / self.stats["total_old_tokens"] * 100
+                / self.stats["total_old_tokens"]
+                * 100
             )
 
         return {
@@ -277,7 +275,7 @@ class PromptOptimizer:
             "tokens_saved": (
                 self.stats["total_old_tokens"] - self.stats["total_new_tokens"]
             ),
-            "reduction_percent": round(reduction, 1)
+            "reduction_percent": round(reduction, 1),
         }
 
     def reset_stats(self):
@@ -285,7 +283,7 @@ class PromptOptimizer:
         self.stats = {
             "total_old_tokens": 0,
             "total_new_tokens": 0,
-            "prompts_optimized": 0
+            "prompts_optimized": 0,
         }
 
 
@@ -303,11 +301,11 @@ def get_optimizer() -> PromptOptimizer:
 
 def optimize_prompt(prompt: str, prompt_type: str = "general") -> str:
     """Optimize a prompt for minimal token usage.
-    
+
     Args:
         prompt: Original verbose prompt
         prompt_type: Type of prompt
-        
+
     Returns:
         Optimized prompt
 
@@ -318,11 +316,11 @@ def optimize_prompt(prompt: str, prompt_type: str = "general") -> str:
 
 def get_prompt_template(template_type: str, **kwargs) -> str:
     """Get an optimized prompt template.
-    
+
     Args:
         template_type: Type of template
         **kwargs: Template variables
-        
+
     Returns:
         Formatted prompt from template
 
@@ -333,10 +331,10 @@ def get_prompt_template(template_type: str, **kwargs) -> str:
 
 def get_system_prompt(prompt_type: str) -> str:
     """Get optimized system prompt.
-    
+
     Args:
         prompt_type: Type of system prompt
-        
+
     Returns:
         Optimized system prompt
 
@@ -347,11 +345,10 @@ def get_system_prompt(prompt_type: str) -> str:
 
 def get_optimization_stats() -> Dict[str, Any]:
     """Get prompt optimization statistics.
-    
+
     Returns:
         Dictionary with token savings statistics
 
     """
     optimizer = get_optimizer()
     return optimizer.get_stats()
-

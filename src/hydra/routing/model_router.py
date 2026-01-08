@@ -54,64 +54,98 @@ class TaskComplexityAnalyzer:
     def __init__(self):
         self.complexity_keywords = {
             ComplexityLevel.SIMPLE: {
-                'keywords': [
-                    'read', 'list', 'show', 'display', 'print', 'format',
-                    'simple', 'basic', 'quick', 'check', 'validate'
+                "keywords": [
+                    "read",
+                    "list",
+                    "show",
+                    "display",
+                    "print",
+                    "format",
+                    "simple",
+                    "basic",
+                    "quick",
+                    "check",
+                    "validate",
                 ],
-                'patterns': [
-                    r'\b(get|fetch|retrieve)\s+\w+',
-                    r'\b(list|show)\s+(files?|directories?)',
-                    r'\bprint\s+\w+'
-                ]
+                "patterns": [
+                    r"\b(get|fetch|retrieve)\s+\w+",
+                    r"\b(list|show)\s+(files?|directories?)",
+                    r"\bprint\s+\w+",
+                ],
             },
             ComplexityLevel.MODERATE: {
-                'keywords': [
-                    'create', 'write', 'modify', 'update', 'refactor',
-                    'implement', 'add', 'remove', 'fix', 'test'
+                "keywords": [
+                    "create",
+                    "write",
+                    "modify",
+                    "update",
+                    "refactor",
+                    "implement",
+                    "add",
+                    "remove",
+                    "fix",
+                    "test",
                 ],
-                'patterns': [
-                    r'\b(create|write|implement)\s+\w+',
-                    r'\b(add|modify|update)\s+\w+',
-                    r'\bfix\s+(bug|issue|error)'
-                ]
+                "patterns": [
+                    r"\b(create|write|implement)\s+\w+",
+                    r"\b(add|modify|update)\s+\w+",
+                    r"\bfix\s+(bug|issue|error)",
+                ],
             },
             ComplexityLevel.COMPLEX: {
-                'keywords': [
-                    'architecture', 'design', 'optimize', 'performance',
-                    'algorithm', 'database', 'integration', 'system',
-                    'concurrent', 'parallel', 'async', 'distributed'
+                "keywords": [
+                    "architecture",
+                    "design",
+                    "optimize",
+                    "performance",
+                    "algorithm",
+                    "database",
+                    "integration",
+                    "system",
+                    "concurrent",
+                    "parallel",
+                    "async",
+                    "distributed",
                 ],
-                'patterns': [
-                    r'\b(design|architect)\s+\w+',
-                    r'\boptimize\s+(for|performance)',
-                    r'\b(integrate|connect)\s+with'
-                ]
+                "patterns": [
+                    r"\b(design|architect)\s+\w+",
+                    r"\boptimize\s+(for|performance)",
+                    r"\b(integrate|connect)\s+with",
+                ],
             },
             ComplexityLevel.CRITICAL: {
-                'keywords': [
-                    'security', 'production', 'deployment', 'migration',
-                    'critical', 'urgent', 'emergency', 'backup',
-                    'recovery', 'scale', 'enterprise'
+                "keywords": [
+                    "security",
+                    "production",
+                    "deployment",
+                    "migration",
+                    "critical",
+                    "urgent",
+                    "emergency",
+                    "backup",
+                    "recovery",
+                    "scale",
+                    "enterprise",
                 ],
-                'patterns': [
-                    r'\b(security|auth|authentication)',
-                    r'\b(production|deploy|release)',
-                    r'\b(critical|urgent|emergency)'
-                ]
-            }
+                "patterns": [
+                    r"\b(security|auth|authentication)",
+                    r"\b(production|deploy|release)",
+                    r"\b(critical|urgent|emergency)",
+                ],
+            },
         }
 
     def _score_keywords(self, text: str, scores: Dict[ComplexityLevel, int]):
         """Score based on keyword matches."""
         for level, rules in self.complexity_keywords.items():
-            for keyword in rules['keywords']:
+            for keyword in rules["keywords"]:
                 if keyword in text:
                     scores[level] += 2
 
     def _score_patterns(self, text: str, scores: Dict[ComplexityLevel, int]):
         """Score based on pattern matches."""
         for level, rules in self.complexity_keywords.items():
-            for pattern in rules['patterns']:
+            for pattern in rules["patterns"]:
                 if re.search(pattern, text):
                     scores[level] += 3
 
@@ -120,11 +154,11 @@ class TaskComplexityAnalyzer:
         if not context:
             return
 
-        if context.get('file_count', 0) > 10:
+        if context.get("file_count", 0) > 10:
             scores[ComplexityLevel.COMPLEX] += 2
-        if context.get('has_tests', False):
+        if context.get("has_tests", False):
             scores[ComplexityLevel.MODERATE] += 1
-        if context.get('involves_database', False):
+        if context.get("involves_database", False):
             scores[ComplexityLevel.COMPLEX] += 2
 
     def analyze_task(
@@ -175,7 +209,9 @@ class CostEstimator:
                 relative_cost = mapping.relative_cost
 
         input_cost = (input_tokens / 1000) * self.base_input_cost * relative_cost
-        output_cost = (expected_output_tokens / 1000) * self.base_output_cost * relative_cost
+        output_cost = (
+            (expected_output_tokens / 1000) * self.base_output_cost * relative_cost
+        )
 
         return input_cost + output_cost
 
@@ -195,21 +231,29 @@ class ModelRouter:
 
         # Map complexity to model categories and then to provider models
         default_config = {
-            'routing_rules': {
-                ComplexityLevel.SIMPLE.value: mapper.suggest_model_for_task("simple", provider),
-                ComplexityLevel.MODERATE.value: mapper.suggest_model_for_task("moderate", provider),
-                ComplexityLevel.COMPLEX.value: mapper.suggest_model_for_task("complex", provider),
-                ComplexityLevel.CRITICAL.value: mapper.suggest_model_for_task("critical", provider),
+            "routing_rules": {
+                ComplexityLevel.SIMPLE.value: mapper.suggest_model_for_task(
+                    "simple", provider
+                ),
+                ComplexityLevel.MODERATE.value: mapper.suggest_model_for_task(
+                    "moderate", provider
+                ),
+                ComplexityLevel.COMPLEX.value: mapper.suggest_model_for_task(
+                    "complex", provider
+                ),
+                ComplexityLevel.CRITICAL.value: mapper.suggest_model_for_task(
+                    "critical", provider
+                ),
             },
-            'confidence_threshold': 0.7,
-            'cost_optimization_enabled': True,
-            'fallback_model': mapper.suggest_model_for_task("moderate", provider),
-            'provider': provider
+            "confidence_threshold": 0.7,
+            "cost_optimization_enabled": True,
+            "fallback_model": mapper.suggest_model_for_task("moderate", provider),
+            "provider": provider,
         }
 
         if config_path and Path(config_path).exists():
             try:
-                with open(config_path, 'r') as f:
+                with open(config_path, "r") as f:
                     user_config = json.load(f)
                 default_config.update(user_config)
             except Exception:
@@ -222,7 +266,7 @@ class ModelRouter:
         task_description: str,
         context: Optional[Dict] = None,
         manual_model: Optional[str] = None,
-        expected_output_tokens: int = 500
+        expected_output_tokens: int = 500,
     ) -> RoutingDecision:
 
         self.metrics.total_requests += 1
@@ -233,7 +277,7 @@ class ModelRouter:
             complexity = self.analyzer.analyze_task(task_description, context)
 
             # Map the manual model if needed
-            selected_model = map_model(manual_model, self.config.get('provider'))
+            selected_model = map_model(manual_model, self.config.get("provider"))
             if not selected_model:
                 selected_model = manual_model  # Use as-is if mapping fails
 
@@ -247,16 +291,16 @@ class ModelRouter:
                 complexity=complexity,
                 reasoning="Manual override",
                 estimated_cost=estimated_cost,
-                manual_override=True
+                manual_override=True,
             )
         else:
             complexity = self.analyzer.analyze_task(task_description, context)
-            selected_model = self.config['routing_rules'][complexity.value]
+            selected_model = self.config["routing_rules"][complexity.value]
 
             confidence = self._calculate_confidence(task_description, complexity)
 
-            if confidence < self.config['confidence_threshold']:
-                selected_model = self.config['fallback_model']
+            if confidence < self.config["confidence_threshold"]:
+                selected_model = self.config["fallback_model"]
 
             # Fallback to default model if still None
             if not selected_model:
@@ -271,7 +315,7 @@ class ModelRouter:
                 estimated_cost = 0.0
 
             reasoning = f"Complexity: {complexity.value}, Confidence: {confidence:.2f}"
-            if self.config['cost_optimization_enabled']:
+            if self.config["cost_optimization_enabled"]:
                 reasoning += f", Estimated cost: ${estimated_cost:.4f}"
 
             decision = RoutingDecision(
@@ -279,7 +323,7 @@ class ModelRouter:
                 confidence=confidence,
                 complexity=complexity,
                 reasoning=reasoning,
-                estimated_cost=estimated_cost
+                estimated_cost=estimated_cost,
             )
 
         # Update metrics based on model category
@@ -306,12 +350,12 @@ class ModelRouter:
         total_keywords = 0
 
         rules = self.analyzer.complexity_keywords.get(complexity, {})
-        for keyword in rules.get('keywords', []):
+        for keyword in rules.get("keywords", []):
             total_keywords += 1
             if keyword in text:
                 keyword_matches += 1
 
-        for pattern in rules.get('patterns', []):
+        for pattern in rules.get("patterns", []):
             total_keywords += 1
             if re.search(pattern, text):
                 keyword_matches += 1
@@ -330,7 +374,9 @@ class ModelRouter:
 
         # Calculate what it would cost to use the most expensive model for everything
         mapper = get_model_mapper()
-        smart_model = mapper.suggest_model_for_task("critical", self.config.get('provider'))
+        smart_model = mapper.suggest_model_for_task(
+            "critical", self.config.get("provider")
+        )
 
         max_cost_total = sum(
             self.cost_estimator.estimate_cost(smart_model, "dummy", 500)
@@ -346,24 +392,24 @@ class ModelRouter:
     def get_routing_stats(self) -> Dict:
         total = self.metrics.total_requests
         if total == 0:
-            return {'no_data': True}
+            return {"no_data": True}
 
         return {
-            'total_requests': total,
-            'fast_percentage': (self.metrics.fast_requests / total) * 100,
-            'balanced_percentage': (self.metrics.balanced_requests / total) * 100,
-            'smart_percentage': (self.metrics.smart_requests / total) * 100,
-            'estimated_total_cost': self.metrics.total_cost,
-            'estimated_cost_savings': self.metrics.cost_savings,
-            'manual_override_percentage': (self.metrics.manual_overrides / total) * 100,
-            'average_cost_per_request': self.metrics.total_cost / total
+            "total_requests": total,
+            "fast_percentage": (self.metrics.fast_requests / total) * 100,
+            "balanced_percentage": (self.metrics.balanced_requests / total) * 100,
+            "smart_percentage": (self.metrics.smart_requests / total) * 100,
+            "estimated_total_cost": self.metrics.total_cost,
+            "estimated_cost_savings": self.metrics.cost_savings,
+            "manual_override_percentage": (self.metrics.manual_overrides / total) * 100,
+            "average_cost_per_request": self.metrics.total_cost / total,
         }
 
     def update_routing_accuracy(self, task_id: str, was_correct: bool):
         pass
 
     def export_config(self, file_path: str):
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             json.dump(self.config, f, indent=2)
 
     def get_model_recommendations(

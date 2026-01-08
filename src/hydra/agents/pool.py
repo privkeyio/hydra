@@ -107,7 +107,7 @@ class AgentPool:
                         subprocess.run(
                             ["tmux", "kill-session", "-t", agent.session_name],
                             capture_output=True,
-                            timeout=5
+                            timeout=5,
                         )
                     except:
                         pass
@@ -118,8 +118,9 @@ class AgentPool:
                     break
 
             # Check if we're at capacity after cleanup
-            active_count = sum(1 for a in self.agents.values()
-                             if a.status != AgentStatus.TERMINATING)
+            active_count = sum(
+                1 for a in self.agents.values() if a.status != AgentStatus.TERMINATING
+            )
             if active_count >= self.max_agents:
                 logger.warning(f"Agent pool full ({active_count}/{self.max_agents})")
                 print(f"⚠️  Agent pool full ({active_count}/{self.max_agents})")
@@ -135,7 +136,7 @@ class AgentPool:
                 ticket_id=ticket_id,
                 status=AgentStatus.BUSY,
                 created_at=time.time(),
-                last_active=time.time()
+                last_active=time.time(),
             )
 
             self.agents[agent_id] = agent
@@ -186,7 +187,7 @@ class AgentPool:
             subprocess.run(
                 ["tmux", "kill-session", "-t", agent.session_name],
                 capture_output=True,
-                timeout=5
+                timeout=5,
             )
             logger.info(f"Terminated tmux session {agent.session_name}")
         except Exception as e:
@@ -204,7 +205,8 @@ class AgentPool:
             with self.lock:
                 current_time = time.time()
                 idle_agents = [
-                    agent_id for agent_id, agent in self.agents.items()
+                    agent_id
+                    for agent_id, agent in self.agents.items()
                     if agent.status == AgentStatus.IDLE
                     and (current_time - agent.last_active) > self.idle_timeout
                 ]
@@ -222,10 +224,8 @@ class AgentPool:
         """
         with self.lock:
             total = len(self.agents)
-            busy = sum(1 for a in self.agents.values()
-                      if a.status == AgentStatus.BUSY)
-            idle = sum(1 for a in self.agents.values()
-                      if a.status == AgentStatus.IDLE)
+            busy = sum(1 for a in self.agents.values() if a.status == AgentStatus.BUSY)
+            idle = sum(1 for a in self.agents.values() if a.status == AgentStatus.IDLE)
 
             return {
                 "max_agents": self.max_agents,
@@ -238,8 +238,8 @@ class AgentPool:
                         "status": agent.status.value,
                         "ticket_id": agent.ticket_id,
                         "created_at": agent.created_at,
-                        "last_active": agent.last_active
+                        "last_active": agent.last_active,
                     }
                     for agent_id, agent in self.agents.items()
-                }
+                },
             }

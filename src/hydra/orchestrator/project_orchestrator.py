@@ -20,9 +20,9 @@ from hydra.exceptions import ValidationError
 
 # Test mode detection
 TEST_MODE = (
-    os.getenv('TESTING') == '1' or
-    os.getenv('PYTEST_CURRENT_TEST') is not None or
-    'pytest' in str(os.getenv('_', ''))
+    os.getenv("TESTING") == "1"
+    or os.getenv("PYTEST_CURRENT_TEST") is not None
+    or "pytest" in str(os.getenv("_", ""))
 )
 
 logger = logging.getLogger(__name__)
@@ -94,40 +94,40 @@ class ProjectSpecification:
     output_directory: Optional[str] = None
 
     @classmethod
-    def from_yaml(cls, yaml_content: str) -> 'ProjectSpecification':
+    def from_yaml(cls, yaml_content: str) -> "ProjectSpecification":
         data = yaml.safe_load(yaml_content)
         return cls.from_dict(data)
 
     @classmethod
-    def from_json(cls, json_content: str) -> 'ProjectSpecification':
+    def from_json(cls, json_content: str) -> "ProjectSpecification":
         data = json.loads(json_content)
         return cls.from_dict(data)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ProjectSpecification':
+    def from_dict(cls, data: Dict[str, Any]) -> "ProjectSpecification":
         tasks = []
-        for task_data in data.get('tasks', []):
+        for task_data in data.get("tasks", []):
             task = TaskNode(
-                id=task_data.get('id', str(uuid.uuid4())),
-                name=task_data['name'],
-                description=task_data['description'],
-                dependencies=task_data.get('dependencies', []),
-                complexity=TaskComplexity(task_data.get('complexity', 'moderate')),
-                model=ModelType(task_data.get('model', 'auto')),
-                retry_count=task_data.get('retry_count', 2),
-                timeout=task_data.get('timeout', 300),
-                parameters=task_data.get('parameters', {})
+                id=task_data.get("id", str(uuid.uuid4())),
+                name=task_data["name"],
+                description=task_data["description"],
+                dependencies=task_data.get("dependencies", []),
+                complexity=TaskComplexity(task_data.get("complexity", "moderate")),
+                model=ModelType(task_data.get("model", "auto")),
+                retry_count=task_data.get("retry_count", 2),
+                timeout=task_data.get("timeout", 300),
+                parameters=task_data.get("parameters", {}),
             )
             tasks.append(task)
 
         return cls(
-            name=data['name'],
-            description=data['description'],
+            name=data["name"],
+            description=data["description"],
             tasks=tasks,
-            max_parallel=data.get('max_parallel', 4),
-            global_timeout=data.get('global_timeout', 3600),
-            model_preferences=data.get('model_preferences', {}),
-            output_directory=data.get('output_directory')
+            max_parallel=data.get("max_parallel", 4),
+            global_timeout=data.get("global_timeout", 3600),
+            model_preferences=data.get("model_preferences", {}),
+            output_directory=data.get("output_directory"),
         )
 
     def validate(self) -> Tuple[bool, List[str]]:
@@ -212,13 +212,18 @@ class ProjectOrchestrator:
         self.failed_tasks = set()
         self.running_tasks = set()
         self.task_queue = deque()
-        self.executor = ThreadPoolExecutor(max_workers=specification.max_parallel)
+        # In test mode, avoid ThreadPoolExecutor to prevent "can't start new thread" errors
+        if TEST_MODE:
+            self.executor = None
+        else:
+            self.executor = ThreadPoolExecutor(max_workers=specification.max_parallel)
         self.start_time = None
         self.end_time = None
         self.execution_log = []
 
     def _select_model_for_task(self, task: TaskNode) -> str:
         from hydra.providers.model_mapper import get_model_mapper
+
         mapper = get_model_mapper()
 
         if task.model != ModelType.AUTO:
@@ -242,7 +247,7 @@ class ProjectOrchestrator:
             TaskComplexity.SIMPLE: "simple",
             TaskComplexity.MODERATE: "moderate",
             TaskComplexity.COMPLEX: "complex",
-            TaskComplexity.CRITICAL: "critical"
+            TaskComplexity.CRITICAL: "critical",
         }
 
         complexity_str = complexity_map.get(task.complexity, "moderate")
@@ -252,25 +257,30 @@ class ProjectOrchestrator:
 
     def _analyze_task_complexity(self, task: TaskNode) -> TaskComplexity:
         indicators = {
-            'simple': ['create', 'list', 'fetch', 'display', 'format'],
-            'moderate': ['implement', 'calculate', 'process', 'transform'],
-            'complex': ['architect', 'design', 'optimize', 'refactor', 'integrate'],
-            'critical': [
-                'security', 'performance', 'scale', 'distribute', 'orchestrate'
-            ]
+            "simple": ["create", "list", "fetch", "display", "format"],
+            "moderate": ["implement", "calculate", "process", "transform"],
+            "complex": ["architect", "design", "optimize", "refactor", "integrate"],
+            "critical": [
+                "security",
+                "performance",
+                "scale",
+                "distribute",
+                "orchestrate",
+            ],
         }
 
         description_lower = task.description.lower()
 
         # Find the highest complexity that matches keywords
         max_complexity = None
-        complexity_order = ['simple', 'moderate', 'complex', 'critical']
+        complexity_order = ["simple", "moderate", "complex", "critical"]
 
         for level, keywords in indicators.items():
             if any(keyword in description_lower for keyword in keywords):
                 current_index = complexity_order.index(level)
-                max_index = (complexity_order.index(max_complexity)
-                            if max_complexity else -1)
+                max_index = (
+                    complexity_order.index(max_complexity) if max_complexity else -1
+                )
                 if max_complexity is None or current_index > max_index:
                     max_complexity = level
 
@@ -310,8 +320,7 @@ class ProjectOrchestrator:
                 result = agent.complete_task(prompt)
             else:
                 result = await asyncio.wait_for(
-                    asyncio.to_thread(agent.complete_task, prompt),
-                    timeout=task.timeout
+                    asyncio.to_thread(agent.complete_task, prompt), timeout=task.timeout
                 )
 
             self.config.llm_provider.model = original_model
@@ -348,7 +357,7 @@ class ProjectOrchestrator:
         context_parts = [
             f"Project: {self.spec.name}",
             f"Task: {task.name}",
-            f"Description: {task.description}"
+            f"Description: {task.description}",
         ]
 
         if task.dependencies:
@@ -380,10 +389,8 @@ class ProjectOrchestrator:
                     )
                     return False
                 else:
-                    self._log_event(
-                        f"Retrying task {task.id} (attempt {attempt + 2})"
-                    )
-                    await asyncio.sleep(2 ** attempt)
+                    self._log_event(f"Retrying task {task.id} (attempt {attempt + 2})")
+                    await asyncio.sleep(2**attempt)
         return False
 
     async def _execute_level(self, level_idx: int, level_tasks: list):
@@ -392,15 +399,16 @@ class ProjectOrchestrator:
             f"Executing level {level_idx + 1} with {len(level_tasks)} tasks"
         )
 
-        tasks_to_run = [task for task in level_tasks
-                       if task.status == TaskStatus.PENDING]
+        tasks_to_run = [
+            task for task in level_tasks if task.status == TaskStatus.PENDING
+        ]
 
         if not tasks_to_run:
             return
 
         batch_size = min(len(tasks_to_run), self.spec.max_parallel)
         for i in range(0, len(tasks_to_run), batch_size):
-            batch = tasks_to_run[i:i + batch_size]
+            batch = tasks_to_run[i : i + batch_size]
             coroutines = [self._execute_task_with_retry(task) for task in batch]
             if coroutines:
                 await asyncio.gather(*coroutines, return_exceptions=True)
@@ -431,30 +439,32 @@ class ProjectOrchestrator:
         task_results = {}
         for task in self.spec.tasks:
             task_results[task.id] = {
-                'name': task.name,
-                'status': task.status.value,
-                'execution_time': task.execution_time,
-                'model_used': self._select_model_for_task(task),
-                'result': task.result if task.status == TaskStatus.COMPLETED else None,
-                'error': task.error if task.status == TaskStatus.FAILED else None
+                "name": task.name,
+                "status": task.status.value,
+                "execution_time": task.execution_time,
+                "model_used": self._select_model_for_task(task),
+                "result": task.result if task.status == TaskStatus.COMPLETED else None,
+                "error": task.error if task.status == TaskStatus.FAILED else None,
             }
 
         return {
-            'project': self.spec.name,
-            'status': 'completed' if not self.failed_tasks else 'partial',
-            'total_execution_time': total_time,
-            'tasks_completed': len(self.completed_tasks),
-            'tasks_failed': len(self.failed_tasks),
-            'task_results': task_results,
-            'execution_log': self.execution_log,
-            'statistics': {
-                'average_task_time': (
-                    sum(t.execution_time or 0 for t in self.spec.tasks) /
-                    len(self.spec.tasks) if self.spec.tasks else 0
+            "project": self.spec.name,
+            "status": "completed" if not self.failed_tasks else "partial",
+            "total_execution_time": total_time,
+            "tasks_completed": len(self.completed_tasks),
+            "tasks_failed": len(self.failed_tasks),
+            "task_results": task_results,
+            "execution_log": self.execution_log,
+            "statistics": {
+                "average_task_time": (
+                    sum(t.execution_time or 0 for t in self.spec.tasks)
+                    / len(self.spec.tasks)
+                    if self.spec.tasks
+                    else 0
                 ),
-                'parallelism_achieved': self._calculate_parallelism(),
-                'model_distribution': self._get_model_distribution()
-            }
+                "parallelism_achieved": self._calculate_parallelism(),
+                "model_distribution": self._get_model_distribution(),
+            },
         }
 
     def _calculate_parallelism(self) -> float:
@@ -465,16 +475,17 @@ class ProjectOrchestrator:
         current_concurrent = 0
 
         for event in self.execution_log:
-            if 'Starting task' in event['message']:
+            if "Starting task" in event["message"]:
                 current_concurrent += 1
                 max_concurrent = max(max_concurrent, current_concurrent)
-            elif 'Completed task' in event['message'] or 'failed' in event['message']:
+            elif "Completed task" in event["message"] or "failed" in event["message"]:
                 current_concurrent = max(0, current_concurrent - 1)
 
         return max_concurrent
 
     def _get_model_distribution(self) -> Dict[str, int]:
         from hydra.providers.model_mapper import get_model_mapper
+
         mapper = get_model_mapper()
 
         distribution = defaultdict(int)
@@ -485,14 +496,11 @@ class ProjectOrchestrator:
             if category:
                 distribution[category.value] += 1
             else:
-                distribution['unknown'] += 1
+                distribution["unknown"] += 1
         return dict(distribution)
 
     def _log_event(self, message: str):
-        event = {
-            'timestamp': time.time(),
-            'message': message
-        }
+        event = {"timestamp": time.time(), "message": message}
         self.execution_log.append(event)
         logger.info(message)
 
@@ -507,7 +515,7 @@ class ProjectOrchestrator:
                 TaskStatus.RUNNING: "🔄",
                 TaskStatus.COMPLETED: "✅",
                 TaskStatus.FAILED: "❌",
-                TaskStatus.SKIPPED: "⏭️"
+                TaskStatus.SKIPPED: "⏭️",
             }.get(task.status, "❓")
 
             if task.dependencies:
@@ -534,6 +542,6 @@ class ProjectOrchestrator:
         return "\n".join(lines)
 
     def cleanup(self):
-        self.executor.shutdown(wait=True)
+        if self.executor is not None:
+            self.executor.shutdown(wait=True)
         self.agents.clear()
-

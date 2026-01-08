@@ -103,14 +103,16 @@ class DistributedState:
 class DistributedCoordinator:
     """Coordinates distributed execution across multiple Hydra instances."""
 
-    def __init__(self,
-                 instance_id: Optional[str] = None,
-                 cluster_id: Optional[str] = None,
-                 port: int = 8090,
-                 discovery_port: int = 8091,
-                 state_dir: Optional[str] = None,
-                 heartbeat_interval: float = 5.0,
-                 election_timeout: float = 15.0):
+    def __init__(
+        self,
+        instance_id: Optional[str] = None,
+        cluster_id: Optional[str] = None,
+        port: int = 8090,
+        discovery_port: int = 8091,
+        state_dir: Optional[str] = None,
+        heartbeat_interval: float = 5.0,
+        election_timeout: float = 15.0,
+    ):
 
         self.instance_id = instance_id or str(uuid.uuid4())[:8]
         self.cluster_id = cluster_id or "default"
@@ -142,7 +144,7 @@ class DistributedCoordinator:
             tasks={},
             locks={},
             last_updated=time.time(),
-            term=0
+            term=0,
         )
 
         # Background tasks
@@ -169,7 +171,9 @@ class DistributedCoordinator:
         # Load balancing
         self.load_balancer = LoadBalancer()
 
-        logger.info(f"Initialized distributed coordinator {self.instance_id} on {self.hostname}:{self.port}")
+        logger.info(
+            f"Initialized distributed coordinator {self.instance_id} on {self.hostname}:{self.port}"
+        )
 
     async def start(self):
         """Start the distributed coordinator."""
@@ -184,9 +188,7 @@ class DistributedCoordinator:
             self._monitoring_started = True
 
         # Create HTTP session
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10)
-        )
+        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
 
         # Start HTTP server
         await self._start_http_server()
@@ -239,20 +241,20 @@ class DistributedCoordinator:
         self.app = web.Application()
 
         # API routes
-        self.app.router.add_get('/health', self._handle_health)
-        self.app.router.add_post('/heartbeat', self._handle_heartbeat)
-        self.app.router.add_post('/vote_request', self._handle_vote_request)
-        self.app.router.add_get('/state', self._handle_get_state)
-        self.app.router.add_post('/state', self._handle_update_state)
-        self.app.router.add_post('/tasks', self._handle_submit_task)
-        self.app.router.add_get('/tasks/{task_id}', self._handle_get_task)
-        self.app.router.add_post('/locks/{resource_id}', self._handle_acquire_lock)
-        self.app.router.add_delete('/locks/{resource_id}', self._handle_release_lock)
+        self.app.router.add_get("/health", self._handle_health)
+        self.app.router.add_post("/heartbeat", self._handle_heartbeat)
+        self.app.router.add_post("/vote_request", self._handle_vote_request)
+        self.app.router.add_get("/state", self._handle_get_state)
+        self.app.router.add_post("/state", self._handle_update_state)
+        self.app.router.add_post("/tasks", self._handle_submit_task)
+        self.app.router.add_get("/tasks/{task_id}", self._handle_get_task)
+        self.app.router.add_post("/locks/{resource_id}", self._handle_acquire_lock)
+        self.app.router.add_delete("/locks/{resource_id}", self._handle_release_lock)
 
         # Start web server
         runner = web.AppRunner(self.app)
         await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', self.port)
+        site = web.TCPSite(runner, "0.0.0.0", self.port)
         await site.start()
 
         # Store the runner for cleanup
@@ -265,7 +267,7 @@ class DistributedCoordinator:
             self._election_loop(),
             self._state_sync_loop(),
             self._task_distribution_loop(),
-            self._lock_maintenance_loop()
+            self._lock_maintenance_loop(),
         ]
 
         for coro in tasks:
@@ -296,8 +298,8 @@ class DistributedCoordinator:
         local_ip = socket.gethostbyname(hostname)
 
         # Extract subnet (simple assumption)
-        subnet_parts = local_ip.split('.')
-        subnet_base = '.'.join(subnet_parts[:3])
+        subnet_parts = local_ip.split(".")
+        subnet_base = ".".join(subnet_parts[:3])
 
         # Scan common ports in subnet
         scan_tasks = []
@@ -315,12 +317,12 @@ class DistributedCoordinator:
 
         results = await asyncio.gather(
             *[bounded_scan(f"{subnet_base}.{i}") for i in range(1, 255)],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         # Process discovered instances
         for result in results:
-            if isinstance(result, dict) and result.get('instance_id'):
+            if isinstance(result, dict) and result.get("instance_id"):
                 await self._register_discovered_instance(result)
 
     async def _try_contact_instance(self, target_ip: str) -> Optional[Dict]:
@@ -328,11 +330,11 @@ class DistributedCoordinator:
         try:
             async with self.session.get(
                 f"http://{target_ip}:{self.port}/health",
-                timeout=aiohttp.ClientTimeout(total=2)
+                timeout=aiohttp.ClientTimeout(total=2),
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if data.get('cluster_id') == self.cluster_id:
+                    if data.get("cluster_id") == self.cluster_id:
                         return data
         except Exception:
             pass
@@ -340,7 +342,7 @@ class DistributedCoordinator:
 
     async def _register_discovered_instance(self, instance_data: Dict):
         """Register a discovered instance."""
-        instance_id = instance_data['instance_id']
+        instance_id = instance_data["instance_id"]
 
         if instance_id != self.instance_id and instance_id not in self.known_instances:
             self.known_instances.add(instance_id)
@@ -375,10 +377,10 @@ class DistributedCoordinator:
             return
 
         heartbeat_data = {
-            'instance_id': self.instance_id,
-            'term': self.term,
-            'role': self.role.value,
-            'timestamp': time.time()
+            "instance_id": self.instance_id,
+            "term": self.term,
+            "role": self.role.value,
+            "timestamp": time.time(),
         }
 
         try:
@@ -440,9 +442,9 @@ class DistributedCoordinator:
             return False
 
         vote_request = {
-            'candidate_id': self.instance_id,
-            'term': self.term,
-            'timestamp': time.time()
+            "candidate_id": self.instance_id,
+            "term": self.term,
+            "timestamp": time.time(),
         }
 
         try:
@@ -450,7 +452,7 @@ class DistributedCoordinator:
             async with self.session.post(url, json=vote_request) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result.get('vote_granted', False)
+                    return result.get("vote_granted", False)
         except Exception as e:
             logger.warning(f"Failed to request vote from {instance_id}: {e}")
 
@@ -471,9 +473,9 @@ class DistributedCoordinator:
     async def _announce_leadership(self):
         """Announce leadership to all instances."""
         announcement = {
-            'new_leader': self.instance_id,
-            'term': self.term,
-            'timestamp': time.time()
+            "new_leader": self.instance_id,
+            "term": self.term,
+            "timestamp": time.time(),
         }
 
         for instance_id in self.known_instances:
@@ -511,7 +513,7 @@ class DistributedCoordinator:
     async def _sync_state_to_followers(self):
         """Sync state from leader to followers."""
         state_data = asdict(self.distributed_state)
-        state_data['last_updated'] = time.time()
+        state_data["last_updated"] = time.time()
 
         for instance_id in self.known_instances:
             if instance_id != self.instance_id:
@@ -557,33 +559,33 @@ class DistributedCoordinator:
         try:
             # Convert dictionaries back to dataclass instances
             instances = {}
-            for instance_id, instance_data in state_data.get('instances', {}).items():
+            for instance_id, instance_data in state_data.get("instances", {}).items():
                 # Handle role enum conversion
-                if 'role' in instance_data and isinstance(instance_data['role'], str):
-                    instance_data['role'] = InstanceRole(instance_data['role'])
+                if "role" in instance_data and isinstance(instance_data["role"], str):
+                    instance_data["role"] = InstanceRole(instance_data["role"])
                 instances[instance_id] = InstanceInfo(**instance_data)
 
             tasks = {}
-            for task_id, task_data in state_data.get('tasks', {}).items():
+            for task_id, task_data in state_data.get("tasks", {}).items():
                 # Make a copy to avoid modifying original data
                 task_copy = task_data.copy()
-                if 'status' in task_copy:
-                    if isinstance(task_copy['status'], str):
-                        task_copy['status'] = TaskStatus(task_copy['status'])
+                if "status" in task_copy:
+                    if isinstance(task_copy["status"], str):
+                        task_copy["status"] = TaskStatus(task_copy["status"])
                 tasks[task_id] = DistributedTask(**task_copy)
 
             locks = {}
-            for resource_id, lock_data in state_data.get('locks', {}).items():
+            for resource_id, lock_data in state_data.get("locks", {}).items():
                 locks[resource_id] = DistributedLock(**lock_data)
 
             self.distributed_state = DistributedState(
-                cluster_id=state_data['cluster_id'],
-                leader_instance=state_data.get('leader_instance'),
+                cluster_id=state_data["cluster_id"],
+                leader_instance=state_data.get("leader_instance"),
                 instances=instances,
                 tasks=tasks,
                 locks=locks,
-                last_updated=state_data['last_updated'],
-                term=state_data.get('term', 0)
+                last_updated=state_data["last_updated"],
+                term=state_data.get("term", 0),
             )
 
         except Exception as e:
@@ -604,7 +606,8 @@ class DistributedCoordinator:
     async def _distribute_pending_tasks(self):
         """Distribute pending tasks to available instances."""
         pending_tasks = [
-            task for task in self.distributed_state.tasks.values()
+            task
+            for task in self.distributed_state.tasks.values()
             if task.status == TaskStatus.PENDING
         ]
 
@@ -638,8 +641,10 @@ class DistributedCoordinator:
 
         for instance in self.distributed_state.instances.values():
             # Check if instance is healthy and has capacity
-            if (time.time() - instance.last_heartbeat < self.heartbeat_interval * 2 and
-                instance.available_workers > 0):
+            if (
+                time.time() - instance.last_heartbeat < self.heartbeat_interval * 2
+                and instance.available_workers > 0
+            ):
                 available.append(instance)
 
         return available
@@ -658,18 +663,24 @@ class DistributedCoordinator:
         # Notify the instance about the new task assignment
         await self._notify_task_assignment(task, instance)
 
-    async def _notify_task_assignment(self, task: DistributedTask, instance: InstanceInfo):
+    async def _notify_task_assignment(
+        self, task: DistributedTask, instance: InstanceInfo
+    ):
         """Notify an instance about task assignment."""
         task_data = asdict(task)
-        task_data['status'] = task.status.value
+        task_data["status"] = task.status.value
 
         try:
             url = f"http://{instance.hostname}:{instance.port}/tasks"
             async with self.session.post(url, json=task_data) as response:
                 if response.status == 200:
-                    logger.debug(f"Notified {instance.instance_id} about task {task.task_id}")
+                    logger.debug(
+                        f"Notified {instance.instance_id} about task {task.task_id}"
+                    )
         except Exception as e:
-            logger.warning(f"Failed to notify {instance.instance_id} about task {task.task_id}: {e}")
+            logger.warning(
+                f"Failed to notify {instance.instance_id} about task {task.task_id}: {e}"
+            )
 
     async def _lock_maintenance_loop(self):
         """Maintain distributed locks and handle expiration."""
@@ -703,19 +714,24 @@ class DistributedCoordinator:
         metrics = self.resource_tracker.get_current_metrics()
 
         health_data = {
-            'instance_id': self.instance_id,
-            'cluster_id': self.cluster_id,
-            'hostname': self.hostname,
-            'port': self.port,
-            'role': self.role.value,
-            'term': self.term,
-            'cpu_usage': metrics.get('cpu_percent', 0),
-            'memory_usage': metrics.get('memory_percent', 0),
-            'available_workers': 5,  # TODO: Make configurable
-            'running_tasks': len([t for t in self.distributed_state.tasks.values()
-                                if t.assigned_instance == self.instance_id and
-                                t.status == TaskStatus.RUNNING]),
-            'timestamp': time.time()
+            "instance_id": self.instance_id,
+            "cluster_id": self.cluster_id,
+            "hostname": self.hostname,
+            "port": self.port,
+            "role": self.role.value,
+            "term": self.term,
+            "cpu_usage": metrics.get("cpu_percent", 0),
+            "memory_usage": metrics.get("memory_percent", 0),
+            "available_workers": 5,  # TODO: Make configurable
+            "running_tasks": len(
+                [
+                    t
+                    for t in self.distributed_state.tasks.values()
+                    if t.assigned_instance == self.instance_id
+                    and t.status == TaskStatus.RUNNING
+                ]
+            ),
+            "timestamp": time.time(),
         }
 
         return web.json_response(health_data)
@@ -725,41 +741,41 @@ class DistributedCoordinator:
         from aiohttp import web
 
         data = await request.json()
-        sender_id = data.get('instance_id')
+        sender_id = data.get("instance_id")
 
         if sender_id and sender_id in self.distributed_state.instances:
             instance = self.distributed_state.instances[sender_id]
             instance.last_heartbeat = time.time()
 
         # If this is from the leader, update our last leader contact
-        if data.get('role') == 'leader':
+        if data.get("role") == "leader":
             self.last_leader_contact = time.time()
             if self.distributed_state.leader_instance != sender_id:
                 self.distributed_state.leader_instance = sender_id
                 self.role = InstanceRole.FOLLOWER
 
-        return web.json_response({'status': 'ok'})
+        return web.json_response({"status": "ok"})
 
     async def _handle_vote_request(self, request):
         """Handle vote requests during leader election."""
         from aiohttp import web
 
         data = await request.json()
-        candidate_id = data.get('candidate_id')
-        candidate_term = data.get('term', 0)
+        candidate_id = data.get("candidate_id")
+        candidate_term = data.get("term", 0)
 
         # Grant vote if term is newer and we haven't voted yet
         vote_granted = (
-            candidate_term > self.term and
-            self.role != InstanceRole.LEADER and
-            candidate_id != self.instance_id
+            candidate_term > self.term
+            and self.role != InstanceRole.LEADER
+            and candidate_id != self.instance_id
         )
 
         if vote_granted:
             self.term = candidate_term
             logger.info(f"Granted vote to {candidate_id} for term {candidate_term}")
 
-        return web.json_response({'vote_granted': vote_granted})
+        return web.json_response({"vote_granted": vote_granted})
 
     async def _handle_get_state(self, request):
         """Handle requests to get distributed state."""
@@ -775,7 +791,7 @@ class DistributedCoordinator:
         state_data = await request.json()
         await self._update_local_state(state_data)
 
-        return web.json_response({'status': 'updated'})
+        return web.json_response({"status": "updated"})
 
     async def _handle_submit_task(self, request):
         """Handle task submission requests."""
@@ -785,38 +801,36 @@ class DistributedCoordinator:
 
         # Only leader can accept task submissions
         if self.role != InstanceRole.LEADER:
-            return web.json_response(
-                {'error': 'Not leader'}, status=400
-            )
+            return web.json_response({"error": "Not leader"}, status=400)
 
         task = DistributedTask(
-            task_id=task_data.get('task_id', str(uuid.uuid4())),
-            ticket_id=task_data['ticket_id'],
-            description=task_data['description'],
+            task_id=task_data.get("task_id", str(uuid.uuid4())),
+            ticket_id=task_data["ticket_id"],
+            description=task_data["description"],
             assigned_instance=None,
             status=TaskStatus.PENDING,
-            priority=task_data.get('priority', 0),
-            created_at=time.time()
+            priority=task_data.get("priority", 0),
+            created_at=time.time(),
         )
 
         self.distributed_state.tasks[task.task_id] = task
 
         logger.info(f"Submitted task {task.task_id} for ticket {task.ticket_id}")
 
-        return web.json_response({'task_id': task.task_id})
+        return web.json_response({"task_id": task.task_id})
 
     async def _handle_get_task(self, request):
         """Handle task status requests."""
         from aiohttp import web
 
-        task_id = request.match_info['task_id']
+        task_id = request.match_info["task_id"]
         task = self.distributed_state.tasks.get(task_id)
 
         if not task:
-            return web.json_response({'error': 'Task not found'}, status=404)
+            return web.json_response({"error": "Task not found"}, status=404)
 
         task_data = asdict(task)
-        task_data['status'] = task.status.value
+        task_data["status"] = task.status.value
 
         return web.json_response(task_data)
 
@@ -824,10 +838,10 @@ class DistributedCoordinator:
         """Handle distributed lock acquisition."""
         from aiohttp import web
 
-        resource_id = request.match_info['resource_id']
+        resource_id = request.match_info["resource_id"]
         data = await request.json()
 
-        duration = data.get('duration', 300)  # 5 minutes default
+        duration = data.get("duration", 300)  # 5 minutes default
         current_time = time.time()
 
         # Check if resource is already locked
@@ -835,7 +849,7 @@ class DistributedCoordinator:
             existing_lock = self.distributed_state.locks[resource_id]
             if existing_lock.expires_at > current_time:
                 return web.json_response(
-                    {'error': 'Resource already locked'}, status=409
+                    {"error": "Resource already locked"}, status=409
                 )
 
         # Create new lock
@@ -844,39 +858,41 @@ class DistributedCoordinator:
             owner_instance=self.instance_id,
             acquired_at=current_time,
             expires_at=current_time + duration,
-            renewable=data.get('renewable', True)
+            renewable=data.get("renewable", True),
         )
 
         self.distributed_state.locks[resource_id] = lock
 
         logger.info(f"Acquired lock for resource {resource_id}")
 
-        return web.json_response({'status': 'acquired', 'expires_at': lock.expires_at})
+        return web.json_response({"status": "acquired", "expires_at": lock.expires_at})
 
     async def _handle_release_lock(self, request):
         """Handle distributed lock release."""
         from aiohttp import web
 
-        resource_id = request.match_info['resource_id']
+        resource_id = request.match_info["resource_id"]
 
         if resource_id not in self.distributed_state.locks:
-            return web.json_response({'error': 'Lock not found'}, status=404)
+            return web.json_response({"error": "Lock not found"}, status=404)
 
         lock = self.distributed_state.locks[resource_id]
 
         # Only owner can release lock
         if lock.owner_instance != self.instance_id:
-            return web.json_response({'error': 'Not lock owner'}, status=403)
+            return web.json_response({"error": "Not lock owner"}, status=403)
 
         del self.distributed_state.locks[resource_id]
 
         logger.info(f"Released lock for resource {resource_id}")
 
-        return web.json_response({'status': 'released'})
+        return web.json_response({"status": "released"})
 
     # Public API methods
 
-    async def submit_task(self, ticket_id: str, description: str, priority: int = 0) -> str:
+    async def submit_task(
+        self, ticket_id: str, description: str, priority: int = 0
+    ) -> str:
         """Submit a task for distributed execution."""
         if self.role != InstanceRole.LEADER:
             # Forward to leader
@@ -897,28 +913,28 @@ class DistributedCoordinator:
             assigned_instance=None,
             status=TaskStatus.PENDING,
             priority=priority,
-            created_at=time.time()
+            created_at=time.time(),
         )
 
         self.distributed_state.tasks[task.task_id] = task
 
         return task.task_id
 
-    async def _forward_task_to_leader(self, leader: InstanceInfo,
-                                     ticket_id: str, description: str,
-                                     priority: int) -> str:
+    async def _forward_task_to_leader(
+        self, leader: InstanceInfo, ticket_id: str, description: str, priority: int
+    ) -> str:
         """Forward task submission to leader."""
         task_data = {
-            'ticket_id': ticket_id,
-            'description': description,
-            'priority': priority
+            "ticket_id": ticket_id,
+            "description": description,
+            "priority": priority,
         }
 
         url = f"http://{leader.hostname}:{leader.port}/tasks"
         async with self.session.post(url, json=task_data) as response:
             if response.status == 200:
                 result = await response.json()
-                return result['task_id']
+                return result["task_id"]
             else:
                 raise Exception(f"Failed to submit task: {response.status}")
 
@@ -926,8 +942,9 @@ class DistributedCoordinator:
         """Get the status of a distributed task."""
         return self.distributed_state.tasks.get(task_id)
 
-    async def acquire_distributed_lock(self, resource_id: str,
-                                     duration: int = 300) -> bool:
+    async def acquire_distributed_lock(
+        self, resource_id: str, duration: int = 300
+    ) -> bool:
         """Acquire a distributed lock on a resource."""
         if self.role == InstanceRole.LEADER:
             return await self._acquire_lock_locally(resource_id, duration)
@@ -957,16 +974,17 @@ class DistributedCoordinator:
             resource_id=resource_id,
             owner_instance=self.instance_id,
             acquired_at=current_time,
-            expires_at=current_time + duration
+            expires_at=current_time + duration,
         )
 
         self.distributed_state.locks[resource_id] = lock
         return True
 
-    async def _request_lock_from_leader(self, leader: InstanceInfo,
-                                      resource_id: str, duration: int) -> bool:
+    async def _request_lock_from_leader(
+        self, leader: InstanceInfo, resource_id: str, duration: int
+    ) -> bool:
         """Request lock from leader."""
-        lock_data = {'duration': duration}
+        lock_data = {"duration": duration}
 
         url = f"http://{leader.hostname}:{leader.port}/locks/{resource_id}"
 
@@ -1002,8 +1020,9 @@ class DistributedCoordinator:
 
         return False
 
-    async def _request_lock_release_from_leader(self, leader: InstanceInfo,
-                                              resource_id: str) -> bool:
+    async def _request_lock_release_from_leader(
+        self, leader: InstanceInfo, resource_id: str
+    ) -> bool:
         """Request lock release from leader."""
         url = f"http://{leader.hostname}:{leader.port}/locks/{resource_id}"
 
@@ -1017,22 +1036,31 @@ class DistributedCoordinator:
     def get_cluster_info(self) -> Dict[str, Any]:
         """Get information about the cluster."""
         return {
-            'instance_id': self.instance_id,
-            'cluster_id': self.cluster_id,
-            'role': self.role.value,
-            'term': self.term,
-            'leader': self.distributed_state.leader_instance,
-            'instances': len(self.distributed_state.instances),
-            'tasks': {
-                'total': len(self.distributed_state.tasks),
-                'pending': sum(1 for t in self.distributed_state.tasks.values()
-                             if t.status == TaskStatus.PENDING),
-                'running': sum(1 for t in self.distributed_state.tasks.values()
-                             if t.status == TaskStatus.RUNNING),
-                'completed': sum(1 for t in self.distributed_state.tasks.values()
-                               if t.status == TaskStatus.COMPLETED)
+            "instance_id": self.instance_id,
+            "cluster_id": self.cluster_id,
+            "role": self.role.value,
+            "term": self.term,
+            "leader": self.distributed_state.leader_instance,
+            "instances": len(self.distributed_state.instances),
+            "tasks": {
+                "total": len(self.distributed_state.tasks),
+                "pending": sum(
+                    1
+                    for t in self.distributed_state.tasks.values()
+                    if t.status == TaskStatus.PENDING
+                ),
+                "running": sum(
+                    1
+                    for t in self.distributed_state.tasks.values()
+                    if t.status == TaskStatus.RUNNING
+                ),
+                "completed": sum(
+                    1
+                    for t in self.distributed_state.tasks.values()
+                    if t.status == TaskStatus.COMPLETED
+                ),
             },
-            'locks': len(self.distributed_state.locks)
+            "locks": len(self.distributed_state.locks),
         }
 
     async def handle_network_partition(self):
@@ -1069,7 +1097,9 @@ class DistributedCoordinator:
 
         try:
             url = f"http://{leader.hostname}:{leader.port}/health"
-            async with self.session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+            async with self.session.get(
+                url, timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
                 return response.status == 200
         except Exception:
             return False
@@ -1085,7 +1115,9 @@ class DistributedCoordinator:
 
             try:
                 url = f"http://{instance.hostname}:{instance.port}/health"
-                async with self.session.get(url, timeout=aiohttp.ClientTimeout(total=2)) as response:
+                async with self.session.get(
+                    url, timeout=aiohttp.ClientTimeout(total=2)
+                ) as response:
                     if response.status == 200:
                         reachable.append(instance_id)
             except Exception:
@@ -1097,7 +1129,7 @@ class DistributedCoordinator:
         """Load persistent state from disk."""
         if self.state_file.exists():
             try:
-                async with aiofiles.open(self.state_file, 'r') as f:
+                async with aiofiles.open(self.state_file, "r") as f:
                     content = await f.read()
                     state_data = json.loads(content)
                     await self._update_local_state(state_data)
@@ -1109,20 +1141,20 @@ class DistributedCoordinator:
         """Save distributed state to disk."""
         try:
             state_data = asdict(self.distributed_state)
-            state_data['last_updated'] = time.time()
+            state_data["last_updated"] = time.time()
 
             # Convert enums to values for JSON serialization
-            if 'tasks' in state_data:
-                for task_id, task in state_data['tasks'].items():
-                    if 'status' in task and hasattr(task['status'], 'value'):
-                        task['status'] = task['status'].value
+            if "tasks" in state_data:
+                for task_id, task in state_data["tasks"].items():
+                    if "status" in task and hasattr(task["status"], "value"):
+                        task["status"] = task["status"].value
 
-            if 'instances' in state_data:
-                for instance_id, instance in state_data['instances'].items():
-                    if 'role' in instance and hasattr(instance['role'], 'value'):
-                        instance['role'] = instance['role'].value
+            if "instances" in state_data:
+                for instance_id, instance in state_data["instances"].items():
+                    if "role" in instance and hasattr(instance["role"], "value"):
+                        instance["role"] = instance["role"].value
 
-            async with aiofiles.open(self.state_file, 'w') as f:
+            async with aiofiles.open(self.state_file, "w") as f:
                 await f.write(json.dumps(state_data, indent=2, default=str))
 
             logger.debug("Saved distributed state to disk")
@@ -1133,8 +1165,9 @@ class DistributedCoordinator:
 class LoadBalancer:
     """Load balancer for distributing tasks across instances."""
 
-    def select_instance(self, instances: List[InstanceInfo],
-                       task: DistributedTask) -> Optional[InstanceInfo]:
+    def select_instance(
+        self, instances: List[InstanceInfo], task: DistributedTask
+    ) -> Optional[InstanceInfo]:
         """Select the best instance for a task."""
         if not instances:
             return None
@@ -1151,8 +1184,9 @@ class LoadBalancer:
 
         return scored_instances[0][1]
 
-    def _calculate_instance_score(self, instance: InstanceInfo,
-                                 task: DistributedTask) -> float:
+    def _calculate_instance_score(
+        self, instance: InstanceInfo, task: DistributedTask
+    ) -> float:
         """Calculate score for an instance."""
         # Base score from available capacity
         capacity_score = instance.available_workers / max(1, instance.running_tasks + 1)
@@ -1162,10 +1196,6 @@ class LoadBalancer:
         memory_score = (100 - instance.memory_usage) / 100
 
         # Combine scores
-        total_score = (
-            capacity_score * 0.4 +
-            cpu_score * 0.3 +
-            memory_score * 0.3
-        )
+        total_score = capacity_score * 0.4 + cpu_score * 0.3 + memory_score * 0.3
 
         return total_score

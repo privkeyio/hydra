@@ -196,18 +196,24 @@ class ResponseParser:
             try:
                 # Validate required fields
                 if not action.target:
-                    raise ValidationError(f"Action {action.type.name} missing target", action)
+                    raise ValidationError(
+                        f"Action {action.type.name} missing target", action
+                    )
 
                 # Validate content for file operations
-                if action.type in [
-                    ActionType.CREATE_FILE,
-                    ActionType.MODIFY_FILE,
-                    ActionType.APPEND_FILE,
-                    ActionType.REPLACE_IN_FILE,
-                ] and action.content is None:
+                if (
+                    action.type
+                    in [
+                        ActionType.CREATE_FILE,
+                        ActionType.MODIFY_FILE,
+                        ActionType.APPEND_FILE,
+                        ActionType.REPLACE_IN_FILE,
+                    ]
+                    and action.content is None
+                ):
                     raise ValidationError(
                         f"Action {action.type.name} requires content for {action.target}",
-                        action
+                        action,
                     )
 
                 # Validate paths
@@ -224,7 +230,7 @@ class ResponseParser:
                     if "source" not in action.options:
                         raise ValidationError(
                             f"Action {action.type.name} missing source in options",
-                            action
+                            action,
                         )
                     self._validate_path(action.options["source"])
                     self._validate_path(action.target)
@@ -487,9 +493,7 @@ class MultiFileParser:
 
         return files
 
-    def group_by_directory(
-        self, response: str
-    ) -> Dict[str, List[Tuple[str, str]]]:
+    def group_by_directory(self, response: str) -> Dict[str, List[Tuple[str, str]]]:
         """Group parsed files by directory.
 
         Args:

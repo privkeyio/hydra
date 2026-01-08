@@ -174,7 +174,7 @@ class ProgressTracker:
             return
 
         try:
-            with open(self.history_file, 'r') as f:
+            with open(self.history_file, "r") as f:
                 data = json.load(f)
 
             for ticket_data in data.get("tickets", []):
@@ -185,9 +185,10 @@ class ProgressTracker:
                     start_time=datetime.fromisoformat(ticket_data["start_time"]),
                     end_time=(
                         datetime.fromisoformat(ticket_data["end_time"])
-                        if ticket_data.get("end_time") else None
+                        if ticket_data.get("end_time")
+                        else None
                     ),
-                    metadata=ticket_data.get("metadata", {})
+                    metadata=ticket_data.get("metadata", {}),
                 )
 
                 for update_data in ticket_data.get("updates", []):
@@ -210,10 +211,10 @@ class ProgressTracker:
 
             data = {
                 "last_updated": datetime.now().isoformat(),
-                "tickets": [progress.to_dict() for progress in self.tickets.values()]
+                "tickets": [progress.to_dict() for progress in self.tickets.values()],
             }
 
-            with open(self.history_file, 'w') as f:
+            with open(self.history_file, "w") as f:
                 json.dump(data, f, indent=2)
 
         except Exception:
@@ -224,7 +225,7 @@ class ProgressTracker:
         self,
         ticket_id: str,
         message: str = "",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Start tracking a ticket.
 
@@ -248,7 +249,7 @@ class ProgressTracker:
                 ticket_id=ticket_id,
                 stage=ProgressStage.STARTED,
                 message=message or f"Started execution of ticket {ticket_id}",
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
 
             self.tickets[ticket_id].add_update(update)
@@ -260,7 +261,7 @@ class ProgressTracker:
         ticket_id: str,
         stage: ProgressStage,
         message: str = "",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Update progress for a ticket.
 
@@ -281,7 +282,7 @@ class ProgressTracker:
                 ticket_id=ticket_id,
                 stage=stage,
                 message=message or f"Moved to {stage.description}",
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
 
             self.tickets[ticket_id].add_update(update)
@@ -292,7 +293,7 @@ class ProgressTracker:
         self,
         ticket_id: str,
         message: str = "",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Mark a ticket as completed.
 
@@ -306,14 +307,14 @@ class ProgressTracker:
             ticket_id=ticket_id,
             stage=ProgressStage.COMPLETED,
             message=message or f"Ticket {ticket_id} completed successfully",
-            metadata=metadata
+            metadata=metadata,
         )
 
     def fail_ticket(
         self,
         ticket_id: str,
         message: str = "",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Mark a ticket as failed.
 
@@ -327,7 +328,7 @@ class ProgressTracker:
             ticket_id=ticket_id,
             stage=ProgressStage.FAILED,
             message=message or f"Ticket {ticket_id} failed",
-            metadata=metadata
+            metadata=metadata,
         )
 
     def get_ticket_progress(self, ticket_id: str) -> Optional[TicketProgress]:
@@ -388,7 +389,7 @@ class ProgressTracker:
             # Basic URL validation
             try:
                 parsed = urlparse(webhook_url)
-                if parsed.scheme in ['http', 'https'] and parsed.netloc:
+                if parsed.scheme in ["http", "https"] and parsed.netloc:
                     self.webhooks.append(webhook_url)
             except Exception:
                 pass
@@ -441,9 +442,7 @@ class ProgressTracker:
         # Send webhooks in background thread
         if self.webhooks:
             threading.Thread(
-                target=self._send_webhooks,
-                args=(update,),
-                daemon=True
+                target=self._send_webhooks, args=(update,), daemon=True
             ).start()
 
     def _send_webhooks(self, update: ProgressUpdate) -> None:
@@ -453,14 +452,14 @@ class ProgressTracker:
             update: ProgressUpdate to send
 
         """
-        payload = json.dumps(update.to_dict()).encode('utf-8')
+        payload = json.dumps(update.to_dict()).encode("utf-8")
 
         for webhook_url in self.webhooks:
             try:
                 req = Request(
                     webhook_url,
                     data=payload,
-                    headers={'Content-Type': 'application/json'}
+                    headers={"Content-Type": "application/json"},
                 )
 
                 with urlopen(req, timeout=5):
@@ -480,21 +479,26 @@ class ProgressTracker:
         """
         total_tickets = len(self.tickets)
         active_tickets = len(self.get_active_tickets())
-        completed_tickets = len([
-            t for t in self.tickets.values()
-            if t.current_stage == ProgressStage.COMPLETED
-        ])
-        failed_tickets = len([
-            t for t in self.tickets.values()
-            if t.current_stage == ProgressStage.FAILED
-        ])
+        completed_tickets = len(
+            [
+                t
+                for t in self.tickets.values()
+                if t.current_stage == ProgressStage.COMPLETED
+            ]
+        )
+        failed_tickets = len(
+            [
+                t
+                for t in self.tickets.values()
+                if t.current_stage == ProgressStage.FAILED
+            ]
+        )
 
         stage_counts = {}
         for stage in ProgressStage:
-            stage_counts[stage.value] = len([
-                t for t in self.tickets.values()
-                if t.current_stage == stage
-            ])
+            stage_counts[stage.value] = len(
+                [t for t in self.tickets.values() if t.current_stage == stage]
+            )
 
         total_duration = sum(t.duration for t in self.tickets.values())
         avg_duration = total_duration / total_tickets if total_tickets > 0 else 0
@@ -507,7 +511,7 @@ class ProgressTracker:
             "stage_counts": stage_counts,
             "total_duration": total_duration,
             "average_duration": avg_duration,
-            "last_updated": datetime.now().isoformat()
+            "last_updated": datetime.now().isoformat(),
         }
 
     def clear_history(self) -> None:
@@ -528,10 +532,15 @@ class ProgressTracker:
 
         """
         if format == "json":
-            return json.dumps({
-                "summary": self.get_summary(),
-                "tickets": [progress.to_dict() for progress in self.tickets.values()]
-            }, indent=2)
+            return json.dumps(
+                {
+                    "summary": self.get_summary(),
+                    "tickets": [
+                        progress.to_dict() for progress in self.tickets.values()
+                    ],
+                },
+                indent=2,
+            )
         elif format == "csv":
             lines = ["ticket_id,stage,start_time,end_time,duration,progress_percentage"]
             for progress in self.tickets.values():

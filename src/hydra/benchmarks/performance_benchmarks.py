@@ -57,17 +57,20 @@ class PerformanceBenchmark:
         data = []
         for i in range(count):
             chars = string.ascii_letters + string.digits
-            prompt = ''.join(random.choices(chars, k=200))
-            data.append({
-                "prompt": f"Test prompt {i}: {prompt}",
-                "model": "test-model",
-                "max_tokens": random.randint(100, 1000),
-                "temperature": random.random()
-            })
+            prompt = "".join(random.choices(chars, k=200))
+            data.append(
+                {
+                    "prompt": f"Test prompt {i}: {prompt}",
+                    "model": "test-model",
+                    "max_tokens": random.randint(100, 1000),
+                    "temperature": random.random(),
+                }
+            )
         return data
 
     async def benchmark_uvloop(self) -> BenchmarkResult:
         """Benchmark uvloop vs standard asyncio."""
+
         async def async_workload():
             """Simulate async workload."""
             tasks = []
@@ -114,7 +117,7 @@ class PerformanceBenchmark:
                 max_time=max(uvloop_times),
                 std_dev=statistics.stdev(uvloop_times) if len(uvloop_times) > 1 else 0,
                 throughput=1 / uvloop_mean if uvloop_mean > 0 else 0,
-                improvement=improvement
+                improvement=improvement,
             )
         else:
             return BenchmarkResult(
@@ -125,12 +128,10 @@ class PerformanceBenchmark:
                 min_time=min(standard_times),
                 max_time=max(standard_times),
                 std_dev=(
-                    statistics.stdev(standard_times)
-                    if len(standard_times) > 1
-                    else 0
+                    statistics.stdev(standard_times) if len(standard_times) > 1 else 0
                 ),
                 throughput=1 / standard_mean if standard_mean > 0 else 0,
-                improvement=0.0
+                improvement=0.0,
             )
 
     async def benchmark_connection_pooling(self) -> BenchmarkResult:
@@ -146,6 +147,7 @@ class PerformanceBenchmark:
         async def without_pooling():
             """Create new connection each time."""
             import aiohttp
+
             async with aiohttp.ClientSession():
                 # Simulate request
                 await asyncio.sleep(0.001)
@@ -183,7 +185,7 @@ class PerformanceBenchmark:
             max_time=max(pooling_times),
             std_dev=statistics.stdev(pooling_times) if len(pooling_times) > 1 else 0,
             throughput=1 / pooling_mean if pooling_mean > 0 else 0,
-            improvement=improvement
+            improvement=improvement,
         )
 
     async def benchmark_request_batching(self) -> BenchmarkResult:
@@ -245,12 +247,10 @@ class PerformanceBenchmark:
             min_time=min(batching_times),
             max_time=max(batching_times),
             std_dev=(
-                statistics.stdev(batching_times)
-                if len(batching_times) > 1
-                else 0
+                statistics.stdev(batching_times) if len(batching_times) > 1 else 0
             ),
             throughput=10 / batching_mean if batching_mean > 0 else 0,
-            improvement=improvement
+            improvement=improvement,
         )
 
     async def benchmark_response_caching(self) -> BenchmarkResult:
@@ -306,7 +306,7 @@ class PerformanceBenchmark:
             max_time=max(caching_times),
             std_dev=statistics.stdev(caching_times) if len(caching_times) > 1 else 0,
             throughput=len(test_data) / caching_mean if caching_mean > 0 else 0,
-            improvement=improvement
+            improvement=improvement,
         )
 
     async def benchmark_parallel_execution(self) -> BenchmarkResult:
@@ -348,7 +348,7 @@ class PerformanceBenchmark:
             max_time=max(parallel_times),
             std_dev=statistics.stdev(parallel_times) if len(parallel_times) > 1 else 0,
             throughput=len(delays) / parallel_mean if parallel_mean > 0 else 0,
-            improvement=improvement
+            improvement=improvement,
         )
 
     async def run_all_benchmarks(self) -> Dict[str, BenchmarkResult]:
@@ -361,7 +361,7 @@ class PerformanceBenchmark:
             enable_uvloop=True,
             enable_batching=True,
             enable_caching=True,
-            profile_enabled=False
+            profile_enabled=False,
         )
         initialize_performance_optimizations(config)
 
@@ -370,7 +370,7 @@ class PerformanceBenchmark:
             ("Connection Pooling", self.benchmark_connection_pooling),
             ("Request Batching", self.benchmark_request_batching),
             ("Response Caching", self.benchmark_response_caching),
-            ("Parallel Execution", self.benchmark_parallel_execution)
+            ("Parallel Execution", self.benchmark_parallel_execution),
         ]
 
         for name, benchmark_func in benchmarks:
@@ -417,7 +417,7 @@ class PerformanceBenchmark:
             print(f"\nAverage improvement: {avg_improvement:.1f}%")
 
         print("\nOptimization Status:")
-        uvloop_status = 'Enabled' if setup_uvloop() else 'Not available'
+        uvloop_status = "Enabled" if setup_uvloop() else "Not available"
         print(f"  ✓ uvloop event loop: {uvloop_status}")
         print("  ✓ Connection pooling: Enabled")
         print("  ✓ Request batching: Enabled")
@@ -429,7 +429,7 @@ class PerformanceBenchmark:
         export_data = {
             "timestamp": time.time(),
             "iterations": self.iterations,
-            "results": {}
+            "results": {},
         }
 
         for name, result in self.results.items():
@@ -440,10 +440,10 @@ class PerformanceBenchmark:
                 "max_time_ms": result.max_time * 1000,
                 "std_dev_ms": result.std_dev * 1000,
                 "throughput_ops_per_sec": result.throughput,
-                "improvement_percent": result.improvement
+                "improvement_percent": result.improvement,
             }
 
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             json.dump(export_data, f, indent=2)
 
         print(f"\nResults exported to {filename}")

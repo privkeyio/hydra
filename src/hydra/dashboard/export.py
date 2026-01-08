@@ -71,10 +71,18 @@ class DataExporter:
                 "dependencies": ticket.dependencies,
                 "acceptance_criteria": ticket.acceptance_criteria,
                 "artifacts": ticket.artifacts,
-                "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
-                "updated_at": ticket.updated_at.isoformat() if ticket.updated_at else None,
-                "started_at": ticket.started_at.isoformat() if ticket.started_at else None,
-                "completed_at": ticket.completed_at.isoformat() if ticket.completed_at else None,
+                "created_at": (
+                    ticket.created_at.isoformat() if ticket.created_at else None
+                ),
+                "updated_at": (
+                    ticket.updated_at.isoformat() if ticket.updated_at else None
+                ),
+                "started_at": (
+                    ticket.started_at.isoformat() if ticket.started_at else None
+                ),
+                "completed_at": (
+                    ticket.completed_at.isoformat() if ticket.completed_at else None
+                ),
                 "metadata": ticket.ticket_metadata,
             }
             data.append(ticket_dict)
@@ -107,32 +115,51 @@ class DataExporter:
         writer = csv.writer(output)
 
         # Write header
-        writer.writerow([
-            "ID", "Project ID", "Ticket Number", "Title", "Description",
-            "Status", "Priority", "Complexity", "Model", "Dependencies",
-            "Acceptance Criteria", "Created At", "Updated At", "Started At",
-            "Completed At"
-        ])
+        writer.writerow(
+            [
+                "ID",
+                "Project ID",
+                "Ticket Number",
+                "Title",
+                "Description",
+                "Status",
+                "Priority",
+                "Complexity",
+                "Model",
+                "Dependencies",
+                "Acceptance Criteria",
+                "Created At",
+                "Updated At",
+                "Started At",
+                "Completed At",
+            ]
+        )
 
         # Write data
         for ticket in tickets:
-            writer.writerow([
-                ticket.id,
-                ticket.project_id,
-                ticket.ticket_number,
-                ticket.title,
-                ticket.description or "",
-                ticket.status,
-                ticket.priority,
-                ticket.complexity or "",
-                ticket.model or "",
-                json.dumps(ticket.dependencies) if ticket.dependencies else "[]",
-                json.dumps(ticket.acceptance_criteria) if ticket.acceptance_criteria else "[]",
-                ticket.created_at.isoformat() if ticket.created_at else "",
-                ticket.updated_at.isoformat() if ticket.updated_at else "",
-                ticket.started_at.isoformat() if ticket.started_at else "",
-                ticket.completed_at.isoformat() if ticket.completed_at else "",
-            ])
+            writer.writerow(
+                [
+                    ticket.id,
+                    ticket.project_id,
+                    ticket.ticket_number,
+                    ticket.title,
+                    ticket.description or "",
+                    ticket.status,
+                    ticket.priority,
+                    ticket.complexity or "",
+                    ticket.model or "",
+                    json.dumps(ticket.dependencies) if ticket.dependencies else "[]",
+                    (
+                        json.dumps(ticket.acceptance_criteria)
+                        if ticket.acceptance_criteria
+                        else "[]"
+                    ),
+                    ticket.created_at.isoformat() if ticket.created_at else "",
+                    ticket.updated_at.isoformat() if ticket.updated_at else "",
+                    ticket.started_at.isoformat() if ticket.started_at else "",
+                    ticket.completed_at.isoformat() if ticket.completed_at else "",
+                ]
+            )
 
         return output.getvalue()
 
@@ -196,7 +223,9 @@ class DataExporter:
             if ticket.artifacts:
                 output.append("\n\n**Artifacts:**")
                 for artifact in ticket.artifacts:
-                    output.append(f"\n- {artifact.get('name', 'Unknown')}: {artifact.get('path', '')}")
+                    output.append(
+                        f"\n- {artifact.get('name', 'Unknown')}: {artifact.get('path', '')}"
+                    )
 
             output.append("\n\n---\n")
 
@@ -231,8 +260,14 @@ class DataExporter:
                 "ticket_id": execution.ticket_id,
                 "session_id": execution.session_id,
                 "status": execution.status,
-                "started_at": execution.started_at.isoformat() if execution.started_at else None,
-                "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
+                "started_at": (
+                    execution.started_at.isoformat() if execution.started_at else None
+                ),
+                "completed_at": (
+                    execution.completed_at.isoformat()
+                    if execution.completed_at
+                    else None
+                ),
                 "duration_seconds": execution.duration_seconds,
                 "tokens_used": execution.tokens_used,
                 "cost_estimate": execution.cost_estimate,
@@ -263,15 +298,21 @@ class DataExporter:
         for ticket in tickets:
             # Status
             status = ticket.status
-            ticket_stats["by_status"][status] = ticket_stats["by_status"].get(status, 0) + 1
+            ticket_stats["by_status"][status] = (
+                ticket_stats["by_status"].get(status, 0) + 1
+            )
 
             # Priority
             priority = f"P{ticket.priority}"
-            ticket_stats["by_priority"][priority] = ticket_stats["by_priority"].get(priority, 0) + 1
+            ticket_stats["by_priority"][priority] = (
+                ticket_stats["by_priority"].get(priority, 0) + 1
+            )
 
             # Model
             if ticket.model:
-                ticket_stats["by_model"][ticket.model] = ticket_stats["by_model"].get(ticket.model, 0) + 1
+                ticket_stats["by_model"][ticket.model] = (
+                    ticket_stats["by_model"].get(ticket.model, 0) + 1
+                )
 
         # Get execution statistics
         executions = (
@@ -308,8 +349,12 @@ class DataExporter:
                 "name": project.name,
                 "description": project.description,
                 "repository_url": project.repository_url,
-                "created_at": project.created_at.isoformat() if project.created_at else None,
-                "updated_at": project.updated_at.isoformat() if project.updated_at else None,
+                "created_at": (
+                    project.created_at.isoformat() if project.created_at else None
+                ),
+                "updated_at": (
+                    project.updated_at.isoformat() if project.updated_at else None
+                ),
                 "is_active": project.is_active,
             },
             "tickets": ticket_stats,
@@ -425,9 +470,9 @@ def export_project_summary(
 
     if not summary:
         from fastapi import HTTPException, status
+
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
 
     data = orjson.dumps(summary, option=orjson.OPT_INDENT_2)

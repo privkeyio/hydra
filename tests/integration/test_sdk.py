@@ -1,4 +1,3 @@
-import pytest
 from hydra.agents.base import CodeAgent
 
 

@@ -73,19 +73,16 @@ class RateLimiter:
         r"^git\s+push\s+.*--force": CommandCategory.CRITICAL,
         r"^(format|fdisk|dd|shred)(\s|$)": CommandCategory.CRITICAL,
         r"^sudo\s+": CommandCategory.CRITICAL,
-
         # Destructive commands
         r"^(rm|rmdir|del)(\s|$)": CommandCategory.DESTRUCTIVE,
         r"^git\s+(reset|clean)": CommandCategory.DESTRUCTIVE,
         r"^truncate\s+": CommandCategory.DESTRUCTIVE,
         r">\s*[^>]": CommandCategory.DESTRUCTIVE,  # File truncation with >
-
         # Moderate commands
         r"^(cp|mv|mkdir|touch|chmod)(\s|$)": CommandCategory.MODERATE,
         r"^git\s+(add|commit|pull|fetch)": CommandCategory.MODERATE,
         r"^npm\s+(install|update)": CommandCategory.MODERATE,
         r"^pip\s+(install|upgrade)": CommandCategory.MODERATE,
-
         # Safe commands
         r"^(ls|pwd|echo|cat|grep|find|which|date|whoami)(\s|$)": CommandCategory.SAFE,
         r"^git\s+(status|log|diff|branch|show)": CommandCategory.SAFE,
@@ -111,13 +108,16 @@ class RateLimiter:
         self._lock = Lock()
 
         # Track operations per key (command or operation identifier)
-        self._operation_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
+        self._operation_history: Dict[str, deque] = defaultdict(
+            lambda: deque(maxlen=1000)
+        )
         self._cooldown_until: Dict[str, datetime] = {}
         self._burst_counters: Dict[str, int] = defaultdict(int)
         self._burst_reset_times: Dict[str, datetime] = {}
 
         # Compile command patterns
         import re
+
         self._compiled_patterns = [
             (re.compile(pattern, re.IGNORECASE), category)
             for pattern, category in self.COMMAND_CATEGORIES.items()
@@ -179,7 +179,9 @@ class RateLimiter:
                     remaining = (cooldown_end - current_time).total_seconds()
                     reason = f"Rate limit cooldown in effect. Retry after {remaining:.1f} seconds"
                     if self.enable_logging:
-                        logger.warning(f"Rate limit cooldown for {identifier}: {reason}")
+                        logger.warning(
+                            f"Rate limit cooldown for {identifier}: {reason}"
+                        )
                     return False, reason, remaining
                 else:
                     # Cooldown expired
@@ -301,7 +303,9 @@ class RateLimiter:
                 "category": category.value,
                 "operations_used": recent_operations,
                 "operations_limit": config.max_operations,
-                "operations_remaining": max(0, config.max_operations - recent_operations),
+                "operations_remaining": max(
+                    0, config.max_operations - recent_operations
+                ),
                 "burst_used": burst_count,
                 "burst_limit": config.burst_limit,
                 "burst_remaining": max(0, config.burst_limit - burst_count),
@@ -319,9 +323,7 @@ class RateLimiter:
         with self._lock:
             total_operations = sum(len(h) for h in self._operation_history.values())
             active_cooldowns = sum(
-                1
-                for cd in self._cooldown_until.values()
-                if cd > datetime.now()
+                1 for cd in self._cooldown_until.values() if cd > datetime.now()
             )
 
             return {
@@ -339,9 +341,7 @@ class RateLimiter:
                 },
             }
 
-    def apply_adaptive_limits(
-        self, identifier: str, success_rate: float
-    ) -> None:
+    def apply_adaptive_limits(self, identifier: str, success_rate: float) -> None:
         """Apply adaptive rate limits based on operation success rate.
 
         Args:
@@ -356,7 +356,9 @@ class RateLimiter:
                     f"Applying stricter limits for {identifier} due to low success rate: {success_rate:.2%}"
                 )
                 # Add to cooldown for 60 seconds
-                self._cooldown_until[identifier] = datetime.now() + timedelta(seconds=60)
+                self._cooldown_until[identifier] = datetime.now() + timedelta(
+                    seconds=60
+                )
             elif success_rate > 0.95 and identifier in self._cooldown_until:
                 # High success rate - consider removing cooldown
                 logger.info(

@@ -34,16 +34,18 @@ class FallbackProvider(BaseProvider):
         """
         # Initialize attributes before calling super().__init__
         # Get fallback providers from config
-        if hasattr(config, 'extra_params'):
-            self.provider_names = config.extra_params.get('fallback_providers', [])
+        if hasattr(config, "extra_params"):
+            self.provider_names = config.extra_params.get("fallback_providers", [])
         elif isinstance(config, dict):
             # Support both 'fallback_providers' and 'fallbacks' keys
-            self.provider_names = config.get('fallback_providers', config.get('fallbacks', []))
+            self.provider_names = config.get(
+                "fallback_providers", config.get("fallbacks", [])
+            )
         else:
             self.provider_names = []
         if not self.provider_names:
             # Default fallback order
-            self.provider_names = ['claude_tmux', 'venice', 'mock']
+            self.provider_names = ["claude_tmux", "venice", "mock"]
 
         # Initialize providers lazily
         self._providers: Dict[str, LLMProvider] = {}
@@ -96,7 +98,7 @@ class FallbackProvider(BaseProvider):
 
             # Check provider health
             health = self._error_handler.get_provider_health(provider_name)
-            if health['status'] == 'unhealthy':
+            if health["status"] == "unhealthy":
                 logger.warning(f"Provider {provider_name} is unhealthy, skipping")
                 self._current_provider_index += 1
                 continue
@@ -123,24 +125,24 @@ class FallbackProvider(BaseProvider):
             if isinstance(self.config, dict):
                 provider_config = LLMConfig(
                     provider_type=provider_name,
-                    model=self.config.get('model', 'claude-3-5-sonnet-20241022'),
-                    temperature=self.config.get('temperature', 0.2),
-                    max_tokens=self.config.get('max_tokens', 2048),
-                    timeout=self.config.get('timeout', 30),
-                    api_key=self.config.get('api_key'),
-                    base_url=self.config.get('base_url'),
-                    extra_params=self.config.get('extra_params', {})
+                    model=self.config.get("model", "claude-3-5-sonnet-20241022"),
+                    temperature=self.config.get("temperature", 0.2),
+                    max_tokens=self.config.get("max_tokens", 2048),
+                    timeout=self.config.get("timeout", 30),
+                    api_key=self.config.get("api_key"),
+                    base_url=self.config.get("base_url"),
+                    extra_params=self.config.get("extra_params", {}),
                 )
             else:
                 provider_config = LLMConfig(
                     provider_type=provider_name,
-                    model=self.config.model or 'claude-3-5-sonnet-20241022',
+                    model=self.config.model or "claude-3-5-sonnet-20241022",
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
                     timeout=self.config.timeout,
                     api_key=self.config.api_key,
                     base_url=self.config.base_url,
-                    extra_params=self.config.extra_params
+                    extra_params=self.config.extra_params,
                 )
 
             # Create provider instance
@@ -148,7 +150,7 @@ class FallbackProvider(BaseProvider):
             self._providers[provider_name] = provider
 
             # Validate provider is working
-            if hasattr(provider, 'validate_config'):
+            if hasattr(provider, "validate_config"):
                 provider.validate_config()
 
             logger.info(f"Successfully initialized {provider_name}")
@@ -156,9 +158,7 @@ class FallbackProvider(BaseProvider):
 
         except Exception as e:
             error = self._error_handler.handle_error(
-                provider=provider_name,
-                error=e,
-                context={'initialization': True}
+                provider=provider_name, error=e, context={"initialization": True}
             )
             logger.error(f"Failed to initialize {provider_name}: {error}")
             return False
@@ -170,7 +170,11 @@ class FallbackProvider(BaseProvider):
             True if fallback successful
 
         """
-        current_name = self.provider_names[self._current_provider_index] if self._current_provider_index < len(self.provider_names) else 'none'
+        current_name = (
+            self.provider_names[self._current_provider_index]
+            if self._current_provider_index < len(self.provider_names)
+            else "none"
+        )
         logger.warning(f"Falling back from {current_name}")
 
         self._current_provider_index += 1
@@ -210,8 +214,8 @@ class FallbackProvider(BaseProvider):
                 result = method(*args, **kwargs)
 
                 # Success - reset health if needed
-                if self._provider_health.get(provider_name) != 'healthy':
-                    self._provider_health[provider_name] = 'healthy'
+                if self._provider_health.get(provider_name) != "healthy":
+                    self._provider_health[provider_name] = "healthy"
                     logger.info(f"Provider {provider_name} recovered")
 
                 return result
@@ -219,15 +223,13 @@ class FallbackProvider(BaseProvider):
             except Exception as e:
                 # Handle error
                 error = self._error_handler.handle_error(
-                    provider=provider_name,
-                    error=e,
-                    context={'method': method_name}
+                    provider=provider_name, error=e, context={"method": method_name}
                 )
                 last_error = error
 
                 # Check if error is severe enough for fallback
                 if error.severity in [ErrorSeverity.CRITICAL, ErrorSeverity.HIGH]:
-                    self._provider_health[provider_name] = 'unhealthy'
+                    self._provider_health[provider_name] = "unhealthy"
 
                     if not self._fallback_to_next():
                         break
@@ -243,15 +245,16 @@ class FallbackProvider(BaseProvider):
 
                 else:
                     # Other errors: try fallback to next provider
-                    logger.info(f"Provider {provider_name} failed, trying next provider")
+                    logger.info(
+                        f"Provider {provider_name} failed, trying next provider"
+                    )
                     if not self._fallback_to_next():
                         break
 
         # All providers failed
         if last_error:
             raise Exception(
-                f"All providers failed for {method_name}. "
-                f"Last error: {last_error}"
+                f"All providers failed for {method_name}. " f"Last error: {last_error}"
             )
         else:
             raise Exception(f"No providers available for {method_name}")
@@ -261,33 +264,35 @@ class FallbackProvider(BaseProvider):
     def validate_config(self):
         """Validate configuration of current provider."""
         # During initialization, we might not have providers yet
-        if hasattr(self, '_providers'):
-            self._execute_with_fallback('validate_config')
+        if hasattr(self, "_providers"):
+            self._execute_with_fallback("validate_config")
         # If we're still initializing, validation will happen when provider is created
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate response with fallback."""
-        return self._execute_with_fallback('generate', prompt, **kwargs)
+        return self._execute_with_fallback("generate", prompt, **kwargs)
 
-    def generate_json(self, prompt: str, schema: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
+    def generate_json(
+        self, prompt: str, schema: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> Dict[str, Any]:
         """Generate JSON response with fallback."""
-        return self._execute_with_fallback('generate_json', prompt, schema, **kwargs)
+        return self._execute_with_fallback("generate_json", prompt, schema, **kwargs)
 
     def generate_code(self, prompt: str, context: Dict[str, Any], **kwargs) -> str:
         """Generate code with fallback."""
-        return self._execute_with_fallback('generate_code', prompt, context, **kwargs)
+        return self._execute_with_fallback("generate_code", prompt, context, **kwargs)
 
     def generate_streaming(self, prompt: str, **kwargs) -> Iterator[str]:
         """Generate streaming response with fallback."""
-        return self._execute_with_fallback('generate_streaming', prompt, **kwargs)
+        return self._execute_with_fallback("generate_streaming", prompt, **kwargs)
 
     def create_session(self, session_id: str, **kwargs) -> Session:
         """Create session with fallback."""
-        return self._execute_with_fallback('create_session', session_id, **kwargs)
+        return self._execute_with_fallback("create_session", session_id, **kwargs)
 
     def attach_session(self, session_id: str) -> Session:
         """Attach to session with fallback."""
-        return self._execute_with_fallback('attach_session', session_id)
+        return self._execute_with_fallback("attach_session", session_id)
 
     def list_sessions(self) -> List[Session]:
         """List sessions from current provider."""
@@ -310,7 +315,7 @@ class FallbackProvider(BaseProvider):
                     models = self._providers[provider_name].list_models()
                     # Tag models with provider
                     for model in models:
-                        model.metadata['provider'] = provider_name
+                        model.metadata["provider"] = provider_name
                     all_models.extend(models)
                 except Exception:
                     pass
@@ -318,7 +323,7 @@ class FallbackProvider(BaseProvider):
 
     def select_model(self, model_identifier: str) -> bool:
         """Select model on current provider."""
-        return self._execute_with_fallback('select_model', model_identifier)
+        return self._execute_with_fallback("select_model", model_identifier)
 
     def get_model_mapping(self) -> Dict[str, str]:
         """Get model mappings from all providers."""
@@ -326,7 +331,9 @@ class FallbackProvider(BaseProvider):
         for provider_name in self.provider_names:
             if provider_name in self._providers:
                 try:
-                    provider_mappings = self._providers[provider_name].get_model_mapping()
+                    provider_mappings = self._providers[
+                        provider_name
+                    ].get_model_mapping()
                     # Prefix with provider name to avoid conflicts
                     for key, value in provider_mappings.items():
                         mappings[f"{provider_name}:{key}"] = value
@@ -339,11 +346,11 @@ class FallbackProvider(BaseProvider):
 
     def parse_response(self, response: str) -> ParsedResponse:
         """Parse response using current provider."""
-        return self._execute_with_fallback('parse_response', response)
+        return self._execute_with_fallback("parse_response", response)
 
     def extract_code_blocks(self, response: str) -> List[CodeBlock]:
         """Extract code blocks using current provider."""
-        return self._execute_with_fallback('extract_code_blocks', response)
+        return self._execute_with_fallback("extract_code_blocks", response)
 
     def supports_interactive(self) -> bool:
         """Check if any provider supports interactive mode."""
@@ -358,7 +365,7 @@ class FallbackProvider(BaseProvider):
 
     def wait_for_prompt(self, timeout: int = 30) -> bool:
         """Wait for prompt with fallback."""
-        return self._execute_with_fallback('wait_for_prompt', timeout)
+        return self._execute_with_fallback("wait_for_prompt", timeout)
 
     def intercept_file_operation(self, operation: FileOperation) -> bool:
         """Intercept file operation with current provider."""
@@ -374,17 +381,21 @@ class FallbackProvider(BaseProvider):
 
         """
         status = {
-            'current_provider': self.provider_names[self._current_provider_index] if self._current_provider_index < len(self.provider_names) else None,
-            'providers': {}
+            "current_provider": (
+                self.provider_names[self._current_provider_index]
+                if self._current_provider_index < len(self.provider_names)
+                else None
+            ),
+            "providers": {},
         }
 
         for i, provider_name in enumerate(self.provider_names):
             health = self._error_handler.get_provider_health(provider_name)
-            status['providers'][provider_name] = {
-                'initialized': provider_name in self._providers,
-                'health': health['status'],
-                'error_count': health['error_count'],
-                'is_current': i == self._current_provider_index
+            status["providers"][provider_name] = {
+                "initialized": provider_name in self._providers,
+                "health": health["status"],
+                "error_count": health["error_count"],
+                "is_current": i == self._current_provider_index,
             }
 
         return status

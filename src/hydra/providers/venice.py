@@ -21,7 +21,12 @@ from hydra.action_executor import (
     FileOperationsExecutor,
     ResponseParser,
 )
-from hydra.prompts import get_system_prompt, optimize_prompt
+from hydra.prompts.injection import (
+    InjectionContext,
+    InjectorRegistry,
+    initialize_default_injectors,
+)
+from hydra.prompts.system_prompts import get_system_prompt
 from hydra.providers.base import LLMConfig
 from hydra.providers.base_provider import (
     BaseProvider,
@@ -32,6 +37,8 @@ from hydra.providers.base_provider import (
     Session,
     SessionState,
 )
+from hydra.providers.error_handler import ErrorCategory, get_error_handler
+from hydra.providers.retry_utils import CircuitBreaker, with_retry
 from hydra.providers.session_manager import get_session_manager
 from hydra.token_tracker import get_token_tracker
 
@@ -160,6 +167,10 @@ class VeniceProvider(BaseProvider):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
 
+        # Initialize error handling
+        self.error_handler = get_error_handler()
+        self.circuit_breaker = CircuitBreaker("venice", failure_threshold=5, recovery_timeout=30.0)
+
         # Get session manager for connection pooling
         self.session_manager = get_session_manager()
 
@@ -169,44 +180,60 @@ class VeniceProvider(BaseProvider):
         self.session_id: Optional[int] = None
 
         # Configure retry settings with exponential backoff
-        self.max_retries = config.extra_params.get('max_retries', 3)
-        self.base_delay = config.extra_params.get('base_delay', 1.0)
-        self.max_delay = config.extra_params.get('max_delay', 60.0)
-        self.backoff_factor = config.extra_params.get('backoff_factor', 2.0)
+        self.max_retries = config.extra_params.get("max_retries", 3)
+        self.base_delay = config.extra_params.get("base_delay", 1.0)
+        self.max_delay = config.extra_params.get("max_delay", 60.0)
+        self.backoff_factor = config.extra_params.get("backoff_factor", 2.0)
 
         # Request/response logging settings
-        self.log_requests = config.extra_params.get('log_requests', True)
-        self.log_responses = config.extra_params.get('log_responses', False)
-        self.log_dir = Path(config.extra_params.get('log_dir', '.hydra/logs'))
+        self.log_requests = config.extra_params.get("log_requests", True)
+        self.log_responses = config.extra_params.get("log_responses", False)
+        self.log_dir = Path(config.extra_params.get("log_dir", ".hydra/logs"))
         if self.log_requests or self.log_responses:
-            self.log_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.log_dir.mkdir(parents=True, exist_ok=True)
+            except (PermissionError, OSError) as e:
+                # Fall back to /tmp if .hydra directory creation fails (e.g., in CI)
+                logger.warning(f"Failed to create {self.log_dir}: {e}, falling back to /tmp/hydra_logs")
+                self.log_dir = Path("/tmp/hydra_logs")
+                self.log_dir.mkdir(parents=True, exist_ok=True)
+                # Disable logging if even /tmp fails
+                if not self.log_dir.exists():
+                    logger.warning("Failed to create any log directory, disabling logging")
+                    self.log_requests = False
+                    self.log_responses = False
 
         # Timeout settings
-        self.request_timeout = config.extra_params.get('request_timeout', 120)
-        self.stream_timeout = config.extra_params.get('stream_timeout', 300)
+        self.request_timeout = config.extra_params.get("request_timeout", 120)
+        self.stream_timeout = config.extra_params.get("stream_timeout", 300)
 
         # OpenAI clients with timeout configuration
         self.client = OpenAI(
             api_key=self.config.api_key,
             base_url=self.config.base_url,
             timeout=self.request_timeout,
-            max_retries=0  # We handle retries ourselves
+            max_retries=0,  # We handle retries ourselves
         )
         self.async_client = AsyncOpenAI(
             api_key=self.config.api_key,
             base_url=self.config.base_url,
             timeout=self.request_timeout,
-            max_retries=0  # We handle retries ourselves
+            max_retries=0,  # We handle retries ourselves
         )
 
         # Statistics tracking
         self.stats = {
-            'total_requests': 0,
-            'successful_requests': 0,
-            'failed_requests': 0,
-            'retries': 0,
-            'total_tokens': 0
+            "total_requests": 0,
+            "successful_requests": 0,
+            "failed_requests": 0,
+            "retries": 0,
+            "total_tokens": 0,
         }
+
+        # Initialize prompt injection system
+        self._injector_registry = InjectorRegistry()
+        if not self._injector_registry.injectors:
+            initialize_default_injectors()
 
         logger.info(f"Venice provider initialized with model: {self.config.model}")
 
@@ -223,9 +250,14 @@ class VeniceProvider(BaseProvider):
     def name(self) -> str:
         return "venice"
 
+    @with_retry(max_retries=3, retry_on=[ErrorCategory.NETWORK, ErrorCategory.API_LIMIT, ErrorCategory.TIMEOUT])
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response from Venice AI with retry logic and error handling."""
-        self.stats['total_requests'] += 1
+        return self.circuit_breaker.call(self._generate_impl, prompt, **kwargs)
+
+    def _generate_impl(self, prompt: str, **kwargs) -> str:
+        """Internal implementation of generate with proper error handling."""
+        self.stats["total_requests"] += 1
 
         # Check budget before making request
         estimated_tokens = self.token_tracker.count_tokens(prompt, "venice") + 1000
@@ -236,16 +268,24 @@ class VeniceProvider(BaseProvider):
             raise ValueError(f"Token budget exceeded: {message}")
 
         # Merge kwargs with config
-        temperature = kwargs.get('temperature', self.config.temperature)
-        max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+        temperature = kwargs.get("temperature", self.config.temperature)
+        max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
 
-        # Add concise system message
+        # Use injection system to prepare prompt
+        injection_context = InjectionContext(
+            operation="code_execution",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"temperature": temperature, "max_tokens": max_tokens}
+        )
+
+        injected_prompt = self._inject_prompts(injection_context)
+
+        # Add system message and user prompt
         messages = [
-            {
-                "role": "system",
-                "content": get_system_prompt("code")
-            },
-            {"role": "user", "content": optimize_prompt(prompt, "code_gen")}
+            {"role": "system", "content": get_system_prompt("code")},
+            {"role": "user", "content": injected_prompt},
         ]
 
         # Log request if enabled
@@ -254,11 +294,24 @@ class VeniceProvider(BaseProvider):
 
         # Filter out conflicting parameters from extra_params
         filtered_extra_params = {
-            k: v for k, v in self.config.extra_params.items()
-            if k not in ['temperature', 'max_tokens', 'model', 'messages',
-                         'max_retries', 'base_delay', 'max_delay', 'backoff_factor',
-                         'log_requests', 'log_responses', 'log_dir',
-                         'request_timeout', 'stream_timeout']
+            k: v
+            for k, v in self.config.extra_params.items()
+            if k
+            not in [
+                "temperature",
+                "max_tokens",
+                "model",
+                "messages",
+                "max_retries",
+                "base_delay",
+                "max_delay",
+                "backoff_factor",
+                "log_requests",
+                "log_responses",
+                "log_dir",
+                "request_timeout",
+                "stream_timeout",
+            ]
         }
 
         # Execute with retry logic
@@ -268,16 +321,18 @@ class VeniceProvider(BaseProvider):
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **filtered_extra_params
+                **filtered_extra_params,
             ),
-            operation_name="generate"
+            operation_name="generate",
         )
 
         # Extract content from response
-        if hasattr(response_content, 'choices'):
+        if hasattr(response_content, "choices"):
             content = response_content.choices[0].message.content
             # Get usage data if available
-            usage_data = response_content.usage if hasattr(response_content, 'usage') else None
+            usage_data = (
+                response_content.usage if hasattr(response_content, "usage") else None
+            )
         else:
             content = response_content
             usage_data = None
@@ -304,15 +359,15 @@ class VeniceProvider(BaseProvider):
                 "temperature": temperature,
                 "max_tokens": max_tokens,
                 "actual_input_tokens": input_tokens if usage_data else None,
-                "actual_output_tokens": output_tokens if usage_data else None
-            }
+                "actual_output_tokens": output_tokens if usage_data else None,
+            },
         )
 
         # Log response if enabled
         if self.log_responses:
             self._log_response(content)
 
-        self.stats['successful_requests'] += 1
+        self.stats["successful_requests"] += 1
         return content
 
     def _execute_with_retry(self, operation, operation_name: str = "operation"):
@@ -338,15 +393,22 @@ class VeniceProvider(BaseProvider):
                     logger.info(
                         f"Retry {attempt}/{self.max_retries} for {operation_name}"
                     )
-                    self.stats['retries'] += 1
+                    self.stats["retries"] += 1
 
                 return operation()
 
             except RateLimitError as e:
                 last_exception = e
+                # Log error with context
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": operation_name, "attempt": attempt + 1}
+                )
+
                 if attempt < self.max_retries:
                     # Use retry-after header if available
-                    retry_after = getattr(e, 'retry_after', None)
+                    retry_after = getattr(e, "retry_after", None)
                     if retry_after:
                         wait_time = min(float(retry_after), self.max_delay)
                     else:
@@ -360,6 +422,13 @@ class VeniceProvider(BaseProvider):
 
             except (APIConnectionError, OpenAITimeout) as e:
                 last_exception = e
+                # Log error with context
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": operation_name, "attempt": attempt + 1}
+                )
+
                 if attempt < self.max_retries:
                     wait_time = min(delay, self.max_delay)
                     logger.warning(
@@ -371,8 +440,15 @@ class VeniceProvider(BaseProvider):
 
             except APIError as e:
                 last_exception = e
+                # Log error with context
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": operation_name, "attempt": attempt + 1, "status_code": getattr(e, "status_code", None)}
+                )
+
                 # Check if it's a retryable error (5xx status codes)
-                if hasattr(e, 'status_code') and e.status_code >= 500:
+                if hasattr(e, "status_code") and e.status_code >= 500:
                     if attempt < self.max_retries:
                         wait_time = min(delay, self.max_delay)
                         logger.warning(
@@ -385,68 +461,105 @@ class VeniceProvider(BaseProvider):
 
                 # Non-retryable API error
                 logger.error(f"Non-retryable API error for {operation_name}: {e}")
-                self.stats['failed_requests'] += 1
+                self.stats["failed_requests"] += 1
                 raise
 
             except Exception as e:
+                # Log unexpected error
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": operation_name, "attempt": attempt + 1, "unexpected": True}
+                )
                 # Unexpected error, don't retry
                 logger.error(f"Unexpected error for {operation_name}: {e}")
-                self.stats['failed_requests'] += 1
+                self.stats["failed_requests"] += 1
                 raise
 
         # All retries exhausted
-        self.stats['failed_requests'] += 1
+        self.stats["failed_requests"] += 1
         error_msg = f"All retries exhausted for {operation_name}: {last_exception}"
         logger.error(error_msg)
         raise Exception(error_msg) from last_exception
 
     def _log_request(self, messages: List[Dict], temperature: float, max_tokens: int):
         """Log request details for debugging and monitoring."""
+        if not self.log_requests:
+            return
+            
         try:
+            # Ensure log directory exists
+            if not self.log_dir.exists():
+                try:
+                    self.log_dir.mkdir(parents=True, exist_ok=True)
+                except (PermissionError, OSError):
+                    # Silently disable logging if directory creation fails
+                    self.log_requests = False
+                    return
+                    
             timestamp = datetime.now().isoformat()
             log_entry = {
-                'timestamp': timestamp,
-                'model': self.config.model,
-                'messages': messages,
-                'temperature': temperature,
-                'max_tokens': max_tokens
+                "timestamp": timestamp,
+                "model": self.config.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
             }
 
             log_file = (
                 self.log_dir / f"requests_{datetime.now().strftime('%Y%m%d')}.jsonl"
             )
-            with open(log_file, 'a') as f:
-                f.write(json.dumps(log_entry) + '\n')
+            with open(log_file, "a") as f:
+                f.write(json.dumps(log_entry) + "\n")
 
         except Exception as e:
             logger.debug(f"Failed to log request: {e}")
 
     def _log_response(self, content: str):
         """Log response details for debugging and monitoring."""
+        if not self.log_responses:
+            return
+            
         try:
+            # Ensure log directory exists
+            if not self.log_dir.exists():
+                try:
+                    self.log_dir.mkdir(parents=True, exist_ok=True)
+                except (PermissionError, OSError):
+                    # Silently disable logging if directory creation fails
+                    self.log_responses = False
+                    return
+                    
             timestamp = datetime.now().isoformat()
             log_entry = {
-                'timestamp': timestamp,
-                'model': self.config.model,
-                'content': content[:1000] if content else None,  # Truncate
-                'content_length': len(content) if content else 0
+                "timestamp": timestamp,
+                "model": self.config.model,
+                "content": content[:1000] if content else None,  # Truncate
+                "content_length": len(content) if content else 0,
             }
 
             log_file = (
                 self.log_dir / f"responses_{datetime.now().strftime('%Y%m%d')}.jsonl"
             )
-            with open(log_file, 'a') as f:
-                f.write(json.dumps(log_entry) + '\n')
+            with open(log_file, "a") as f:
+                f.write(json.dumps(log_entry) + "\n")
 
         except Exception as e:
             logger.debug(f"Failed to log response: {e}")
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a JSON response from Venice AI."""
-        # Add JSON instruction to prompt
-        json_prompt = optimize_prompt(f"{prompt}\nJSON only.", "json_gen")
+        # Use injection system for JSON generation
+        injection_context = InjectionContext(
+            operation="json_generation",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"format": "json"}
+        )
 
-        response = self.generate(json_prompt, **kwargs)
+        injected_prompt = self._inject_prompts(injection_context)
+        response = self.generate(injected_prompt, **kwargs)
 
         # Try to extract JSON from response
         try:
@@ -463,7 +576,8 @@ class VeniceProvider(BaseProvider):
         except orjson.JSONDecodeError as e:
             # Fallback: try to find JSON in the response
             import re
-            json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+
+            json_match = re.search(r"\{[^{}]*\}", response, re.DOTALL)
             if json_match:
                 try:
                     return orjson.loads(json_match.group())
@@ -474,9 +588,7 @@ class VeniceProvider(BaseProvider):
                 f"Failed to parse JSON response: {e}\nResponse: {response}"
             ) from e
 
-    def generate_code(
-        self, prompt: str, context: Dict[str, Any], **kwargs
-    ) -> str:
+    def generate_code(self, prompt: str, context: Dict[str, Any], **kwargs) -> str:
         """Generate code using Venice's coding-optimized models.
 
         Args:
@@ -504,9 +616,7 @@ class VeniceProvider(BaseProvider):
         # If no code blocks found, assume entire response is code
         return response.strip()
 
-    def generate_streaming(
-        self, prompt: str, **kwargs
-    ) -> Iterator[str]:
+    def generate_streaming(self, prompt: str, **kwargs) -> Iterator[str]:
         """Generate streaming response from Venice with proper error handling.
 
         Args:
@@ -517,7 +627,7 @@ class VeniceProvider(BaseProvider):
             Chunks of generated text
 
         """
-        self.stats['total_requests'] += 1
+        self.stats["total_requests"] += 1
         messages = self._prepare_messages(prompt, **kwargs)
 
         # Log request if enabled
@@ -525,7 +635,7 @@ class VeniceProvider(BaseProvider):
             self._log_request(
                 messages,
                 kwargs.get("temperature", self.config.temperature),
-                kwargs.get("max_tokens", self.config.max_tokens)
+                kwargs.get("max_tokens", self.config.max_tokens),
             )
 
         # Create stream with timeout
@@ -544,7 +654,7 @@ class VeniceProvider(BaseProvider):
                     temperature=kwargs.get("temperature", self.config.temperature),
                     stream=True,
                 ),
-                operation_name="streaming_generate"
+                operation_name="streaming_generate",
             )
 
             for chunk in stream:
@@ -555,22 +665,20 @@ class VeniceProvider(BaseProvider):
 
             # Log complete response if enabled
             if self.log_responses and buffer:
-                self._log_response(''.join(buffer))
+                self._log_response("".join(buffer))
 
-            self.stats['successful_requests'] += 1
+            self.stats["successful_requests"] += 1
 
         except Exception as e:
-            self.stats['failed_requests'] += 1
+            self.stats["failed_requests"] += 1
             logger.error(f"Venice streaming error: {e}")
             raise
         finally:
             # Restore original timeout
-            if hasattr(self, 'client'):
+            if hasattr(self, "client"):
                 self.client.timeout = self.request_timeout
 
-    def _prepare_messages(
-        self, prompt: str, **kwargs
-    ) -> List[Dict[str, str]]:
+    def _prepare_messages(self, prompt: str, **kwargs) -> List[Dict[str, str]]:
         """Prepare messages for Venice API.
 
         Args:
@@ -586,20 +694,14 @@ class VeniceProvider(BaseProvider):
         # Add system message for code generation
         system_prompt = kwargs.get("system_prompt", self._get_default_system_prompt())
         if system_prompt:
-            messages.append({
-                "role": "system",
-                "content": system_prompt
-            })
+            messages.append({"role": "system", "content": system_prompt})
 
         # Add conversation history if provided
         history = kwargs.get("history", [])
         messages.extend(history)
 
         # Add current prompt
-        messages.append({
-            "role": "user",
-            "content": prompt
-        })
+        messages.append({"role": "user", "content": prompt})
 
         return messages
 
@@ -607,9 +709,7 @@ class VeniceProvider(BaseProvider):
         """Get default system prompt for Venice."""
         return get_system_prompt("code")
 
-    def _build_code_prompt(
-        self, prompt: str, context: Dict[str, Any]
-    ) -> str:
+    def _build_code_prompt(self, prompt: str, context: Dict[str, Any]) -> str:
         """Build enhanced prompt for code generation.
 
         Args:
@@ -658,17 +758,19 @@ class VeniceProvider(BaseProvider):
         models = []
 
         for model_id, info in self.VENICE_MODELS.items():
-            models.append(ModelInfo(
-                identifier=model_id,
-                display_name=info["display_name"],
-                category=info["category"],
-                context_window=info["context_window"],
-                max_output_tokens=info["max_output_tokens"],
-                supports_streaming=info["supports_streaming"],
-                supports_interactive=info["supports_interactive"],
-                cost_per_token=info.get("cost_per_token"),
-                metadata={"provider": "venice"}
-            ))
+            models.append(
+                ModelInfo(
+                    identifier=model_id,
+                    display_name=info["display_name"],
+                    category=info["category"],
+                    context_window=info["context_window"],
+                    max_output_tokens=info["max_output_tokens"],
+                    supports_streaming=info["supports_streaming"],
+                    supports_interactive=info["supports_interactive"],
+                    cost_per_token=info.get("cost_per_token"),
+                    metadata={"provider": "venice"},
+                )
+            )
 
         return models
 
@@ -723,7 +825,7 @@ class VeniceProvider(BaseProvider):
                 "model": self.config.model,
                 "timestamp": datetime.now().isoformat(),
                 "requires_code_extraction": len(code_blocks) > 0,
-            }
+            },
         )
 
     def _format_code_prompt(self, prompt: str) -> str:
@@ -751,7 +853,7 @@ class VeniceProvider(BaseProvider):
         code_blocks = []
 
         # Find markdown code blocks
-        pattern = r'```(\w+)?\n(.*?)```'
+        pattern = r"```(\w+)?\n(.*?)```"
         matches = re.finditer(pattern, response, re.DOTALL)
 
         for _i, match in enumerate(matches):
@@ -760,44 +862,69 @@ class VeniceProvider(BaseProvider):
 
             # Determine if executable based on language
             executable_languages = {
-                "python", "py", "javascript", "js", "typescript", "ts",
-                "bash", "sh", "shell", "ruby", "rb", "go", "rust", "rs",
-                "java", "cpp", "c", "cs", "php", "perl", "lua"
+                "python",
+                "py",
+                "javascript",
+                "js",
+                "typescript",
+                "ts",
+                "bash",
+                "sh",
+                "shell",
+                "ruby",
+                "rb",
+                "go",
+                "rust",
+                "rs",
+                "java",
+                "cpp",
+                "c",
+                "cs",
+                "php",
+                "perl",
+                "lua",
             }
 
-            code_blocks.append(CodeBlock(
-                language=language,
-                content=content,
-                line_start=response[:match.start()].count('\n') + 1,
-                line_end=response[:match.end()].count('\n') + 1,
-                executable=language.lower() in executable_languages,
-                filename=None
-            ))
+            code_blocks.append(
+                CodeBlock(
+                    language=language,
+                    content=content,
+                    line_start=response[: match.start()].count("\n") + 1,
+                    line_end=response[: match.end()].count("\n") + 1,
+                    executable=language.lower() in executable_languages,
+                    filename=None,
+                )
+            )
 
         # If no markdown blocks found, check for inline code patterns
         if not code_blocks:
             # Look for common code patterns
             code_patterns = [
-                "def ", "class ", "function ", "import ",
-                "const ", "var ", "let "
+                "def ",
+                "class ",
+                "function ",
+                "import ",
+                "const ",
+                "var ",
+                "let ",
             ]
             if any(pattern in response for pattern in code_patterns):
                 # Treat entire response as code
-                code_blocks.append(CodeBlock(
-                    language="text",
-                    content=response.strip(),
-                    line_start=1,
-                    line_end=response.count('\n') + 1,
-                    executable=True,
-                    filename=None
-                ))
+                code_blocks.append(
+                    CodeBlock(
+                        language="text",
+                        content=response.strip(),
+                        line_start=1,
+                        line_end=response.count("\n") + 1,
+                        executable=True,
+                        filename=None,
+                    )
+                )
 
         return code_blocks
 
     # Session Management (Venice doesn't support persistent sessions)
-    def create_session(
-        self, session_id: str, **kwargs
-    ) -> Session:
+    def create_session(self, session_id: str, **kwargs) -> Session:
         """Create a new session (stateless for Venice).
 
         Args:
@@ -815,7 +942,7 @@ class VeniceProvider(BaseProvider):
             created_at=datetime.now(),
             last_activity=datetime.now(),
             state=SessionState.ACTIVE,
-            metadata=kwargs
+            metadata=kwargs,
         )
 
         self._sessions[session_id] = session
@@ -890,9 +1017,7 @@ class VeniceProvider(BaseProvider):
         return False
 
     # File Operations
-    def intercept_file_operation(
-        self, operation: FileOperation
-    ) -> bool:
+    def intercept_file_operation(self, operation: FileOperation) -> bool:
         """Intercept file operations (basic validation only).
 
         Args:
@@ -944,12 +1069,12 @@ class VeniceProvider(BaseProvider):
         """
         # Remove any potential prompt leakage
         if "Please provide" in response or "Here is" in response:
-            lines = response.split('\n')
+            lines = response.split("\n")
             # Remove common preamble lines
             phrases = ["Please", "Here", "I'll", "Let me"]
             while lines and any(phrase in lines[0] for phrase in phrases):
                 lines.pop(0)
-            response = '\n'.join(lines)
+            response = "\n".join(lines)
 
         return response.strip()
 
@@ -982,17 +1107,25 @@ class VeniceProvider(BaseProvider):
 
     async def generate_async(self, prompt: str, **kwargs) -> str:
         """Generate a response asynchronously with retry logic."""
-        self.stats['total_requests'] += 1
+        self.stats["total_requests"] += 1
 
-        temperature = kwargs.get('temperature', self.config.temperature)
-        max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+        temperature = kwargs.get("temperature", self.config.temperature)
+        max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
+
+        # Use injection system for async generation
+        injection_context = InjectionContext(
+            operation="async_code_execution",
+            provider=self.name,
+            model=self.config.model,
+            user_prompt=prompt,
+            metadata={"temperature": temperature, "max_tokens": max_tokens, "async": True}
+        )
+
+        injected_prompt = self._inject_prompts(injection_context)
 
         messages = [
-            {
-                "role": "system",
-                "content": get_system_prompt("code")
-            },
-            {"role": "user", "content": optimize_prompt(prompt, "code_gen")}
+            {"role": "system", "content": get_system_prompt("code")},
+            {"role": "user", "content": injected_prompt},
         ]
 
         # Log request if enabled
@@ -1001,11 +1134,24 @@ class VeniceProvider(BaseProvider):
 
         # Filter out conflicting parameters from extra_params
         filtered_extra_params = {
-            k: v for k, v in self.config.extra_params.items()
-            if k not in ['temperature', 'max_tokens', 'model', 'messages',
-                         'max_retries', 'base_delay', 'max_delay', 'backoff_factor',
-                         'log_requests', 'log_responses', 'log_dir',
-                         'request_timeout', 'stream_timeout']
+            k: v
+            for k, v in self.config.extra_params.items()
+            if k
+            not in [
+                "temperature",
+                "max_tokens",
+                "model",
+                "messages",
+                "max_retries",
+                "base_delay",
+                "max_delay",
+                "backoff_factor",
+                "log_requests",
+                "log_responses",
+                "log_dir",
+                "request_timeout",
+                "stream_timeout",
+            ]
         }
 
         # Execute with async retry logic
@@ -1015,9 +1161,9 @@ class VeniceProvider(BaseProvider):
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **filtered_extra_params
+                **filtered_extra_params,
             ),
-            operation_name="async_generate"
+            operation_name="async_generate",
         )
 
         content = response.choices[0].message.content
@@ -1026,7 +1172,7 @@ class VeniceProvider(BaseProvider):
         if self.log_responses:
             self._log_response(content)
 
-        self.stats['successful_requests'] += 1
+        self.stats["successful_requests"] += 1
         return content
 
     async def _execute_async_with_retry(
@@ -1054,14 +1200,14 @@ class VeniceProvider(BaseProvider):
                     logger.info(
                         f"Retry {attempt}/{self.max_retries} for {operation_name}"
                     )
-                    self.stats['retries'] += 1
+                    self.stats["retries"] += 1
 
                 return await operation()
 
             except RateLimitError as e:
                 last_exception = e
                 if attempt < self.max_retries:
-                    retry_after = getattr(e, 'retry_after', None)
+                    retry_after = getattr(e, "retry_after", None)
                     if retry_after:
                         wait_time = min(float(retry_after), self.max_delay)
                     else:
@@ -1086,7 +1232,7 @@ class VeniceProvider(BaseProvider):
 
             except APIError as e:
                 last_exception = e
-                if hasattr(e, 'status_code') and e.status_code >= 500:
+                if hasattr(e, "status_code") and e.status_code >= 500:
                     if attempt < self.max_retries:
                         wait_time = min(delay, self.max_delay)
                         logger.warning(
@@ -1098,15 +1244,15 @@ class VeniceProvider(BaseProvider):
                         continue
 
                 logger.error(f"Non-retryable API error for {operation_name}: {e}")
-                self.stats['failed_requests'] += 1
+                self.stats["failed_requests"] += 1
                 raise
 
             except Exception as e:
                 logger.error(f"Unexpected error for {operation_name}: {e}")
-                self.stats['failed_requests'] += 1
+                self.stats["failed_requests"] += 1
                 raise
 
-        self.stats['failed_requests'] += 1
+        self.stats["failed_requests"] += 1
         error_msg = f"All retries exhausted for {operation_name}: {last_exception}"
         logger.error(error_msg)
         raise Exception(error_msg) from last_exception
@@ -1131,10 +1277,7 @@ class VeniceProvider(BaseProvider):
         return final_results
 
     def execute_ticket(
-        self,
-        ticket_content: str,
-        working_directory: Optional[str] = None,
-        **kwargs
+        self, ticket_content: str, working_directory: Optional[str] = None, **kwargs
     ) -> Dict[str, Any]:
         """Execute a ticket by generating Venice response and executing actions.
 
@@ -1223,14 +1366,16 @@ class VeniceProvider(BaseProvider):
                     result = executor.execute(action)
 
                     # Track result
-                    execution_result["results"].append({
-                        "action_type": action.type.name,
-                        "target": action.target,
-                        "success": result.success,
-                        "output": result.output,
-                        "error": result.error,
-                        "execution_time": result.execution_time,
-                    })
+                    execution_result["results"].append(
+                        {
+                            "action_type": action.type.name,
+                            "target": action.target,
+                            "success": result.success,
+                            "output": result.output,
+                            "error": result.error,
+                            "execution_time": result.execution_time,
+                        }
+                    )
 
                     if result.success:
                         execution_result["actions_executed"] += 1
@@ -1347,7 +1492,7 @@ class VeniceProvider(BaseProvider):
         actions = []
 
         # Pattern for code blocks with file paths (e.g., ```python:src/main.py)
-        file_pattern = r'```(?:(\w+):)?([^\n]+)\n(.*?)```'
+        file_pattern = r"```(?:(\w+):)?([^\n]+)\n(.*?)```"
         matches = re.finditer(file_pattern, response, re.DOTALL)
 
         for match in matches:
@@ -1364,20 +1509,20 @@ class VeniceProvider(BaseProvider):
                     metadata={
                         "language": language,
                         "source": "venice_parser",
-                    }
+                    },
                 )
                 actions.append(action)
             # Check if it's a shell command
             elif language in ["bash", "sh", "shell"]:
                 # Parse individual commands from the block
-                commands = content.split('\n')
+                commands = content.split("\n")
                 for cmd in commands:
                     cmd = cmd.strip()
-                    if cmd and not cmd.startswith('#'):
+                    if cmd and not cmd.startswith("#"):
                         action = Action(
                             type=ActionType.RUN_COMMAND,
                             target=cmd,
-                            metadata={"source": "venice_parser"}
+                            metadata={"source": "venice_parser"},
                         )
                         actions.append(action)
 
@@ -1411,18 +1556,18 @@ class VeniceProvider(BaseProvider):
                     metadata={
                         "language": block.language,
                         "source": "venice_fallback",
-                    }
+                    },
                 )
                 actions.append(action)
             elif block.language in ["bash", "sh", "shell"]:
                 # Treat as commands
-                for line in block.content.split('\n'):
+                for line in block.content.split("\n"):
                     line = line.strip()
-                    if line and not line.startswith('#'):
+                    if line and not line.startswith("#"):
                         action = Action(
                             type=ActionType.RUN_COMMAND,
                             target=line,
-                            metadata={"source": "venice_fallback"}
+                            metadata={"source": "venice_fallback"},
                         )
                         actions.append(action)
 
@@ -1443,20 +1588,47 @@ class VeniceProvider(BaseProvider):
             return False
 
         # Check for file extensions
-        if '.' in path:
-            ext = path.split('.')[-1]
+        if "." in path:
+            ext = path.split(".")[-1]
             # Common code file extensions
             valid_extensions = {
-                'py', 'js', 'ts', 'jsx', 'tsx', 'java', 'cpp', 'c', 'h',
-                'go', 'rs', 'rb', 'php', 'cs', 'swift', 'kt', 'scala',
-                'html', 'css', 'scss', 'json', 'xml', 'yaml', 'yml',
-                'md', 'txt', 'sh', 'bash', 'sql', 'dockerfile', 'makefile'
+                "py",
+                "js",
+                "ts",
+                "jsx",
+                "tsx",
+                "java",
+                "cpp",
+                "c",
+                "h",
+                "go",
+                "rs",
+                "rb",
+                "php",
+                "cs",
+                "swift",
+                "kt",
+                "scala",
+                "html",
+                "css",
+                "scss",
+                "json",
+                "xml",
+                "yaml",
+                "yml",
+                "md",
+                "txt",
+                "sh",
+                "bash",
+                "sql",
+                "dockerfile",
+                "makefile",
             }
             if ext.lower() in valid_extensions:
                 return True
 
         # Check for path separators
-        if '/' in path or '\\' in path:
+        if "/" in path or "\\" in path:
             return True
 
         return False
@@ -1482,20 +1654,23 @@ class VeniceProvider(BaseProvider):
 
         for action in actions:
             if action.type in [ActionType.CREATE_FILE, ActionType.MODIFY_FILE]:
-                file_operations.append({
-                    "path": action.target,
-                    "content": action.content or "",
-                    "operation": action.type.name.lower(),
-                })
+                file_operations.append(
+                    {
+                        "path": action.target,
+                        "content": action.content or "",
+                        "operation": action.type.name.lower(),
+                    }
+                )
             elif action.type == ActionType.RUN_COMMAND:
                 commands.append(action.target)
 
         return file_operations, commands
 
-    def set_tracking_context(self, ticket_id: Optional[int] = None,
-                            session_id: Optional[int] = None) -> None:
+    def set_tracking_context(
+        self, ticket_id: Optional[int] = None, session_id: Optional[int] = None
+    ) -> None:
         """Set context for token tracking.
-        
+
         Args:
             ticket_id: Optional ticket ID for tracking
             session_id: Optional session ID for tracking
@@ -1534,9 +1709,30 @@ class VeniceProvider(BaseProvider):
     def reset_stats(self) -> None:
         """Reset provider statistics."""
         self.stats = {
-            'total_requests': 0,
-            'successful_requests': 0,
-            'failed_requests': 0,
-            'retries': 0,
-            'total_tokens': 0
+            "total_requests": 0,
+            "successful_requests": 0,
+            "failed_requests": 0,
+            "retries": 0,
+            "total_tokens": 0,
         }
+
+    def _inject_prompts(self, context: InjectionContext) -> str:
+        """Apply prompt injection based on context."""
+        # Get appropriate injector for operation
+        if "execution" in context.operation:
+            injector = self._injector_registry.get("production")
+        elif "verification" in context.operation:
+            injector = self._injector_registry.get("verification")
+        elif "ticket" in context.operation:
+            injector = self._injector_registry.get("ticket")
+        elif "json" in context.operation:
+            # Apply minimal injection for JSON to preserve format
+            return context.user_prompt + "\nJSON only."
+        else:
+            # Use production as default for safety
+            injector = self._injector_registry.get("production")
+
+        if injector:
+            return injector.inject(context)
+
+        return context.user_prompt

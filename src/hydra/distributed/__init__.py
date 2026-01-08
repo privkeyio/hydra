@@ -6,4 +6,4 @@ across multiple instances with distributed state management.
 
 from .coordinator import DistributedCoordinator, DistributedState, InstanceInfo
 
-__all__ = ['DistributedCoordinator', 'InstanceInfo', 'DistributedState']
+__all__ = ["DistributedCoordinator", "InstanceInfo", "DistributedState"]

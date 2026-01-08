@@ -15,7 +15,7 @@ def with_retry(
     max_retries: Optional[int] = None,
     retry_on: Optional[list[ErrorCategory]] = None,
     provider_name: Optional[str] = None,
-    fallback_result: Any = None
+    fallback_result: Any = None,
 ):
     """Decorator for adding retry logic to provider methods.
 
@@ -26,20 +26,21 @@ def with_retry(
         fallback_result: Result to return if all retries fail
 
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Get provider name from self if available
             nonlocal provider_name
-            if not provider_name and args and hasattr(args[0], 'name'):
+            if not provider_name and args and hasattr(args[0], "name"):
                 provider_name = args[0].name
             if not provider_name:
-                provider_name = 'unknown'
+                provider_name = "unknown"
 
             error_handler = get_error_handler()
             retry_config = RetryConfig(
                 max_retries=max_retries or error_handler.retry_config.max_retries,
-                retry_on=retry_on or error_handler.retry_config.retry_on
+                retry_on=retry_on or error_handler.retry_config.retry_on,
             )
 
             last_error = None
@@ -50,7 +51,7 @@ def with_retry(
                     last_error = error_handler.handle_error(
                         provider=provider_name,
                         error=e,
-                        context={'attempt': attempt + 1, 'function': func.__name__}
+                        context={"attempt": attempt + 1, "function": func.__name__},
                     )
                     last_error.retry_count = attempt
 
@@ -77,6 +78,7 @@ def with_retry(
             raise Exception(f"All retries failed for {func.__name__}")
 
         return wrapper
+
     return decorator
 
 
@@ -84,7 +86,7 @@ def async_with_retry(
     max_retries: Optional[int] = None,
     retry_on: Optional[list[ErrorCategory]] = None,
     provider_name: Optional[str] = None,
-    fallback_result: Any = None
+    fallback_result: Any = None,
 ):
     """Async decorator for adding retry logic to provider methods.
 
@@ -95,20 +97,21 @@ def async_with_retry(
         fallback_result: Result to return if all retries fail
 
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             # Get provider name from self if available
             nonlocal provider_name
-            if not provider_name and args and hasattr(args[0], 'name'):
+            if not provider_name and args and hasattr(args[0], "name"):
                 provider_name = args[0].name
             if not provider_name:
-                provider_name = 'unknown'
+                provider_name = "unknown"
 
             error_handler = get_error_handler()
             retry_config = RetryConfig(
                 max_retries=max_retries or error_handler.retry_config.max_retries,
-                retry_on=retry_on or error_handler.retry_config.retry_on
+                retry_on=retry_on or error_handler.retry_config.retry_on,
             )
 
             last_error = None
@@ -119,7 +122,7 @@ def async_with_retry(
                     last_error = error_handler.handle_error(
                         provider=provider_name,
                         error=e,
-                        context={'attempt': attempt + 1, 'function': func.__name__}
+                        context={"attempt": attempt + 1, "function": func.__name__},
                     )
                     last_error.retry_count = attempt
 
@@ -146,6 +149,7 @@ def async_with_retry(
             raise Exception(f"All retries failed for {func.__name__}")
 
         return wrapper
+
     return decorator
 
 
@@ -157,7 +161,7 @@ class RetryableOperation:
         provider: str,
         operation: str,
         max_retries: int = 3,
-        retry_on: Optional[list[ErrorCategory]] = None
+        retry_on: Optional[list[ErrorCategory]] = None,
     ):
         """Initialize retryable operation.
 
@@ -174,7 +178,7 @@ class RetryableOperation:
         self.retry_on = retry_on or [
             ErrorCategory.NETWORK,
             ErrorCategory.API_LIMIT,
-            ErrorCategory.TIMEOUT
+            ErrorCategory.TIMEOUT,
         ]
         self.attempt = 0
         self.error_handler = get_error_handler()
@@ -194,10 +198,7 @@ class RetryableOperation:
         error = self.error_handler.handle_error(
             provider=self.provider,
             error=exc_val,
-            context={
-                'operation': self.operation,
-                'attempt': self.attempt
-            }
+            context={"operation": self.operation, "attempt": self.attempt},
         )
 
         # Check if we should retry
@@ -239,10 +240,7 @@ class RetryableOperation:
 
 
 def exponential_backoff(
-    attempt: int,
-    base_delay: float = 1.0,
-    max_delay: float = 60.0,
-    jitter: bool = True
+    attempt: int, base_delay: float = 1.0, max_delay: float = 60.0, jitter: bool = True
 ) -> float:
     """Calculate exponential backoff delay.
 
@@ -256,11 +254,12 @@ def exponential_backoff(
         Delay in seconds
 
     """
-    delay = min(base_delay * (2 ** attempt), max_delay)
+    delay = min(base_delay * (2**attempt), max_delay)
 
     if jitter:
         import random
-        delay *= (0.5 + random.random())
+
+        delay *= 0.5 + random.random()
 
     return delay
 
@@ -273,7 +272,7 @@ class CircuitBreaker:
         provider: str,
         failure_threshold: int = 5,
         recovery_timeout: float = 60.0,
-        half_open_requests: int = 1
+        half_open_requests: int = 1,
     ):
         """Initialize circuit breaker.
 
@@ -291,7 +290,7 @@ class CircuitBreaker:
 
         self.failure_count = 0
         self.last_failure_time = 0
-        self.state = 'closed'  # closed, open, half-open
+        self.state = "closed"  # closed, open, half-open
         self.half_open_count = 0
 
     def call(self, func: Callable, *args, **kwargs) -> Any:
@@ -309,9 +308,9 @@ class CircuitBreaker:
             Exception: If circuit is open or function fails
 
         """
-        if self.state == 'open':
+        if self.state == "open":
             if time.time() - self.last_failure_time > self.recovery_timeout:
-                self.state = 'half-open'
+                self.state = "half-open"
                 self.half_open_count = 0
             else:
                 raise Exception(
@@ -319,9 +318,9 @@ class CircuitBreaker:
                     f"Retry after {self.recovery_timeout}s"
                 )
 
-        if self.state == 'half-open':
+        if self.state == "half-open":
             if self.half_open_count >= self.half_open_requests:
-                self.state = 'open'
+                self.state = "open"
                 raise Exception(
                     f"Circuit breaker is open for {self.provider}. "
                     "Half-open requests exceeded"
@@ -337,10 +336,10 @@ class CircuitBreaker:
 
     def _on_success(self):
         """Handle successful call."""
-        if self.state == 'half-open':
+        if self.state == "half-open":
             self.half_open_count += 1
             if self.half_open_count >= self.half_open_requests:
-                self.state = 'closed'
+                self.state = "closed"
                 self.failure_count = 0
                 logger.info(f"Circuit breaker closed for {self.provider}")
         else:
@@ -352,7 +351,7 @@ class CircuitBreaker:
         self.last_failure_time = time.time()
 
         if self.failure_count >= self.failure_threshold:
-            self.state = 'open'
+            self.state = "open"
             logger.warning(
                 f"Circuit breaker opened for {self.provider} "
                 f"after {self.failure_count} failures"
@@ -360,6 +359,6 @@ class CircuitBreaker:
 
     def reset(self):
         """Reset circuit breaker to closed state."""
-        self.state = 'closed'
+        self.state = "closed"
         self.failure_count = 0
         self.half_open_count = 0

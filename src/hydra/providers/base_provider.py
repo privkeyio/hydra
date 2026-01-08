@@ -1,4 +1,8 @@
-"""Extended base provider interface for LLM abstraction."""
+"""Unified provider interface for LLM abstraction.
+
+This module provides the comprehensive interface that consolidates all LLM providers
+in Hydra, eliminating duplication across Claude CLI, tmux, and enhanced implementations.
+"""
 
 from abc import abstractmethod
 from dataclasses import dataclass, field
@@ -109,9 +113,7 @@ class BaseProvider(LLMProvider):
 
     # Core Generation Methods
     @abstractmethod
-    def generate_code(
-        self, prompt: str, context: Dict[str, Any], **kwargs
-    ) -> str:
+    def generate_code(self, prompt: str, context: Dict[str, Any], **kwargs) -> str:
         """Generate code with context awareness.
 
         Args:
@@ -126,9 +128,7 @@ class BaseProvider(LLMProvider):
         pass
 
     @abstractmethod
-    def generate_streaming(
-        self, prompt: str, **kwargs
-    ) -> Iterator[str]:
+    def generate_streaming(self, prompt: str, **kwargs) -> Iterator[str]:
         """Generate streaming response for real-time output.
 
         Args:
@@ -143,9 +143,7 @@ class BaseProvider(LLMProvider):
 
     # Session Management
     @abstractmethod
-    def create_session(
-        self, session_id: str, **kwargs
-    ) -> Session:
+    def create_session(self, session_id: str, **kwargs) -> Session:
         """Create a new provider session.
 
         Args:
@@ -340,9 +338,7 @@ class BaseProvider(LLMProvider):
 
     # File Operations
     @abstractmethod
-    def intercept_file_operation(
-        self, operation: FileOperation
-    ) -> bool:
+    def intercept_file_operation(self, operation: FileOperation) -> bool:
         """Intercept and validate file operations.
 
         Args:
@@ -397,10 +393,7 @@ class BaseProvider(LLMProvider):
             )
         except AttributeError:
             # For unbound methods or when __func__ is not available
-            return (
-                self.__class__.generate_streaming
-                != BaseProvider.generate_streaming
-            )
+            return self.__class__.generate_streaming != BaseProvider.generate_streaming
 
     def supports_session_persistence(self) -> bool:
         """Check if provider supports session save/restore.
@@ -413,7 +406,8 @@ class BaseProvider(LLMProvider):
         try:
             return (
                 self.save_session.__func__ != BaseProvider.save_session.__func__
-                or self.restore_session.__func__ != BaseProvider.restore_session.__func__
+                or self.restore_session.__func__
+                != BaseProvider.restore_session.__func__
             )
         except AttributeError:
             # For unbound methods or when __func__ is not available
@@ -520,9 +514,9 @@ class BaseProvider(LLMProvider):
 
         error_handler = get_error_handler()
         provider_error = error_handler.handle_error(
-            provider=self.name if hasattr(self, 'name') else 'unknown',
+            provider=self.name if hasattr(self, "name") else "unknown",
             error=error,
-            context={'method': 'handle_error'}
+            context={"method": "handle_error"},
         )
 
         # Return user-friendly message

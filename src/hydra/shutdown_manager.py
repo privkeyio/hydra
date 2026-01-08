@@ -137,11 +137,11 @@ class ShutdownManager:
         for name, connection in list(self._connections.items()):
             try:
                 # Try common close methods
-                if hasattr(connection, 'close'):
+                if hasattr(connection, "close"):
                     connection.close()
-                elif hasattr(connection, 'shutdown'):
+                elif hasattr(connection, "shutdown"):
                     connection.shutdown()
-                elif hasattr(connection, 'cleanup'):
+                elif hasattr(connection, "cleanup"):
                     connection.cleanup()
 
                 logger.debug(f"Closed connection: {name}")

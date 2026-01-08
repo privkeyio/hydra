@@ -1,8 +1,9 @@
+"""Standalone module."""
+
 #!/usr/bin/env python3
 """Standalone dashboard server that persists between hydra executions."""
 
 import argparse
-import asyncio
 import logging
 import os
 import signal
@@ -11,7 +12,6 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI
 
 from hydra.dashboard.app import app
 from hydra.dashboard.database import get_db_manager
@@ -62,12 +62,13 @@ def stop_dashboard():
             os.kill(pid, signal.SIGTERM)
             # Wait a moment for graceful shutdown
             import time
+
             time.sleep(1)
-            
+
             # Force kill if still running
             if is_running(pid):
                 os.kill(pid, signal.SIGKILL)
-            
+
             remove_pid()
             print("Dashboard server stopped.")
             return True
@@ -84,7 +85,7 @@ def start_dashboard(
     host: str = "0.0.0.0",
     port: int = 8080,
     daemon: bool = False,
-    log_level: str = "info"
+    log_level: str = "info",
 ):
     """Start the dashboard server."""
     # Check if already running
@@ -103,25 +104,25 @@ def start_dashboard(
             print(f"Access dashboard at http://localhost:{port}")
             print("Stop with: hydra dashboard stop")
             return
-        
+
         # Child process continues
         # Detach from parent
         os.setsid()
-        
+
         # Fork again to prevent zombie processes
         pid = os.fork()
         if pid > 0:
             sys.exit(0)
-        
+
         # Redirect standard file descriptors
         sys.stdout.flush()
         sys.stderr.flush()
-        
+
         # Close or redirect file descriptors
         log_file = Path.home() / ".hydra" / "dashboard.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(log_file, 'a') as f:
+
+        with open(log_file, "a") as f:
             os.dup2(f.fileno(), sys.stdout.fileno())
             os.dup2(f.fileno(), sys.stderr.fileno())
 
@@ -138,22 +139,27 @@ def start_dashboard(
     signal.signal(signal.SIGINT, handle_shutdown)
 
     # Initialize database - use project-specific database if in a project directory
-    if os.path.exists('tickets.md') or os.path.exists('tickets.yaml') or \
-       os.path.exists('tickets.yml'):
+    if (
+        os.path.exists("tickets.md")
+        or os.path.exists("tickets.yaml")
+        or os.path.exists("tickets.yml")
+    ):
         # We're in a project directory, use local database
-        os.environ['DATABASE_URL'] = f"sqlite:///{os.getcwd()}/.hydra/dashboard/hydra.db"
+        os.environ["DATABASE_URL"] = (
+            f"sqlite:///{os.getcwd()}/.hydra/dashboard/hydra.db"
+        )
         logger.info(f"Using project database: {os.getcwd()}/.hydra/dashboard/")
     else:
         # Use global database
         logger.info("Using global database: ~/.hydra/dashboard/")
-    
+
     logger.info("Initializing database...")
     db_manager = get_db_manager()
     db_manager.create_tables()
 
     # Start server
     logger.info(f"Starting Hydra Dashboard at http://{host}:{port}")
-    
+
     config = uvicorn.Config(
         app=app,
         host=host,
@@ -162,9 +168,9 @@ def start_dashboard(
         access_log=False,
         reload=False,  # Disable reload for production
     )
-    
+
     server = uvicorn.Server(config)
-    
+
     try:
         server.run()
     finally:
@@ -191,29 +197,22 @@ def main():
     parser.add_argument(
         "action",
         choices=["start", "stop", "restart", "status"],
-        help="Action to perform"
+        help="Action to perform",
     )
     parser.add_argument(
-        "--host",
-        default="0.0.0.0",
-        help="Host to bind to (default: 0.0.0.0)"
+        "--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)"
     )
     parser.add_argument(
-        "--port",
-        type=int,
-        default=8080,
-        help="Port to bind to (default: 8080)"
+        "--port", type=int, default=8080, help="Port to bind to (default: 8080)"
     )
     parser.add_argument(
-        "--daemon",
-        action="store_true",
-        help="Run in background (daemon mode)"
+        "--daemon", action="store_true", help="Run in background (daemon mode)"
     )
     parser.add_argument(
         "--log-level",
         default="info",
         choices=["debug", "info", "warning", "error"],
-        help="Log level (default: info)"
+        help="Log level (default: info)",
     )
 
     args = parser.parse_args()
@@ -221,7 +220,7 @@ def main():
     # Configure logging
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper()),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     if args.action == "start":
@@ -231,6 +230,7 @@ def main():
     elif args.action == "restart":
         stop_dashboard()
         import time
+
         time.sleep(1)
         start_dashboard(args.host, args.port, args.daemon, args.log_level)
     elif args.action == "status":

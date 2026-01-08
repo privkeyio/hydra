@@ -21,6 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 
 from hydra.cache import get_cache
+
 # Delayed import to avoid circular imports
 # from hydra.dashboard.database import get_db_manager
 
@@ -64,9 +65,7 @@ TOKEN_COSTS = {
     "gpt-4-turbo-preview": TokenCost(
         Provider.OPENAI, "gpt-4-turbo-preview", 0.01, 0.03, 128000, 4096
     ),
-    "gpt-4": TokenCost(
-        Provider.OPENAI, "gpt-4", 0.03, 0.06, 8192, 4096
-    ),
+    "gpt-4": TokenCost(Provider.OPENAI, "gpt-4", 0.03, 0.06, 8192, 4096),
     "gpt-3.5-turbo": TokenCost(
         Provider.OPENAI, "gpt-3.5-turbo", 0.0005, 0.0015, 16385, 4096
     ),
@@ -106,8 +105,14 @@ class UsageMetrics:
     by_model: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     by_provider: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
-    def add_usage(self, provider: str, model: str, input_tokens: int,
-                  output_tokens: int, cost: float):
+    def add_usage(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+    ):
         """Add usage to metrics."""
         self.total_input_tokens += input_tokens
         self.total_output_tokens += output_tokens
@@ -120,7 +125,7 @@ class UsageMetrics:
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cost": 0.0,
-                "requests": 0
+                "requests": 0,
             }
         self.by_model[model]["input_tokens"] += input_tokens
         self.by_model[model]["output_tokens"] += output_tokens
@@ -133,7 +138,7 @@ class UsageMetrics:
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cost": 0.0,
-                "requests": 0
+                "requests": 0,
             }
         self.by_provider[provider]["input_tokens"] += input_tokens
         self.by_provider[provider]["output_tokens"] += output_tokens
@@ -144,10 +149,11 @@ class UsageMetrics:
 class TokenTracker:
     """Tracks token usage and manages budgets for LLM operations."""
 
-    def __init__(self, budget_limit: Optional[float] = None,
-                 warning_threshold: float = 0.8):
+    def __init__(
+        self, budget_limit: Optional[float] = None, warning_threshold: float = 0.8
+    ):
         """Initialize token tracker.
-        
+
         Args:
             budget_limit: Maximum budget in USD (None for unlimited)
             warning_threshold: Fraction of budget to trigger warning (0.8 = 80%)
@@ -162,6 +168,7 @@ class TokenTracker:
         # Delayed import to avoid circular imports
         try:
             from hydra.dashboard.database import get_db_manager
+
             self._db_manager = get_db_manager()
         except ImportError:
             self._db_manager = None
@@ -186,11 +193,11 @@ class TokenTracker:
 
     def count_tokens(self, text: str, provider: Provider = Provider.ANTHROPIC) -> int:
         """Count tokens in text for given provider.
-        
+
         Args:
             text: Text to count tokens for
             provider: LLM provider
-            
+
         Returns:
             Number of tokens
 
@@ -211,15 +218,16 @@ class TokenTracker:
         # Fallback: estimate 4 characters per token
         return len(text) // 4
 
-    def calculate_cost(self, model: str, input_tokens: int,
-                      output_tokens: int) -> Tuple[float, float, float]:
+    def calculate_cost(
+        self, model: str, input_tokens: int, output_tokens: int
+    ) -> Tuple[float, float, float]:
         """Calculate cost for token usage.
-        
+
         Args:
             model: Model name
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
-            
+
         Returns:
             Tuple of (input_cost, output_cost, total_cost) in USD
 
@@ -238,12 +246,18 @@ class TokenTracker:
         total_cost = input_cost + output_cost
         return input_cost, output_cost, total_cost
 
-    def track_usage(self, provider: str, model: str, prompt: str,
-                   response: str, ticket_id: Optional[int] = None,
-                   session_id: Optional[int] = None,
-                   metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def track_usage(
+        self,
+        provider: str,
+        model: str,
+        prompt: str,
+        response: str,
+        ticket_id: Optional[int] = None,
+        session_id: Optional[int] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Track token usage for a request.
-        
+
         Args:
             provider: Provider name
             model: Model name
@@ -252,7 +266,7 @@ class TokenTracker:
             ticket_id: Optional ticket ID
             session_id: Optional session ID
             metadata: Optional metadata
-            
+
         Returns:
             Usage statistics dictionary
 
@@ -289,7 +303,7 @@ class TokenTracker:
                     # Truncate long prompts
                     prompt=prompt[:5000] if len(prompt) > 5000 else prompt,
                     response=response[:5000] if len(response) > 5000 else response,
-                    request_metadata=json.dumps(metadata) if metadata else None
+                    request_metadata=json.dumps(metadata) if metadata else None,
                 )
                 session.add(usage_record)
                 session.commit()
@@ -302,10 +316,7 @@ class TokenTracker:
         # Cache usage stats
         cache_key = f"token_usage:{datetime.utcnow().strftime('%Y%m%d')}"
         self._cache.set_api_response(
-            "token_usage",
-            cache_key,
-            self._current_usage.__dict__,
-            ttl=3600
+            "token_usage", cache_key, self._current_usage.__dict__, ttl=3600
         )
 
         return {
@@ -319,8 +330,9 @@ class TokenTracker:
             "budget_remaining": self.budget_limit - self._current_usage.total_cost,
             "budget_percentage": (
                 self._current_usage.total_cost / self.budget_limit * 100
-                if self.budget_limit > 0 else 0
-            )
+                if self.budget_limit > 0
+                else 0
+            ),
         }
 
     def _check_budget_warning(self):
@@ -339,14 +351,15 @@ class TokenTracker:
                 f"${remaining:.2f} remaining."
             )
 
-    def check_budget_available(self, estimated_tokens: int,
-                              model: str) -> Tuple[bool, str]:
+    def check_budget_available(
+        self, estimated_tokens: int, model: str
+    ) -> Tuple[bool, str]:
         """Check if budget is available for estimated usage.
-        
+
         Args:
             estimated_tokens: Estimated total tokens
             model: Model to use
-            
+
         Returns:
             Tuple of (is_available, message)
 
@@ -369,14 +382,15 @@ class TokenTracker:
 
         return True, f"Budget available: ${remaining:.2f}"
 
-    def get_usage_report(self, start_date: Optional[datetime] = None,
-                        end_date: Optional[datetime] = None) -> Dict[str, Any]:
+    def get_usage_report(
+        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
+    ) -> Dict[str, Any]:
         """Generate usage report for specified period.
-        
+
         Args:
             start_date: Start of period (default: 24 hours ago)
             end_date: End of period (default: now)
-            
+
         Returns:
             Detailed usage report
 
@@ -387,31 +401,32 @@ class TokenTracker:
             end_date = datetime.utcnow()
 
         report = {
-            "period": {
-                "start": start_date.isoformat(),
-                "end": end_date.isoformat()
-            },
+            "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
             "summary": {
                 "total_requests": 0,
                 "total_input_tokens": 0,
                 "total_output_tokens": 0,
                 "total_tokens": 0,
-                "total_cost": 0.0
+                "total_cost": 0.0,
             },
             "by_provider": {},
             "by_model": {},
             "by_ticket": {},
             "hourly_usage": [],
-            "top_expensive_requests": []
+            "top_expensive_requests": [],
         }
 
         try:
             with self._db_manager.get_session() as session:
                 # Query usage data
-                usage_data = session.query(TokenUsage).filter(
-                    TokenUsage.timestamp >= start_date,
-                    TokenUsage.timestamp <= end_date
-                ).all()
+                usage_data = (
+                    session.query(TokenUsage)
+                    .filter(
+                        TokenUsage.timestamp >= start_date,
+                        TokenUsage.timestamp <= end_date,
+                    )
+                    .all()
+                )
 
                 for usage in usage_data:
                     # Update summary
@@ -426,12 +441,12 @@ class TokenTracker:
                         report["by_provider"][usage.provider] = {
                             "requests": 0,
                             "tokens": 0,
-                            "cost": 0.0
+                            "cost": 0.0,
                         }
                     report["by_provider"][usage.provider]["requests"] += 1
-                    report["by_provider"][usage.provider]["tokens"] += (
-                        usage.total_tokens
-                    )
+                    report["by_provider"][usage.provider][
+                        "tokens"
+                    ] += usage.total_tokens
                     report["by_provider"][usage.provider]["cost"] += usage.total_cost
 
                     # By model
@@ -439,7 +454,7 @@ class TokenTracker:
                         report["by_model"][usage.model] = {
                             "requests": 0,
                             "tokens": 0,
-                            "cost": 0.0
+                            "cost": 0.0,
                         }
                     report["by_model"][usage.model]["requests"] += 1
                     report["by_model"][usage.model]["tokens"] += usage.total_tokens
@@ -452,17 +467,23 @@ class TokenTracker:
                             report["by_ticket"][ticket_key] = {
                                 "requests": 0,
                                 "tokens": 0,
-                                "cost": 0.0
+                                "cost": 0.0,
                             }
                         report["by_ticket"][ticket_key]["requests"] += 1
                         report["by_ticket"][ticket_key]["tokens"] += usage.total_tokens
                         report["by_ticket"][ticket_key]["cost"] += usage.total_cost
 
                 # Get top expensive requests
-                top_requests = session.query(TokenUsage).filter(
-                    TokenUsage.timestamp >= start_date,
-                    TokenUsage.timestamp <= end_date
-                ).order_by(TokenUsage.total_cost.desc()).limit(10).all()
+                top_requests = (
+                    session.query(TokenUsage)
+                    .filter(
+                        TokenUsage.timestamp >= start_date,
+                        TokenUsage.timestamp <= end_date,
+                    )
+                    .order_by(TokenUsage.total_cost.desc())
+                    .limit(10)
+                    .all()
+                )
 
                 report["top_expensive_requests"] = [
                     {
@@ -470,7 +491,7 @@ class TokenTracker:
                         "model": req.model,
                         "tokens": req.total_tokens,
                         "cost": req.total_cost,
-                        "ticket_id": req.ticket_id
+                        "ticket_id": req.ticket_id,
                     }
                     for req in top_requests
                 ]
@@ -480,10 +501,14 @@ class TokenTracker:
 
         return report
 
-    def export_usage_csv(self, filepath: str, start_date: Optional[datetime] = None,
-                        end_date: Optional[datetime] = None):
+    def export_usage_csv(
+        self,
+        filepath: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ):
         """Export usage data to CSV file.
-        
+
         Args:
             filepath: Path to output CSV file
             start_date: Start of period
@@ -499,33 +524,47 @@ class TokenTracker:
 
         try:
             with self._db_manager.get_session() as session:
-                usage_data = session.query(TokenUsage).filter(
-                    TokenUsage.timestamp >= start_date,
-                    TokenUsage.timestamp <= end_date
-                ).order_by(TokenUsage.timestamp).all()
+                usage_data = (
+                    session.query(TokenUsage)
+                    .filter(
+                        TokenUsage.timestamp >= start_date,
+                        TokenUsage.timestamp <= end_date,
+                    )
+                    .order_by(TokenUsage.timestamp)
+                    .all()
+                )
 
-                with open(filepath, 'w', newline='') as csvfile:
+                with open(filepath, "w", newline="") as csvfile:
                     fieldnames = [
-                        'timestamp', 'provider', 'model', 'ticket_id',
-                        'input_tokens', 'output_tokens', 'total_tokens',
-                        'input_cost', 'output_cost', 'total_cost'
+                        "timestamp",
+                        "provider",
+                        "model",
+                        "ticket_id",
+                        "input_tokens",
+                        "output_tokens",
+                        "total_tokens",
+                        "input_cost",
+                        "output_cost",
+                        "total_cost",
                     ]
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
                     writer.writeheader()
                     for usage in usage_data:
-                        writer.writerow({
-                            'timestamp': usage.timestamp.isoformat(),
-                            'provider': usage.provider,
-                            'model': usage.model,
-                            'ticket_id': usage.ticket_id,
-                            'input_tokens': usage.input_tokens,
-                            'output_tokens': usage.output_tokens,
-                            'total_tokens': usage.total_tokens,
-                            'input_cost': f"{usage.input_cost:.6f}",
-                            'output_cost': f"{usage.output_cost:.6f}",
-                            'total_cost': f"{usage.total_cost:.6f}"
-                        })
+                        writer.writerow(
+                            {
+                                "timestamp": usage.timestamp.isoformat(),
+                                "provider": usage.provider,
+                                "model": usage.model,
+                                "ticket_id": usage.ticket_id,
+                                "input_tokens": usage.input_tokens,
+                                "output_tokens": usage.output_tokens,
+                                "total_tokens": usage.total_tokens,
+                                "input_cost": f"{usage.input_cost:.6f}",
+                                "output_cost": f"{usage.output_cost:.6f}",
+                                "total_cost": f"{usage.total_cost:.6f}",
+                            }
+                        )
 
                 logger.info(f"Exported {len(usage_data)} usage records to {filepath}")
 
@@ -540,7 +579,7 @@ class TokenTracker:
 
     def get_current_usage(self) -> Dict[str, Any]:
         """Get current usage statistics.
-        
+
         Returns:
             Current usage metrics
 
@@ -548,18 +587,19 @@ class TokenTracker:
         return {
             "total_input_tokens": self._current_usage.total_input_tokens,
             "total_output_tokens": self._current_usage.total_output_tokens,
-            "total_tokens": self._current_usage.total_input_tokens +
-                          self._current_usage.total_output_tokens,
+            "total_tokens": self._current_usage.total_input_tokens
+            + self._current_usage.total_output_tokens,
             "total_cost": self._current_usage.total_cost,
             "request_count": self._current_usage.request_count,
             "budget_limit": self.budget_limit,
             "budget_remaining": self.budget_limit - self._current_usage.total_cost,
             "budget_percentage": (
                 self._current_usage.total_cost / self.budget_limit * 100
-                if self.budget_limit > 0 else 0
+                if self.budget_limit > 0
+                else 0
             ),
             "by_model": self._current_usage.by_model,
-            "by_provider": self._current_usage.by_provider
+            "by_provider": self._current_usage.by_provider,
         }
 
 
@@ -569,10 +609,10 @@ _token_tracker: Optional[TokenTracker] = None
 
 def get_token_tracker(budget_limit: Optional[float] = None) -> TokenTracker:
     """Get or create global token tracker instance.
-    
+
     Args:
         budget_limit: Optional budget limit override
-        
+
     Returns:
         TokenTracker instance
 
@@ -585,10 +625,10 @@ def get_token_tracker(budget_limit: Optional[float] = None) -> TokenTracker:
 
 def reset_token_tracker(budget_limit: Optional[float] = None) -> TokenTracker:
     """Reset global token tracker instance.
-    
+
     Args:
         budget_limit: Optional new budget limit
-        
+
     Returns:
         New TokenTracker instance
 

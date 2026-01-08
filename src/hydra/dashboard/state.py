@@ -73,37 +73,37 @@ class DashboardState:
         """Load state from disk."""
         if self.state_file.exists():
             try:
-                with open(self.state_file, 'r') as f:
+                with open(self.state_file, "r") as f:
                     data = json.load(f)
 
-                for ticket_data in data.get('tickets', []):
+                for ticket_data in data.get("tickets", []):
                     ticket = TicketInfo(
-                        ticket_id=ticket_data['ticket_id'],
-                        title=ticket_data['title'],
-                        model=ticket_data['model'],
-                        status=TicketStatus(ticket_data['status']),
-                        dependencies=ticket_data['dependencies'],
-                        start_time=ticket_data.get('start_time'),
-                        end_time=ticket_data.get('end_time'),
-                        error=ticket_data.get('error'),
-                        logs=ticket_data.get('logs', []),
-                        files_changed=ticket_data.get('files_changed', []),
-                        quality_status=ticket_data.get('quality_status')
+                        ticket_id=ticket_data["ticket_id"],
+                        title=ticket_data["title"],
+                        model=ticket_data["model"],
+                        status=TicketStatus(ticket_data["status"]),
+                        dependencies=ticket_data["dependencies"],
+                        start_time=ticket_data.get("start_time"),
+                        end_time=ticket_data.get("end_time"),
+                        error=ticket_data.get("error"),
+                        logs=ticket_data.get("logs", []),
+                        files_changed=ticket_data.get("files_changed", []),
+                        quality_status=ticket_data.get("quality_status"),
                     )
                     self.tickets[ticket.ticket_id] = ticket
 
-                session_data = data.get('session')
+                session_data = data.get("session")
                 if session_data:
                     self.session = ExecutionSession(
-                        session_id=session_data['session_id'],
-                        start_time=session_data['start_time'],
-                        tickets_path=session_data['tickets_path'],
-                        total_tickets=session_data['total_tickets'],
-                        completed_tickets=session_data['completed_tickets'],
-                        failed_tickets=session_data['failed_tickets'],
-                        current_wave=session_data['current_wave'],
-                        total_waves=session_data['total_waves'],
-                        workers=session_data['workers']
+                        session_id=session_data["session_id"],
+                        start_time=session_data["start_time"],
+                        tickets_path=session_data["tickets_path"],
+                        total_tickets=session_data["total_tickets"],
+                        completed_tickets=session_data["completed_tickets"],
+                        failed_tickets=session_data["failed_tickets"],
+                        current_wave=session_data["current_wave"],
+                        total_waves=session_data["total_waves"],
+                        workers=session_data["workers"],
                     )
 
             except Exception:
@@ -112,40 +112,50 @@ class DashboardState:
     def _save_state(self):
         """Save state to disk. Assumes lock is already held."""
         data = {
-                'tickets': [
-                    {
-                        'ticket_id': t.ticket_id,
-                        'title': t.title,
-                        'model': t.model,
-                        'status': t.status.value,
-                        'dependencies': t.dependencies,
-                        'start_time': t.start_time,
-                        'end_time': t.end_time,
-                        'error': t.error,
-                        'logs': t.logs,
-                        'files_changed': t.files_changed,
-                        'quality_status': t.quality_status
-                    }
-                    for t in self.tickets.values()
-                ],
-                'session': {
-                    'session_id': self.session.session_id,
-                    'start_time': self.session.start_time,
-                    'tickets_path': self.session.tickets_path,
-                    'total_tickets': self.session.total_tickets,
-                    'completed_tickets': self.session.completed_tickets,
-                    'failed_tickets': self.session.failed_tickets,
-                    'current_wave': self.session.current_wave,
-                    'total_waves': self.session.total_waves,
-                    'workers': self.session.workers
-                } if self.session else None
+            "tickets": [
+                {
+                    "ticket_id": t.ticket_id,
+                    "title": t.title,
+                    "model": t.model,
+                    "status": t.status.value,
+                    "dependencies": t.dependencies,
+                    "start_time": t.start_time,
+                    "end_time": t.end_time,
+                    "error": t.error,
+                    "logs": t.logs,
+                    "files_changed": t.files_changed,
+                    "quality_status": t.quality_status,
+                }
+                for t in self.tickets.values()
+            ],
+            "session": (
+                {
+                    "session_id": self.session.session_id,
+                    "start_time": self.session.start_time,
+                    "tickets_path": self.session.tickets_path,
+                    "total_tickets": self.session.total_tickets,
+                    "completed_tickets": self.session.completed_tickets,
+                    "failed_tickets": self.session.failed_tickets,
+                    "current_wave": self.session.current_wave,
+                    "total_waves": self.session.total_waves,
+                    "workers": self.session.workers,
+                }
+                if self.session
+                else None
+            ),
         }
 
-        with open(self.state_file, 'w') as f:
+        with open(self.state_file, "w") as f:
             json.dump(data, f, indent=2)
 
-    def start_session(self, session_id: str, tickets_path: str,
-                     total_tickets: int, total_waves: int, workers: int):
+    def start_session(
+        self,
+        session_id: str,
+        tickets_path: str,
+        total_tickets: int,
+        total_waves: int,
+        workers: int,
+    ):
         """Start a new execution session."""
         with self.lock:
             self.session = ExecutionSession(
@@ -157,13 +167,14 @@ class DashboardState:
                 failed_tickets=0,
                 current_wave=1,
                 total_waves=total_waves,
-                workers=workers
+                workers=workers,
             )
             self.tickets.clear()
             self._save_state()
 
-    def add_ticket(self, ticket_id: str, title: str, model: str,
-                  dependencies: List[str]):
+    def add_ticket(
+        self, ticket_id: str, title: str, model: str, dependencies: List[str]
+    ):
         """Add a ticket to tracking."""
         with self.lock:
             self.tickets[ticket_id] = TicketInfo(
@@ -171,12 +182,13 @@ class DashboardState:
                 title=title,
                 model=model,
                 status=TicketStatus.PENDING,
-                dependencies=dependencies
+                dependencies=dependencies,
             )
             self._save_state()
 
-    def update_ticket_status(self, ticket_id: str, status: TicketStatus,
-                            error: Optional[str] = None):
+    def update_ticket_status(
+        self, ticket_id: str, status: TicketStatus, error: Optional[str] = None
+    ):
         """Update ticket status."""
         with self.lock:
             if ticket_id in self.tickets:
@@ -217,43 +229,53 @@ class DashboardState:
         """Get current state as dictionary."""
         with self.lock:
             return {
-                'session': {
-                    'session_id': self.session.session_id,
-                    'start_time': self.session.start_time,
-                    'elapsed_time': time.time() - self.session.start_time,
-                    'tickets_path': self.session.tickets_path,
-                    'total_tickets': self.session.total_tickets,
-                    'completed_tickets': self.session.completed_tickets,
-                    'failed_tickets': self.session.failed_tickets,
-                    'pending_tickets': self.session.total_tickets -
-                                     self.session.completed_tickets -
-                                     self.session.failed_tickets,
-                    'current_wave': self.session.current_wave,
-                    'total_waves': self.session.total_waves,
-                    'workers': self.session.workers,
-                    'progress': (self.session.completed_tickets /
-                               self.session.total_tickets * 100
-                               if self.session.total_tickets > 0 else 0)
-                } if self.session else None,
-                'tickets': [
+                "session": (
                     {
-                        'ticket_id': t.ticket_id,
-                        'title': t.title,
-                        'model': t.model,
-                        'status': t.status.value,
-                        'dependencies': t.dependencies,
-                        'start_time': t.start_time,
-                        'end_time': t.end_time,
-                        'duration': (t.end_time - t.start_time
-                                   if t.start_time and t.end_time else None),
-                        'error': t.error,
-                        'logs': t.logs[-10:],  # Last 10 log entries
-                        'files_changed': t.files_changed,
-                        'quality_status': t.quality_status
+                        "session_id": self.session.session_id,
+                        "start_time": self.session.start_time,
+                        "elapsed_time": time.time() - self.session.start_time,
+                        "tickets_path": self.session.tickets_path,
+                        "total_tickets": self.session.total_tickets,
+                        "completed_tickets": self.session.completed_tickets,
+                        "failed_tickets": self.session.failed_tickets,
+                        "pending_tickets": self.session.total_tickets
+                        - self.session.completed_tickets
+                        - self.session.failed_tickets,
+                        "current_wave": self.session.current_wave,
+                        "total_waves": self.session.total_waves,
+                        "workers": self.session.workers,
+                        "progress": (
+                            self.session.completed_tickets
+                            / self.session.total_tickets
+                            * 100
+                            if self.session.total_tickets > 0
+                            else 0
+                        ),
                     }
-                    for t in sorted(self.tickets.values(),
-                                  key=lambda x: x.ticket_id)
-                ]
+                    if self.session
+                    else None
+                ),
+                "tickets": [
+                    {
+                        "ticket_id": t.ticket_id,
+                        "title": t.title,
+                        "model": t.model,
+                        "status": t.status.value,
+                        "dependencies": t.dependencies,
+                        "start_time": t.start_time,
+                        "end_time": t.end_time,
+                        "duration": (
+                            t.end_time - t.start_time
+                            if t.start_time and t.end_time
+                            else None
+                        ),
+                        "error": t.error,
+                        "logs": t.logs[-10:],  # Last 10 log entries
+                        "files_changed": t.files_changed,
+                        "quality_status": t.quality_status,
+                    }
+                    for t in sorted(self.tickets.values(), key=lambda x: x.ticket_id)
+                ],
             }
 
     def clear(self):

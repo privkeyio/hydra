@@ -39,11 +39,11 @@ class ComplexityFactors:
     def total_complexity(self) -> float:
         """Calculate weighted total complexity score."""
         base_score = (
-            self.architectural_complexity * 2.0 +
-            self.implementation_complexity * 1.5 +
-            self.algorithmic_complexity * 2.5 +
-            self.integration_complexity * 1.5 +
-            self.testing_complexity * 1.0
+            self.architectural_complexity * 2.0
+            + self.implementation_complexity * 1.5
+            + self.algorithmic_complexity * 2.5
+            + self.integration_complexity * 1.5
+            + self.testing_complexity * 1.0
         )
 
         # Adjust for scale factors
@@ -68,44 +68,121 @@ class ModelSelector:
 
     # Keywords indicating architectural complexity
     ARCHITECTURE_KEYWORDS = {
-        "architecture", "design", "system", "framework", "infrastructure",
-        "microservice", "distributed", "scalable", "pattern", "abstraction",
-        "interface", "api", "protocol", "schema", "database", "migration"
+        "architecture",
+        "design",
+        "system",
+        "framework",
+        "infrastructure",
+        "microservice",
+        "distributed",
+        "scalable",
+        "pattern",
+        "abstraction",
+        "interface",
+        "api",
+        "protocol",
+        "schema",
+        "database",
+        "migration",
     }
 
     # Keywords indicating complex algorithms
     ALGORITHM_KEYWORDS = {
-        "algorithm", "optimization", "graph", "tree", "recursive", "dynamic",
-        "parallel", "concurrent", "async", "thread", "performance", "cache",
-        "index", "search", "sort", "hash", "encryption", "compression"
+        "algorithm",
+        "optimization",
+        "graph",
+        "tree",
+        "recursive",
+        "dynamic",
+        "parallel",
+        "concurrent",
+        "async",
+        "thread",
+        "performance",
+        "cache",
+        "index",
+        "search",
+        "sort",
+        "hash",
+        "encryption",
+        "compression",
     }
 
     # Keywords indicating heavy implementation work
     IMPLEMENTATION_KEYWORDS = {
-        "implement", "build", "create", "develop", "construct", "establish",
-        "refactor", "rewrite", "restructure", "reorganize", "migrate",
-        "port", "convert", "transform", "integrate", "connect"
+        "implement",
+        "build",
+        "create",
+        "develop",
+        "construct",
+        "establish",
+        "refactor",
+        "rewrite",
+        "restructure",
+        "reorganize",
+        "migrate",
+        "port",
+        "convert",
+        "transform",
+        "integrate",
+        "connect",
     }
 
     # Keywords indicating integration complexity
     INTEGRATION_KEYWORDS = {
-        "integrate", "connect", "api", "webhook", "service", "endpoint",
-        "external", "third-party", "authentication", "authorization",
-        "middleware", "adapter", "bridge", "gateway", "proxy"
+        "integrate",
+        "connect",
+        "api",
+        "webhook",
+        "service",
+        "endpoint",
+        "external",
+        "third-party",
+        "authentication",
+        "authorization",
+        "middleware",
+        "adapter",
+        "bridge",
+        "gateway",
+        "proxy",
     }
 
     # Keywords indicating testing complexity
     TESTING_KEYWORDS = {
-        "test", "validate", "verify", "benchmark", "performance", "load",
-        "integration test", "end-to-end", "e2e", "coverage", "mock",
-        "stub", "fixture", "assertion", "regression"
+        "test",
+        "validate",
+        "verify",
+        "benchmark",
+        "performance",
+        "load",
+        "integration test",
+        "end-to-end",
+        "e2e",
+        "coverage",
+        "mock",
+        "stub",
+        "fixture",
+        "assertion",
+        "regression",
     }
 
     # Keywords suggesting analysis requirements
     ANALYSIS_KEYWORDS = {
-        "analyze", "investigate", "research", "explore", "evaluate",
-        "assess", "review", "audit", "profile", "debug", "diagnose",
-        "troubleshoot", "identify", "discover", "understand"
+        "analyze",
+        "investigate",
+        "research",
+        "explore",
+        "evaluate",
+        "assess",
+        "review",
+        "audit",
+        "profile",
+        "debug",
+        "diagnose",
+        "troubleshoot",
+        "identify",
+        "discover",
+        "understand",
     }
 
     # File patterns suggesting complexity
@@ -127,7 +204,7 @@ class ModelSelector:
             ModelCategory.SMART: 8.0,
             ModelCategory.CODER: 5.0,
             ModelCategory.BALANCED: 2.0,
-            ModelCategory.FAST: 0.0
+            ModelCategory.FAST: 0.0,
         }
 
     def analyze_ticket(self, ticket: Dict) -> ComplexityFactors:
@@ -185,9 +262,8 @@ class ModelSelector:
 
         # Check for design requirements
         factors.requires_design = any(
-            keyword in full_text for keyword in [
-                "design", "architect", "plan", "structure", "model"
-            ]
+            keyword in full_text
+            for keyword in ["design", "architect", "plan", "structure", "model"]
         )
 
         # Count files and criteria
@@ -251,8 +327,14 @@ class ModelSelector:
 
         """
         breaking_indicators = [
-            "breaking change", "migration", "deprecate", "remove",
-            "refactor", "restructure", "incompatible", "major version"
+            "breaking change",
+            "migration",
+            "deprecate",
+            "remove",
+            "refactor",
+            "restructure",
+            "incompatible",
+            "major version",
         ]
 
         # Check text for indicators
@@ -318,9 +400,9 @@ class ModelSelector:
         else:
             return ModelCategory.FAST, factors
 
-    def get_recommendation_reason(self,
-                                   model: ModelCategory,
-                                   factors: ComplexityFactors) -> str:
+    def get_recommendation_reason(
+        self, model: ModelCategory, factors: ComplexityFactors
+    ) -> str:
         """Generate human-readable explanation for model selection.
 
         Args:
@@ -338,9 +420,9 @@ class ModelSelector:
         )
         return " | ".join(reasons)
 
-    def _get_model_specific_reasons(self,
-                                     model: ModelCategory,
-                                     factors: ComplexityFactors) -> List[str]:
+    def _get_model_specific_reasons(
+        self, model: ModelCategory, factors: ComplexityFactors
+    ) -> List[str]:
         """Get model-specific reason list."""
         if model == ModelCategory.SMART:
             return self._get_smart_reasons(factors)
@@ -428,9 +510,9 @@ class ModelSelector:
 
         return results
 
-    def validate_model_selection(self,
-                                  ticket: Dict,
-                                  selected_model: str) -> Tuple[bool, Optional[str]]:
+    def validate_model_selection(
+        self, ticket: Dict, selected_model: str
+    ) -> Tuple[bool, Optional[str]]:
         """Validate if a manually selected model is appropriate.
 
         Args:
@@ -458,13 +540,13 @@ class ModelSelector:
         if selected_category == ModelCategory.FAST and complexity > 5.0:
             return (
                 False,
-                f"Task too complex for FAST model (complexity: {complexity:.1f})"
+                f"Task too complex for FAST model (complexity: {complexity:.1f})",
             )
 
         if selected_category == ModelCategory.BALANCED and complexity > 10.0:
             return (
                 False,
-                f"Task too complex for BALANCED model (complexity: {complexity:.1f})"
+                f"Task too complex for BALANCED model (complexity: {complexity:.1f})",
             )
 
         # Warn about potential inefficiencies

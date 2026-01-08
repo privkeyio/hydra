@@ -132,19 +132,13 @@ class ErrorMessages:
 
     # File operation errors
     FILE_ACCESS_DENIED = (
-        "Access denied to file: {path}\n"
-        "Check file permissions and ownership."
+        "Access denied to file: {path}\n" "Check file permissions and ownership."
     )
 
-    FILE_NOT_FOUND = (
-        "File not found: {path}\n"
-        "Verify the file path and try again."
-    )
+    FILE_NOT_FOUND = "File not found: {path}\n" "Verify the file path and try again."
 
     FILE_OPERATION_FAILED = (
-        "File operation '{operation}' failed.\n"
-        "Path: {path}\n"
-        "Reason: {reason}"
+        "File operation '{operation}' failed.\n" "Path: {path}\n" "Reason: {reason}"
     )
 
     # Fallback messages
@@ -160,13 +154,10 @@ class ErrorMessages:
     )
 
     # Recovery messages
-    PROVIDER_RECOVERED = (
-        "Provider {provider} has recovered and is operational."
-    )
+    PROVIDER_RECOVERED = "Provider {provider} has recovered and is operational."
 
     RETRYING_REQUEST = (
-        "Retrying request to {provider}.\n"
-        "Attempt {attempt}/{max_attempts}"
+        "Retrying request to {provider}.\n" "Attempt {attempt}/{max_attempts}"
     )
 
     # Generic messages
@@ -213,21 +204,21 @@ class ErrorMessages:
 
         """
         help_urls = {
-            'venice': {
-                'api_key': 'https://venice.ai/docs/api-keys',
-                'models': 'https://venice.ai/docs/models',
-                'limits': 'https://venice.ai/docs/rate-limits'
+            "venice": {
+                "api_key": "https://venice.ai/docs/api-keys",
+                "models": "https://venice.ai/docs/models",
+                "limits": "https://venice.ai/docs/rate-limits",
             },
-            'anthropic': {
-                'api_key': 'https://console.anthropic.com/api-keys',
-                'models': 'https://docs.anthropic.com/models',
-                'limits': 'https://docs.anthropic.com/rate-limits'
+            "anthropic": {
+                "api_key": "https://console.anthropic.com/api-keys",
+                "models": "https://docs.anthropic.com/models",
+                "limits": "https://docs.anthropic.com/rate-limits",
             },
-            'openai': {
-                'api_key': 'https://platform.openai.com/api-keys',
-                'models': 'https://platform.openai.com/docs/models',
-                'limits': 'https://platform.openai.com/docs/rate-limits'
-            }
+            "openai": {
+                "api_key": "https://platform.openai.com/api-keys",
+                "models": "https://platform.openai.com/docs/models",
+                "limits": "https://platform.openai.com/docs/rate-limits",
+            },
         }
 
         provider_urls = help_urls.get(provider, {})
@@ -245,18 +236,15 @@ class ErrorMessages:
 
         """
         install_commands = {
-            'tmux': 'sudo apt-get install tmux',
-            'openai': 'pip install openai',
-            'anthropic': 'pip install anthropic',
-            'aiohttp': 'pip install aiohttp',
-            'requests': 'pip install requests',
-            'pydantic': 'pip install pydantic'
+            "tmux": "sudo apt-get install tmux",
+            "openai": "pip install openai",
+            "anthropic": "pip install anthropic",
+            "aiohttp": "pip install aiohttp",
+            "requests": "pip install requests",
+            "pydantic": "pip install pydantic",
         }
 
-        return install_commands.get(
-            dependency,
-            f'pip install {dependency}'
-        )
+        return install_commands.get(dependency, f"pip install {dependency}")
 
     @classmethod
     def get_env_var(cls, provider: str) -> str:
@@ -270,50 +258,50 @@ class ErrorMessages:
 
         """
         env_vars = {
-            'venice': 'VENICE_API_KEY',
-            'anthropic': 'ANTHROPIC_API_KEY',
-            'openai': 'OPENAI_API_KEY',
-            'claude': 'ANTHROPIC_API_KEY',
-            'claude_tmux': 'CLAUDE_CLI_PATH'
+            "venice": "VENICE_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "claude": "ANTHROPIC_API_KEY",
+            "claude_tmux": "CLAUDE_CLI_PATH",
         }
 
-        return env_vars.get(provider, f'{provider.upper()}_API_KEY')
+        return env_vars.get(provider, f"{provider.upper()}_API_KEY")
 
 
 class ProviderHints:
     """Helpful hints for resolving provider issues."""
 
     HINTS = {
-        'rate_limit': [
+        "rate_limit": [
             "Space out your requests with delays",
             "Use exponential backoff for retries",
             "Consider caching responses when possible",
-            "Upgrade to a higher tier for increased limits"
+            "Upgrade to a higher tier for increased limits",
         ],
-        'timeout': [
+        "timeout": [
             "Increase the timeout value in configuration",
             "Check if the provider service is operational",
             "Try using a simpler or shorter prompt",
-            "Consider using a faster model variant"
+            "Consider using a faster model variant",
         ],
-        'authentication': [
+        "authentication": [
             "Verify your API key is correctly set",
             "Check if the key has expired or been revoked",
             "Ensure you're using the correct environment variable",
-            "Confirm your account has necessary permissions"
+            "Confirm your account has necessary permissions",
         ],
-        'model_access': [
+        "model_access": [
             "Check if the model requires special access",
             "Verify your account tier supports this model",
             "Try using an alternative model",
-            "Contact support for access requests"
+            "Contact support for access requests",
         ],
-        'network': [
+        "network": [
             "Check your internet connection",
             "Verify firewall and proxy settings",
             "Try using a different network",
-            "Check if the service is down"
-        ]
+            "Check if the service is down",
+        ],
     }
 
     @classmethod
@@ -330,11 +318,7 @@ class ProviderHints:
         return cls.HINTS.get(error_type, [])
 
 
-def format_error_with_hints(
-    message: str,
-    error_type: str,
-    provider: str
-) -> str:
+def format_error_with_hints(message: str, error_type: str, provider: str) -> str:
     """Format error message with helpful hints.
 
     Args:

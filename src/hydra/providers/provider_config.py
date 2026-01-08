@@ -58,7 +58,7 @@ class ProviderConfig:
             model=self.default_model,
             api_key=self.api_key,
             base_url=self.base_url,
-            extra_params=self.extra_params
+            extra_params=self.extra_params,
         )
 
 
@@ -77,14 +77,14 @@ class ProviderConfigManager:
                     "category": "smart",
                     "context_window": 200000,
                     "max_output_tokens": 8192,
-                    "cost_per_million_tokens": 15.0
+                    "cost_per_million_tokens": 15.0,
                 },
                 "sonnet": {
                     "provider_identifier": "claude-sonnet-4-20250514",
                     "category": "balanced",
                     "context_window": 200000,
                     "max_output_tokens": 8192,
-                    "cost_per_million_tokens": 3.0
+                    "cost_per_million_tokens": 3.0,
                 },
             },
             "features": {
@@ -93,15 +93,15 @@ class ProviderConfigManager:
                 "file_interception": True,
                 "session_persistence": True,
                 "code_execution": False,
-                "context_extension": False
+                "context_extension": False,
             },
             "extra_params": {
                 "tmux": {
                     "session_prefix": "hydra_claude",
                     "capture_method": "pane",
-                    "output_wait_time": 0.5
+                    "output_wait_time": 0.5,
                 }
-            }
+            },
         },
         "venice": {
             "type": "venice_api",
@@ -115,36 +115,36 @@ class ProviderConfigManager:
                     "category": "fast",
                     "context_window": 131072,
                     "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 0.05
+                    "cost_per_million_tokens": 0.05,
                 },
                 "balanced": {
                     "provider_identifier": "llama-3.1-70b",
                     "category": "balanced",
                     "context_window": 131072,
                     "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 0.35
+                    "cost_per_million_tokens": 0.35,
                 },
                 "smart": {
                     "provider_identifier": "llama-3.1-405b",
                     "category": "smart",
                     "context_window": 131072,
                     "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 2.75
+                    "cost_per_million_tokens": 2.75,
                 },
                 "opus": {
                     "provider_identifier": "llama-3.1-405b",
                     "category": "smart",
                     "context_window": 131072,
                     "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 2.75
+                    "cost_per_million_tokens": 2.75,
                 },
                 "sonnet": {
                     "provider_identifier": "llama-3.1-70b",
                     "category": "balanced",
                     "context_window": 131072,
                     "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 0.35
-                }
+                    "cost_per_million_tokens": 0.35,
+                },
             },
             "features": {
                 "interactive": False,
@@ -152,8 +152,8 @@ class ProviderConfigManager:
                 "file_interception": False,
                 "session_persistence": False,
                 "code_execution": False,
-                "context_extension": False
-            }
+                "context_extension": False,
+            },
         },
         "anthropic": {
             "type": "anthropic_api",
@@ -167,14 +167,14 @@ class ProviderConfigManager:
                     "category": "smart",
                     "context_window": 200000,
                     "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 15.0
+                    "cost_per_million_tokens": 15.0,
                 },
                 "sonnet": {
                     "provider_identifier": "claude-3-sonnet-20240229",
                     "category": "balanced",
                     "context_window": 200000,
                     "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 3.0
+                    "cost_per_million_tokens": 3.0,
                 },
             },
             "features": {
@@ -183,8 +183,8 @@ class ProviderConfigManager:
                 "file_interception": False,
                 "session_persistence": False,
                 "code_execution": False,
-                "context_extension": False
-            }
+                "context_extension": False,
+            },
         },
         "mock": {
             "type": "mock_provider",
@@ -196,7 +196,7 @@ class ProviderConfigManager:
                     "category": "balanced",
                     "context_window": 100000,
                     "max_output_tokens": 4096,
-                    "cost_per_million_tokens": 0.0
+                    "cost_per_million_tokens": 0.0,
                 }
             },
             "features": {
@@ -205,13 +205,10 @@ class ProviderConfigManager:
                 "file_interception": False,
                 "session_persistence": False,
                 "code_execution": False,
-                "context_extension": False
+                "context_extension": False,
             },
-            "extra_params": {
-                "mock_responses": {},
-                "mock_delay": 0
-            }
-        }
+            "extra_params": {"mock_responses": {}, "mock_delay": 0},
+        },
     }
 
     def __init__(self, config_path: Optional[Path] = None):
@@ -249,10 +246,10 @@ class ProviderConfigManager:
 
         # Load from file if exists
         if self.config_path.exists():
-            with open(self.config_path, 'r') as f:
+            with open(self.config_path, "r") as f:
                 file_configs = yaml.safe_load(f)
-                if file_configs and 'providers' in file_configs:
-                    configs.update(file_configs['providers'])
+                if file_configs and "providers" in file_configs:
+                    configs.update(file_configs["providers"])
 
         # Process each provider configuration
         for name, config_dict in configs.items():
@@ -278,49 +275,49 @@ class ProviderConfigManager:
 
         """
         # Parse features
-        features_dict = config_dict.get('features', {})
+        features_dict = config_dict.get("features", {})
         features = ProviderFeatures(**features_dict)
 
         # Parse model mappings
         models = {}
-        models_dict = config_dict.get('models', {})
+        models_dict = config_dict.get("models", {})
         for model_name, model_config in models_dict.items():
             if isinstance(model_config, str):
                 # Simple string mapping
                 models[model_name] = ModelMapping(
                     generic_name=model_name,
                     provider_identifier=model_config,
-                    category="balanced"
+                    category="balanced",
                 )
             else:
                 # Full model configuration
                 models[model_name] = ModelMapping(
-                    generic_name=model_name,
-                    **model_config
+                    generic_name=model_name, **model_config
                 )
 
         # Expand environment variables
-        api_key = self._expand_env_var(config_dict.get('api_key'))
-        base_url = self._expand_env_var(config_dict.get('base_url'))
-        cli_path = self._expand_env_var(config_dict.get('cli_path'))
+        api_key = self._expand_env_var(config_dict.get("api_key"))
+        base_url = self._expand_env_var(config_dict.get("base_url"))
+        cli_path = self._expand_env_var(config_dict.get("cli_path"))
 
         # For Claude providers, use dynamic path resolution if not explicitly set
-        if name == 'claude' and cli_path == 'claude':
+        if name == "claude" and cli_path == "claude":
             from hydra.utils.claude_path import get_claude_cli_path
+
             cli_path = get_claude_cli_path()
 
         config = ProviderConfig(
             name=name,
-            type=config_dict.get('type', name),
-            enabled=config_dict.get('enabled', True),
-            default_model=config_dict.get('default_model'),
+            type=config_dict.get("type", name),
+            enabled=config_dict.get("enabled", True),
+            default_model=config_dict.get("default_model"),
             models=models,
             features=features,
             api_key=api_key,
             base_url=base_url,
             cli_path=cli_path,
-            extra_params=config_dict.get('extra_params', {}),
-            fallback_providers=config_dict.get('fallback_providers', [])
+            extra_params=config_dict.get("extra_params", {}),
+            fallback_providers=config_dict.get("fallback_providers", []),
         )
 
         # Validate configuration (defer credential validation)
@@ -372,40 +369,42 @@ class ProviderConfigManager:
     def _validate_all_credentials(self) -> None:
         """Validate credentials for all providers after configuration is complete."""
         # Only warn about missing API keys if this provider might be used
-        provider_name = os.getenv('LLM_PROVIDER')
+        provider_name = os.getenv("LLM_PROVIDER")
 
         # Count enabled providers
         enabled_configs = [c for c in self._configs.values() if c.enabled]
         enabled_count = len(enabled_configs)
 
         for config in self._configs.values():
-            is_selected = (provider_name == config.name)
-            is_only_provider = (config.enabled and enabled_count == 1)
+            is_selected = provider_name == config.name
+            is_only_provider = config.enabled and enabled_count == 1
 
             # Only validate if provider is explicitly selected or is the only option
             if not (is_selected or is_only_provider):
                 continue
 
             # Validate API providers have required credentials
-            if config.type in ['venice_api', 'anthropic_api', 'openai_api']:
+            if config.type in ["venice_api", "anthropic_api", "openai_api"]:
                 if not config.api_key and config.enabled:
                     import warnings
+
                     warnings.warn(
                         f"API key not configured for {config.name} provider. "
                         f"Set {config.name.upper()}_API_KEY environment variable.",
-                        stacklevel=4
+                        stacklevel=4,
                     )
 
             # Validate CLI providers have CLI path
-            if config.type in ['claude_tmux', 'claude_cli']:
-                if config.cli_path and not config.cli_path.startswith('$'):
+            if config.type in ["claude_tmux", "claude_cli"]:
+                if config.cli_path and not config.cli_path.startswith("$"):
                     cli_path = Path(config.cli_path)
                     if not cli_path.exists() and config.enabled:
                         import warnings
+
                         warnings.warn(
                             f"CLI path '{config.cli_path}' not found for "
                             f"{config.name} provider",
-                            stacklevel=4
+                            stacklevel=4,
                         )
 
     def _validate_provider_credentials(self, config: ProviderConfig) -> None:
@@ -447,11 +446,11 @@ class ProviderConfigManager:
         if not value:
             return None
 
-        if value.startswith('${') and value.endswith('}'):
+        if value.startswith("${") and value.endswith("}"):
             # Handle ${VAR} or ${VAR:-default} format
             inner = value[2:-1]
-            if ':-' in inner:
-                var_name, default = inner.split(':-', 1)
+            if ":-" in inner:
+                var_name, default = inner.split(":-", 1)
                 return os.getenv(var_name, default)
             else:
                 return os.getenv(inner)
@@ -461,30 +460,30 @@ class ProviderConfigManager:
     def _apply_environment_overrides(self) -> None:
         """Apply environment variable overrides to configurations."""
         # Check for provider selection
-        provider_name = os.getenv('LLM_PROVIDER')
+        provider_name = os.getenv("LLM_PROVIDER")
         if provider_name and provider_name in self._configs:
             # Mark only selected provider as enabled
             for name, config in self._configs.items():
-                config.enabled = (name == provider_name)
+                config.enabled = name == provider_name
 
         # Check for model override
-        model_override = os.getenv('LLM_MODEL')
+        model_override = os.getenv("LLM_MODEL")
         if model_override:
             for config in self._configs.values():
                 if config.enabled:
                     config.default_model = model_override
 
         # Check for timeout override
-        timeout = os.getenv('LLM_TIMEOUT')
+        timeout = os.getenv("LLM_TIMEOUT")
         if timeout:
             for config in self._configs.values():
-                config.extra_params['timeout'] = int(timeout)
+                config.extra_params["timeout"] = int(timeout)
 
         # Check for max retries
-        max_retries = os.getenv('LLM_MAX_RETRIES')
+        max_retries = os.getenv("LLM_MAX_RETRIES")
         if max_retries:
             for config in self._configs.values():
-                config.extra_params['max_retries'] = int(max_retries)
+                config.extra_params["max_retries"] = int(max_retries)
 
     def get_provider_config(self, name: str) -> Optional[ProviderConfig]:
         """Get configuration for specific provider.
@@ -506,24 +505,24 @@ class ProviderConfigManager:
 
         """
         # Check environment first
-        provider_name = os.getenv('LLM_PROVIDER')
+        provider_name = os.getenv("LLM_PROVIDER")
         if provider_name and provider_name in self._configs:
             return self._configs[provider_name]
 
         # Prioritize claude_tmux if available and enabled
-        if 'claude' in self._configs and self._configs['claude'].enabled:
+        if "claude" in self._configs and self._configs["claude"].enabled:
             # Check if the Claude CLI is actually available
-            if self._configs['claude'].cli_path and (
-                os.path.exists(self._configs['claude'].cli_path) or
-                shutil.which(self._configs['claude'].cli_path)
+            if self._configs["claude"].cli_path and (
+                os.path.exists(self._configs["claude"].cli_path)
+                or shutil.which(self._configs["claude"].cli_path)
             ):
-                return self._configs['claude']
+                return self._configs["claude"]
 
         # Return first enabled provider with valid configuration
         for config in self._configs.values():
             if config.enabled:
                 # Skip API providers without keys
-                if config.type in ['venice_api', 'anthropic_api', 'openai_api']:
+                if config.type in ["venice_api", "anthropic_api", "openai_api"]:
                     if not config.api_key:
                         continue
                 return config
@@ -559,49 +558,49 @@ class ProviderConfigManager:
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Convert configs to dict format
-        config_dict = {'providers': {}}
+        config_dict = {"providers": {}}
         for name, config in self._configs.items():
             provider_dict = {
-                'type': config.type,
-                'enabled': config.enabled,
-                'default_model': config.default_model,
-                'models': {},
-                'features': {
-                    'interactive': config.features.interactive,
-                    'streaming': config.features.streaming,
-                    'file_interception': config.features.file_interception,
-                    'session_persistence': config.features.session_persistence,
-                    'code_execution': config.features.code_execution,
-                    'context_extension': config.features.context_extension,
+                "type": config.type,
+                "enabled": config.enabled,
+                "default_model": config.default_model,
+                "models": {},
+                "features": {
+                    "interactive": config.features.interactive,
+                    "streaming": config.features.streaming,
+                    "file_interception": config.features.file_interception,
+                    "session_persistence": config.features.session_persistence,
+                    "code_execution": config.features.code_execution,
+                    "context_extension": config.features.context_extension,
                 },
-                'extra_params': config.extra_params
+                "extra_params": config.extra_params,
             }
 
             # Add optional fields
             if config.api_key:
-                provider_dict['api_key'] = config.api_key
+                provider_dict["api_key"] = config.api_key
             if config.base_url:
-                provider_dict['base_url'] = config.base_url
+                provider_dict["base_url"] = config.base_url
             if config.cli_path:
-                provider_dict['cli_path'] = config.cli_path
+                provider_dict["cli_path"] = config.cli_path
 
             # Convert model mappings
             for model_name, mapping in config.models.items():
-                provider_dict['models'][model_name] = {
-                    'provider_identifier': mapping.provider_identifier,
-                    'category': mapping.category,
-                    'context_window': mapping.context_window,
-                    'max_output_tokens': mapping.max_output_tokens,
+                provider_dict["models"][model_name] = {
+                    "provider_identifier": mapping.provider_identifier,
+                    "category": mapping.category,
+                    "context_window": mapping.context_window,
+                    "max_output_tokens": mapping.max_output_tokens,
                 }
                 if mapping.cost_per_million_tokens:
-                    provider_dict['models'][model_name][
-                        'cost_per_million_tokens'
+                    provider_dict["models"][model_name][
+                        "cost_per_million_tokens"
                     ] = mapping.cost_per_million_tokens
 
-            config_dict['providers'][name] = provider_dict
+            config_dict["providers"][name] = provider_dict
 
         # Write to file
-        with open(save_path, 'w') as f:
+        with open(save_path, "w") as f:
             yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
 

@@ -68,11 +68,12 @@ app = FastAPI(
     description="REST API for Hydra AI agent system with Celery task queue",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 app.add_middleware(AuthMiddleware)
 monitoring.instrument_fastapi(app)
+
 
 @app.middleware("http")
 async def monitoring_middleware(request: Request, call_next):
@@ -87,7 +88,7 @@ async def monitoring_middleware(request: Request, call_next):
         method=request.method,
         endpoint=request.url.path,
         status_code=response.status_code,
-        duration=duration
+        duration=duration,
     )
 
     response.headers["x-correlation-id"] = monitoring.get_correlation_id()
@@ -103,7 +104,7 @@ def get_task_status(celery_result: AsyncResult) -> TaskStatus:
         "SUCCESS": TaskStatus.COMPLETED,
         "FAILURE": TaskStatus.FAILED,
         "RETRY": TaskStatus.IN_PROGRESS,
-        "REVOKED": TaskStatus.FAILED
+        "REVOKED": TaskStatus.FAILED,
     }
     return state_mapping.get(celery_result.state, TaskStatus.PENDING)
 
@@ -126,8 +127,7 @@ def get_task_progress(celery_result: AsyncResult) -> int:
 @app.post("/generate", response_model=TaskResponse)
 @timed_operation("api_generate")
 async def generate_code_endpoint(
-    request: GenerateRequest,
-    api_key_info: tuple = Depends(get_current_api_key)
+    request: GenerateRequest, api_key_info: tuple = Depends(get_current_api_key)
 ):
     """Generate code using a single agent."""
     api_key, is_priority = api_key_info
@@ -136,21 +136,20 @@ async def generate_code_endpoint(
 
     result = task_func.apply_async(
         args=[request.prompt, request.language, request.max_tokens],
-        kwargs={"task_id": None}
+        kwargs={"task_id": None},
     )
 
     return TaskResponse(
         task_id=result.id,
         status=TaskStatus.PENDING,
-        message="Code generation task queued"
+        message="Code generation task queued",
     )
 
 
 @app.post("/workflow", response_model=TaskResponse)
 @timed_operation("api_workflow")
 async def execute_workflow_endpoint(
-    request: WorkflowRequest,
-    api_key_info: tuple = Depends(get_current_api_key)
+    request: WorkflowRequest, api_key_info: tuple = Depends(get_current_api_key)
 ):
     """Execute a multi-agent workflow."""
     api_key, is_priority = api_key_info
@@ -159,13 +158,13 @@ async def execute_workflow_endpoint(
 
     result = task_func.apply_async(
         args=[request.task, request.agents, request.max_iterations],
-        kwargs={"task_id": None}
+        kwargs={"task_id": None},
     )
 
     return TaskResponse(
         task_id=result.id,
         status=TaskStatus.PENDING,
-        message="Workflow execution task queued"
+        message="Workflow execution task queued",
     )
 
 
@@ -186,7 +185,7 @@ async def get_task_status_endpoint(
         "task_id": task_id,
         "status": status,
         "progress": progress,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.utcnow(),
     }
 
     if status == TaskStatus.COMPLETED:
@@ -220,18 +219,15 @@ async def health_check():
             provider_status["celery"] = "no_workers"
 
         return HealthResponse(
-            status="healthy",
-            timestamp=datetime.utcnow(),
-            providers=provider_status
+            status="healthy", timestamp=datetime.utcnow(), providers=provider_status
         )
     except Exception as e:
         return HealthResponse(
-            status="unhealthy",
-            timestamp=datetime.utcnow(),
-            providers={"error": str(e)}
+            status="unhealthy", timestamp=datetime.utcnow(), providers={"error": str(e)}
         )
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

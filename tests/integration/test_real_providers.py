@@ -1,35 +1,38 @@
 """Integration tests with real providers - skip if no API key."""
 
 import os
-import pytest
 import tempfile
 from pathlib import Path
 
-from hydra.ticket_workflow import execute_single_ticket
-from hydra.providers.provider_factory import ProviderFactory
+import pytest
 
+from hydra.ticket_workflow import execute_single_ticket
 
 # Skip all tests if no provider API keys available
 pytestmark = pytest.mark.skipif(
-    not any([
-        os.getenv("VENICE_API_KEY"),
-        os.getenv("ANTHROPIC_API_KEY"),
-        os.getenv("OPENAI_API_KEY")
-    ]),
-    reason="No provider API keys available"
+    not any(
+        [
+            os.getenv("VENICE_API_KEY"),
+            os.getenv("ANTHROPIC_API_KEY"),
+            os.getenv("OPENAI_API_KEY"),
+        ]
+    ),
+    reason="No provider API keys available",
 )
 
 
 class TestRealProviderIntegration:
     """Test with real providers when available."""
-    
+
     @pytest.fixture
     def workspace(self):
         """Create temporary workspace."""
         with tempfile.TemporaryDirectory() as tmpdir:
             yield tmpdir
-            
-    @pytest.mark.skipif(not os.getenv("VENICE_API_KEY"), reason="Venice API key required")
+
+    @pytest.mark.skipif(
+        not os.getenv("VENICE_API_KEY"), reason="Venice API key required"
+    )
     def test_venice_simple_task(self, workspace):
         """Test Venice provider with deterministic task."""
         content = """# Tickets
@@ -49,25 +52,27 @@ class TestRealProviderIntegration:
 """
         tickets_file = Path(workspace) / "tickets.md"
         tickets_file.write_text(content)
-        
+
         # Execute with Venice
         os.environ["LLM_PROVIDER"] = "venice"
         result = execute_single_ticket(str(tickets_file), "001")
-        
+
         assert result is True
-        
+
         # Check if the function was created
         output_file = Path(workspace) / "hello_world.py"
         if output_file.exists():
             content = output_file.read_text()
             assert "def hello_world" in content
             assert "Hello, World!" in content
-            
-    @pytest.mark.skipif(not os.getenv("ANTHROPIC_API_KEY"), reason="Anthropic API key required")
+
+    @pytest.mark.skipif(
+        not os.getenv("ANTHROPIC_API_KEY"), reason="Anthropic API key required"
+    )
     def test_claude_deterministic_task(self, workspace):
         """Test Claude provider with deterministic task."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
         content = """# Tickets
 
@@ -89,16 +94,16 @@ class TestRealProviderIntegration:
 """
         tickets_file = Path(workspace) / "tickets.md"
         tickets_file.write_text(content)
-        
+
         os.environ["LLM_PROVIDER"] = "anthropic"
         result = execute_single_ticket(str(tickets_file), "001")
-        
+
         assert result is True
-        
+
     def test_provider_fallback(self, workspace):
         """Test provider fallback mechanism."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
         content = """# Tickets
 
@@ -110,24 +115,26 @@ class TestRealProviderIntegration:
 """
         tickets_file = Path(workspace) / "tickets.md"
         tickets_file.write_text(content)
-        
+
         # Set invalid primary provider
         os.environ["LLM_PROVIDER"] = "nonexistent"
-        os.environ["FALLBACK_PROVIDER"] = "venice" if os.getenv("VENICE_API_KEY") else "mock"
-        
+        os.environ["FALLBACK_PROVIDER"] = (
+            "venice" if os.getenv("VENICE_API_KEY") else "mock"
+        )
+
         result = execute_single_ticket(str(tickets_file), "001")
-        
+
         # Should fallback and still work
         assert result is True
-        
+
     @pytest.mark.benchmark
     def test_provider_performance(self, workspace):
         """Benchmark provider response times."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
         import time
-        
+
         content = """# Tickets
 
 ## Ticket 001: Quick Task
@@ -138,32 +145,32 @@ class TestRealProviderIntegration:
 """
         tickets_file = Path(workspace) / "tickets.md"
         tickets_file.write_text(content)
-        
+
         providers_to_test = []
         if os.getenv("VENICE_API_KEY"):
             providers_to_test.append("venice")
         if os.getenv("ANTHROPIC_API_KEY"):
             providers_to_test.append("anthropic")
-            
+
         timings = {}
         for provider in providers_to_test:
             os.environ["LLM_PROVIDER"] = provider
-            
+
             start = time.time()
             result = execute_single_ticket(str(tickets_file), "001")
             elapsed = time.time() - start
-            
+
             timings[provider] = elapsed
             assert result is True
-            
+
         # Log performance metrics
         for provider, timing in timings.items():
             print(f"{provider}: {timing:.2f}s")
-            
+
     def test_parallel_with_real_provider(self, workspace):
         """Test parallel execution with real provider."""
         # Skip in CI due to resource limitations
-        if os.getenv('CI') == 'true':
+        if os.getenv("CI") == "true":
             pytest.skip("Skipped in CI due to resource limitations")
         content = """# Tickets
 
@@ -184,8 +191,8 @@ class TestRealProviderIntegration:
 """
         tickets_file = Path(workspace) / "tickets.md"
         tickets_file.write_text(content)
-        
+
         from hydra.ticket_workflow import run_all_tickets
-        
+
         result = run_all_tickets(str(tickets_file), max_parallel=2)
         assert result is True

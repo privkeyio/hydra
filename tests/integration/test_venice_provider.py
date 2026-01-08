@@ -36,8 +36,10 @@ class TestVeniceProviderIntegration:
     @pytest.fixture
     def venice_provider(self, venice_config):
         """Create a Venice provider instance."""
-        with patch("hydra.providers.venice.OpenAI"), \
-             patch("hydra.providers.venice.AsyncOpenAI"):
+        with (
+            patch("hydra.providers.venice.OpenAI"),
+            patch("hydra.providers.venice.AsyncOpenAI"),
+        ):
             return VeniceProvider(venice_config)
 
     def test_execute_ticket_basic_file_creation(self, venice_provider, temp_dir):
@@ -114,7 +116,9 @@ class TestVeniceProviderIntegration:
             assert len(result["results"]) > 0
 
     @pytest.mark.external
-    @pytest.mark.skipif(not os.getenv("VENICE_API_KEY"), reason="Venice API key required")
+    @pytest.mark.skipif(
+        not os.getenv("VENICE_API_KEY"), reason="Venice API key required"
+    )
     def test_execute_ticket_with_commands(self, venice_provider, temp_dir):
         """Test executing commands through execute_ticket."""
         mock_response = """
@@ -168,9 +172,7 @@ class TestVeniceProviderIntegration:
 
         # Test with generation failure
         with patch.object(
-            venice_provider,
-            "generate",
-            side_effect=Exception("API error")
+            venice_provider, "generate", side_effect=Exception("API error")
         ):
             result = venice_provider.execute_ticket(
                 "Create something",
@@ -270,23 +272,22 @@ class TestVeniceProviderIntegration:
 
         with patch.object(venice_provider, "generate", return_value=mock_response):
             # Create a mock executor that fails on second action
-            with patch("hydra.providers.venice.FileOperationsExecutor") as mock_executor:
+            with patch(
+                "hydra.providers.venice.FileOperationsExecutor"
+            ) as mock_executor:
                 mock_executor_instance = mock_executor.return_value
                 mock_executor_instance.validate.return_value = True
 
                 # First execution succeeds, second fails
                 mock_results = [
                     Mock(
-                        success=True,
-                        error=None,
-                        output="Created",
-                        execution_time=0.1
+                        success=True, error=None, output="Created", execution_time=0.1
                     ),
                     Mock(
                         success=False,
                         error="Permission denied",
                         output=None,
-                        execution_time=0.1
+                        execution_time=0.1,
                     ),
                 ]
                 mock_executor_instance.execute.side_effect = mock_results
@@ -331,13 +332,16 @@ class TestVeniceProviderIntegration:
         assert "Code files" in prompt
         assert "Commands" in prompt or "bash blocks" in prompt
 
-    @pytest.mark.parametrize("response_format", [
-        # Different response formats to test
-        """```python\n# file.py\ncode```""",
-        """```python:path/file.py\ncode```""",
-        """```bash\necho "test"```""",
-        """Create file:\n```python\ncode```""",
-    ])
+    @pytest.mark.parametrize(
+        "response_format",
+        [
+            # Different response formats to test
+            """```python\n# file.py\ncode```""",
+            """```python:path/file.py\ncode```""",
+            """```bash\necho "test"```""",
+            """Create file:\n```python\ncode```""",
+        ],
+    )
     def test_various_response_formats(self, venice_provider, response_format):
         """Test parsing various Venice response formats."""
         actions = venice_provider._parse_venice_response(response_format)
@@ -355,8 +359,10 @@ class TestVeniceProviderEdgeCases:
             provider_type="venice",
             api_key="test-key",
         )
-        with patch("hydra.providers.venice.OpenAI"), \
-             patch("hydra.providers.venice.AsyncOpenAI"):
+        with (
+            patch("hydra.providers.venice.OpenAI"),
+            patch("hydra.providers.venice.AsyncOpenAI"),
+        ):
             return VeniceProvider(config)
 
     def test_execute_ticket_with_invalid_working_dir(self, venice_provider):
@@ -416,4 +422,3 @@ class TestVeniceProviderEdgeCases:
             assert "success" in result
             # Should respect max_actions limit
             assert len(result["results"]) <= 100  # Default max from parser
-

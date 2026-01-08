@@ -115,9 +115,13 @@ class CodebaseAnalyzer:
         if self._file_exists("package.json"):
             try:
                 import json
+
                 with open(self.project_path / "package.json") as f:
                     pkg = json.load(f)
-                    deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+                    deps = {
+                        **pkg.get("dependencies", {}),
+                        **pkg.get("devDependencies", {}),
+                    }
                     for framework, indicators in framework_indicators.items():
                         if any(ind.lower() in deps for ind in indicators):
                             self.framework = framework
@@ -178,8 +182,9 @@ class CodebaseAnalyzer:
             return "jest"
 
         # Check test files
-        test_files = list(self.project_path.glob("**/test*.py")) + \
-                    list(self.project_path.glob("**/*test.py"))
+        test_files = list(self.project_path.glob("**/test*.py")) + list(
+            self.project_path.glob("**/*test.py")
+        )
         for test_file in test_files[:5]:  # Sample first 5
             try:
                 content = test_file.read_text()
@@ -209,24 +214,42 @@ class CodebaseAnalyzer:
         }
 
         # Find key directories
-        for pattern in ["src", "lib", "app", "core", "modules", "components", "tests", "docs"]:
+        for pattern in [
+            "src",
+            "lib",
+            "app",
+            "core",
+            "modules",
+            "components",
+            "tests",
+            "docs",
+        ]:
             dirs = list(self.project_path.glob(f"**/{pattern}"))
             if dirs:
-                structure["directories"].extend([str(d.relative_to(self.project_path)) for d in dirs[:3]])
+                structure["directories"].extend(
+                    [str(d.relative_to(self.project_path)) for d in dirs[:3]]
+                )
 
         # Find key files
         key_patterns = ["*.py", "*.js", "*.ts", "*.go", "*.rs", "*.java"]
         for pattern in key_patterns:
             files = list(self.project_path.glob(f"**/{pattern}"))
             if files:
-                structure["key_files"].extend([str(f.relative_to(self.project_path)) for f in files[:5]])
+                structure["key_files"].extend(
+                    [str(f.relative_to(self.project_path)) for f in files[:5]]
+                )
 
         # Calculate directory depth
         max_depth = 0
         for root, dirs, files in os.walk(self.project_path):
             # Skip hidden and vendor directories
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', 'venv', '__pycache__']]
-            depth = root.replace(str(self.project_path), '').count(os.sep)
+            dirs[:] = [
+                d
+                for d in dirs
+                if not d.startswith(".")
+                and d not in ["node_modules", "venv", "__pycache__"]
+            ]
+            depth = root.replace(str(self.project_path), "").count(os.sep)
             max_depth = max(max_depth, depth)
         structure["depth"] = max_depth
 
@@ -250,15 +273,21 @@ class CodebaseAnalyzer:
         py_files = list(self.project_path.glob("**/*.py"))
 
         for py_file in py_files:
-            if any(part.startswith('.') or part in ['venv', 'node_modules', '__pycache__']
-                   for part in py_file.parts):
+            if any(
+                part.startswith(".") or part in ["venv", "node_modules", "__pycache__"]
+                for part in py_file.parts
+            ):
                 continue
 
             try:
                 content = py_file.read_text()
                 tree = ast.parse(content)
 
-                module_name = str(py_file.relative_to(self.project_path)).replace('.py', '').replace('/', '.')
+                module_name = (
+                    str(py_file.relative_to(self.project_path))
+                    .replace(".py", "")
+                    .replace("/", ".")
+                )
 
                 for node in ast.walk(tree):
                     if isinstance(node, ast.Import):
@@ -283,8 +312,10 @@ class CodebaseAnalyzer:
         py_files = list(self.project_path.glob("**/*.py"))
 
         for py_file in py_files:
-            if any(part.startswith('.') or part in ['venv', 'node_modules', '__pycache__']
-                   for part in py_file.parts):
+            if any(
+                part.startswith(".") or part in ["venv", "node_modules", "__pycache__"]
+                for part in py_file.parts
+            ):
                 continue
 
             try:
@@ -345,12 +376,20 @@ class CodebaseAnalyzer:
             "javascript_loc": 0,
         }
 
-        for ext, key in [("*.py", "python"), ("*.js", "javascript"), ("*.ts", "javascript")]:
+        for ext, key in [
+            ("*.py", "python"),
+            ("*.js", "javascript"),
+            ("*.ts", "javascript"),
+        ]:
             files = list(self.project_path.glob(f"**/{ext}"))
-            files = [f for f in files if not any(
-                part in ['venv', 'node_modules', '__pycache__', '.git']
-                for part in f.parts
-            )]
+            files = [
+                f
+                for f in files
+                if not any(
+                    part in ["venv", "node_modules", "__pycache__", ".git"]
+                    for part in f.parts
+                )
+            ]
 
             if key == "javascript" and ext == "*.js":
                 # Don't overwrite javascript_files if already set by .ts files
@@ -373,10 +412,12 @@ class CodebaseAnalyzer:
             metrics["total_loc"] += loc
 
         # Count test files
-        test_files = list(self.project_path.glob("**/test*.py")) + \
-                    list(self.project_path.glob("**/*test.py")) + \
-                    list(self.project_path.glob("**/*.test.js")) + \
-                    list(self.project_path.glob("**/*.spec.js"))
+        test_files = (
+            list(self.project_path.glob("**/test*.py"))
+            + list(self.project_path.glob("**/*test.py"))
+            + list(self.project_path.glob("**/*.test.js"))
+            + list(self.project_path.glob("**/*.spec.js"))
+        )
         metrics["test_files"] = len(test_files)
 
         metrics["total_files"] = metrics["python_files"] + metrics["javascript_files"]
@@ -395,7 +436,9 @@ class CodebaseAnalyzer:
         # Language detection
         if list(self.project_path.glob("**/*.py")):
             tech_stack.append("Python")
-        if list(self.project_path.glob("**/*.js")) or list(self.project_path.glob("**/*.ts")):
+        if list(self.project_path.glob("**/*.js")) or list(
+            self.project_path.glob("**/*.ts")
+        ):
             tech_stack.append("JavaScript/TypeScript")
         if list(self.project_path.glob("**/*.go")):
             tech_stack.append("Go")
@@ -403,11 +446,15 @@ class CodebaseAnalyzer:
             tech_stack.append("Rust")
 
         # Database detection
-        if self._file_exists("docker-compose.yml") or self._file_exists("docker-compose.yaml"):
+        if self._file_exists("docker-compose.yml") or self._file_exists(
+            "docker-compose.yaml"
+        ):
             try:
-                content = (self.project_path / "docker-compose.yml").read_text() if \
-                         self._file_exists("docker-compose.yml") else \
-                         (self.project_path / "docker-compose.yaml").read_text()
+                content = (
+                    (self.project_path / "docker-compose.yml").read_text()
+                    if self._file_exists("docker-compose.yml")
+                    else (self.project_path / "docker-compose.yaml").read_text()
+                )
                 if "postgres" in content.lower():
                     tech_stack.append("PostgreSQL")
                 if "mysql" in content.lower() or "mariadb" in content.lower():
@@ -430,7 +477,9 @@ class CodebaseAnalyzer:
         # Infrastructure
         if self._file_exists("Dockerfile"):
             tech_stack.append("Docker")
-        if self._file_exists(".github/workflows") or self._file_exists(".gitlab-ci.yml"):
+        if self._file_exists(".github/workflows") or self._file_exists(
+            ".gitlab-ci.yml"
+        ):
             tech_stack.append("CI/CD")
         if self._file_exists("terraform") or list(self.project_path.glob("**/*.tf")):
             tech_stack.append("Terraform")
@@ -465,18 +514,24 @@ class CodebaseAnalyzer:
         test_patterns = ["**/test*.py", "**/*test.py", "**/*.test.js", "**/*.spec.js"]
         for pattern in test_patterns:
             files = list(self.project_path.glob(pattern))
-            test_info["test_files"].extend([str(f.relative_to(self.project_path)) for f in files])
+            test_info["test_files"].extend(
+                [str(f.relative_to(self.project_path)) for f in files]
+            )
 
         test_info["test_count"] = len(test_info["test_files"])
 
         # Find test directories
         for dir_name in ["tests", "test", "spec", "__tests__"]:
             dirs = list(self.project_path.glob(f"**/{dir_name}"))
-            test_info["test_directories"].extend([str(d.relative_to(self.project_path)) for d in dirs])
+            test_info["test_directories"].extend(
+                [str(d.relative_to(self.project_path)) for d in dirs]
+            )
 
         # Check for coverage configuration
         coverage_files = [".coveragerc", "coverage.xml", ".coverage", "codecov.yml"]
-        test_info["coverage_configured"] = any(self._file_exists(f) for f in coverage_files)
+        test_info["coverage_configured"] = any(
+            self._file_exists(f) for f in coverage_files
+        )
 
         return test_info
 
@@ -497,15 +552,20 @@ class CodebaseAnalyzer:
         # GitHub Actions
         if self._file_exists(".github/workflows"):
             ci_info["platform"] = "GitHub Actions"
-            workflow_files = list((self.project_path / ".github/workflows").glob("*.yml")) + \
-                           list((self.project_path / ".github/workflows").glob("*.yaml"))
+            workflow_files = list(
+                (self.project_path / ".github/workflows").glob("*.yml")
+            ) + list((self.project_path / ".github/workflows").glob("*.yaml"))
             ci_info["workflows"] = [f.name for f in workflow_files]
 
             # Check workflow content
             for wf in workflow_files:
                 try:
                     content = wf.read_text()
-                    if "pytest" in content or "npm test" in content or "go test" in content:
+                    if (
+                        "pytest" in content
+                        or "npm test" in content
+                        or "go test" in content
+                    ):
                         ci_info["automated_tests"] = True
                     if "deploy" in content.lower() or "release" in content.lower():
                         ci_info["automated_deployment"] = True
@@ -542,11 +602,14 @@ class CodebaseAnalyzer:
 
         """
         doc_info = {
-            "has_readme": self._file_exists("README.md") or self._file_exists("README.rst"),
-            "has_docs_folder": self._file_exists("docs") or self._file_exists("documentation"),
+            "has_readme": self._file_exists("README.md")
+            or self._file_exists("README.rst"),
+            "has_docs_folder": self._file_exists("docs")
+            or self._file_exists("documentation"),
             "has_api_docs": False,
             "has_contributing": self._file_exists("CONTRIBUTING.md"),
-            "has_changelog": self._file_exists("CHANGELOG.md") or self._file_exists("HISTORY.md"),
+            "has_changelog": self._file_exists("CHANGELOG.md")
+            or self._file_exists("HISTORY.md"),
             "docstring_coverage": 0.0,
         }
 
@@ -564,14 +627,19 @@ class CodebaseAnalyzer:
         documented_functions = 0
 
         for py_file in py_files:
-            if any(part in ['venv', 'node_modules', '__pycache__'] for part in py_file.parts):
+            if any(
+                part in ["venv", "node_modules", "__pycache__"]
+                for part in py_file.parts
+            ):
                 continue
             try:
                 content = py_file.read_text()
                 tree = ast.parse(content)
 
                 for node in ast.walk(tree):
-                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    if isinstance(
+                        node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                    ):
                         total_functions += 1
                         if ast.get_docstring(node):
                             documented_functions += 1
@@ -609,7 +677,10 @@ class CodebaseAnalyzer:
         for py_file in py_files:
             try:
                 content = py_file.read_text()
-                if f"import {import_name}" in content or f"from {import_name}" in content:
+                if (
+                    f"import {import_name}" in content
+                    or f"from {import_name}" in content
+                ):
                     return True
             except Exception:
                 continue
@@ -628,7 +699,9 @@ class CodebaseAnalyzer:
         report = ["Code Complexity Analysis", "=" * 40]
 
         # Sort by complexity
-        sorted_modules = sorted(self.module_complexity.items(), key=lambda x: x[1], reverse=True)
+        sorted_modules = sorted(
+            self.module_complexity.items(), key=lambda x: x[1], reverse=True
+        )
 
         # Categorize
         high_complexity = [(m, c) for m, c in sorted_modules if c > 10]
@@ -651,7 +724,11 @@ class CodebaseAnalyzer:
         report.append(f"  Medium complexity: {len(medium_complexity)}")
         report.append(f"  Low complexity: {len(low_complexity)}")
 
-        avg_complexity = sum(self.module_complexity.values()) / len(self.module_complexity) if self.module_complexity else 0
+        avg_complexity = (
+            sum(self.module_complexity.values()) / len(self.module_complexity)
+            if self.module_complexity
+            else 0
+        )
         report.append(f"  Average complexity: {avg_complexity:.1f}")
 
         return "\n".join(report)
@@ -669,7 +746,7 @@ class CodebaseAnalyzer:
         if file_path not in self.module_complexity:
             # Try to analyze the specific file
             full_path = self.project_path / file_path
-            if full_path.exists() and full_path.suffix == '.py':
+            if full_path.exists() and full_path.suffix == ".py":
                 try:
                     content = full_path.read_text()
                     tree = ast.parse(content)
@@ -703,19 +780,19 @@ class CodebaseAnalyzer:
         related = set()
 
         # Convert file path to module name
-        module_name = str(file_path).replace('.py', '').replace('/', '.')
+        module_name = str(file_path).replace(".py", "").replace("/", ".")
 
         # Find modules that import this one
         for module, deps in self.dependency_graph.items():
             if module_name in deps or any(module_name in d for d in deps):
-                related.add(module.replace('.', '/') + '.py')
+                related.add(module.replace(".", "/") + ".py")
 
         # Find modules this one imports
         if module_name in self.dependency_graph:
             for dep in self.dependency_graph[module_name]:
                 # Convert back to file path if it's a local module
-                if not dep.startswith(('sys', 'os', 'json', 'typing')):  # Skip stdlib
-                    potential_path = dep.replace('.', '/') + '.py'
+                if not dep.startswith(("sys", "os", "json", "typing")):  # Skip stdlib
+                    potential_path = dep.replace(".", "/") + ".py"
                     if (self.project_path / potential_path).exists():
                         related.add(potential_path)
 

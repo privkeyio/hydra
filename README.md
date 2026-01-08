@@ -110,6 +110,9 @@ hydra ticket execute tickets.yaml 001
 # Execute all tickets in parallel
 hydra ticket parallel tickets.yaml --workers 4
 
+# Execute allowing system modifications (for self-improvement)
+hydra ticket parallel tickets.yaml --workers 3 --allow-system-modifications
+
 # Verify parallel execution results
 hydra ticket verify-parallel tickets.yaml --workers 2
 ```

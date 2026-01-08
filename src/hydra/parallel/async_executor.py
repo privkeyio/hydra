@@ -67,8 +67,9 @@ class ExecutionPlan:
 class AsyncParallelExecutor:
     """Executes tickets in parallel using asyncio for true concurrency."""
 
-    def __init__(self, max_concurrent: int = 3, project_root: str = ".",
-                 dashboard_state=None):
+    def __init__(
+        self, max_concurrent: int = 3, project_root: str = ".", dashboard_state=None
+    ):
         self.max_concurrent = max_concurrent
         self.project_root = Path(project_root).resolve()
         self.tickets: Dict[str, TicketNode] = {}
@@ -91,9 +92,10 @@ class AsyncParallelExecutor:
         # Initialize file lock manager
         self.file_lock_manager = get_file_lock_manager()
         from hydra.safety.claude_file_interceptor import SmartFileLockManager
+
         self.smart_lock_manager = SmartFileLockManager()
         # Start deadlock monitoring for production use
-        if not os.environ.get('TESTING'):
+        if not os.environ.get("TESTING"):
             self.smart_lock_manager.start_deadlock_monitoring()
 
     async def load_tickets(self, tickets_path: str) -> Dict[str, TicketNode]:
@@ -101,19 +103,20 @@ class AsyncParallelExecutor:
         self.tickets_path = tickets_path
         tickets = {}
 
-        async with aiofiles.open(tickets_path, 'r') as f:
+        async with aiofiles.open(tickets_path, "r") as f:
             content = await f.read()
 
         # Find all ticket IDs using existing logic
         import re
+
         ticket_patterns = [
-            r'## Ticket (\d+):',
-            r'## TICKET-(\d+):',
-            r'## Ticket-(\d+):',
-            r'## \w+-(\d+):',
-            r'### TICKET-(\d+):',
-            r'## #(\d+):',
-            r'## (\d+):'
+            r"## Ticket (\d+):",
+            r"## TICKET-(\d+):",
+            r"## Ticket-(\d+):",
+            r"## \w+-(\d+):",
+            r"### TICKET-(\d+):",
+            r"## #(\d+):",
+            r"## (\d+):",
         ]
 
         ticket_ids = []
@@ -127,33 +130,33 @@ class AsyncParallelExecutor:
         for ticket_id in ticket_ids:
             ticket_data = parse_ticket(tickets_path, ticket_id)
             if ticket_data:
-                ticket_status = ticket_data.get('status', 'TODO').upper()
-                if ticket_data.get('completed') or ticket_status == 'DONE':
+                ticket_status = ticket_data.get("status", "TODO").upper()
+                if ticket_data.get("completed") or ticket_status == "DONE":
                     node = TicketNode(
                         ticket_id=ticket_id,
-                        title=ticket_data['title'],
-                        model=ticket_data['model'],
-                        dependencies=ticket_data.get('dependencies', []),
-                        status=ExecutionStatus.COMPLETED
+                        title=ticket_data["title"],
+                        model=ticket_data["model"],
+                        dependencies=ticket_data.get("dependencies", []),
+                        status=ExecutionStatus.COMPLETED,
                     )
                     tickets[ticket_id] = node
                     self.completed_tickets.add(ticket_id)
                 else:
                     node = TicketNode(
                         ticket_id=ticket_id,
-                        title=ticket_data['title'],
-                        model=ticket_data['model'],
-                        dependencies=ticket_data.get('dependencies', []),
-                        status=ExecutionStatus.PENDING
+                        title=ticket_data["title"],
+                        model=ticket_data["model"],
+                        dependencies=ticket_data.get("dependencies", []),
+                        status=ExecutionStatus.PENDING,
                     )
                     tickets[ticket_id] = node
 
                     if self.dashboard_state:
                         self.dashboard_state.add_ticket(
                             ticket_id,
-                            ticket_data['title'],
-                            ticket_data['model'],
-                            ticket_data.get('dependencies', [])
+                            ticket_data["title"],
+                            ticket_data["model"],
+                            ticket_data.get("dependencies", []),
                         )
 
         self.tickets = tickets
@@ -172,7 +175,8 @@ class AsyncParallelExecutor:
 
             # If ticket has no unresolved dependencies, add to ready queue
             unresolved_deps = [
-                dep for dep in node.dependencies
+                dep
+                for dep in node.dependencies
                 if dep not in self.completed_tickets and dep in self.tickets
             ]
 
@@ -192,7 +196,7 @@ class AsyncParallelExecutor:
             ready_queue=ready_queue,
             dependency_graph=dependency_graph,
             total_tickets=len(self.tickets),
-            max_concurrent=self.max_concurrent
+            max_concurrent=self.max_concurrent,
         )
 
     async def execute_ticket(self, ticket_id: str, tickets_path: str) -> bool:
@@ -224,6 +228,7 @@ class AsyncParallelExecutor:
 
             if self.dashboard_state:
                 from hydra.dashboard.state import TicketStatus
+
                 self.dashboard_state.update_ticket_status(
                     ticket_id, TicketStatus.RUNNING
                 )
@@ -243,17 +248,18 @@ class AsyncParallelExecutor:
             )
 
             # Create model-specific orchestrator
-            ticket_model = ticket_data.get('model', 'sonnet')
+            ticket_model = ticket_data.get("model", "sonnet")
             logger.info(f"🧠 Ticket {ticket_id} requires model: {ticket_model.upper()}")
 
             # Set model environment
             import os
-            original_model = os.environ.get('CLAUDE_MODEL')
 
-            if ticket_model.lower() == 'opus':
-                os.environ['CLAUDE_MODEL'] = 'claude-opus-4-1-20250805'
+            original_model = os.environ.get("CLAUDE_MODEL")
+
+            if ticket_model.lower() == "opus":
+                os.environ["CLAUDE_MODEL"] = "claude-opus-4-1-20250805"
             else:
-                os.environ['CLAUDE_MODEL'] = 'claude-sonnet-4-20250514'
+                os.environ["CLAUDE_MODEL"] = "claude-sonnet-4-20250514"
 
             orchestrator = ClaudeCodeOrchestrator()
             self.orchestrators[ticket_id] = orchestrator
@@ -294,7 +300,7 @@ tickets."""
                 prompt=prompt,
                 working_directory=str(self.project_root),
                 timeout=900,
-                task_id=ticket_id
+                task_id=ticket_id,
             )
 
             # Execute in executor to avoid blocking event loop
@@ -307,8 +313,10 @@ tickets."""
                 from hydra.ticket_workflow import validate_acceptance_criteria
 
                 validation_passed = await asyncio.get_event_loop().run_in_executor(
-                    None, validate_acceptance_criteria, ticket_data,
-                    str(self.project_root)
+                    None,
+                    validate_acceptance_criteria,
+                    ticket_data,
+                    str(self.project_root),
                 )
 
                 if validation_passed:
@@ -322,6 +330,7 @@ tickets."""
                     f"🔧 Running automatic quality fixes for ticket {ticket_id}"
                 )
                 from hydra.quality.auto_fixer import QualityAutoFixer
+
                 fixer = QualityAutoFixer(self.project_root)
                 fixes = await asyncio.get_event_loop().run_in_executor(
                     None, fixer.fix_common_issues
@@ -343,7 +352,11 @@ tickets."""
                 # Log quality gate results
                 logger.info("📋 Quality Gate Results:")
                 for check in quality_report.results:
-                    status_icon = "✅" if check.status.value == "passed" else "❌" if check.status.value == "failed" else "⚠️"
+                    status_icon = (
+                        "✅"
+                        if check.status.value == "passed"
+                        else "❌" if check.status.value == "failed" else "⚠️"
+                    )
                     logger.info(f"   {status_icon} {check.name}: {check.status.value}")
 
                 allowed_statuses = ["passed", "warning"]
@@ -357,14 +370,25 @@ tickets."""
                     logger.info("✅ Quality gates passed - ticket marked as DONE")
                 else:
                     from hydra.ticket_workflow import mark_ticket_quality_failed
+
                     await asyncio.get_event_loop().run_in_executor(
-                        None, mark_ticket_quality_failed, tickets_path, ticket_id, quality_report
+                        None,
+                        mark_ticket_quality_failed,
+                        tickets_path,
+                        ticket_id,
+                        quality_report,
                     )
                     if not quality_passed:
-                        logger.warning("⚠️ Quality gates failed - ticket marked as QUALITY_FAILED")
+                        logger.warning(
+                            "⚠️ Quality gates failed - ticket marked as QUALITY_FAILED"
+                        )
 
                 async with self.lock:
-                    node.status = ExecutionStatus.COMPLETED if quality_passed else ExecutionStatus.FAILED
+                    node.status = (
+                        ExecutionStatus.COMPLETED
+                        if quality_passed
+                        else ExecutionStatus.FAILED
+                    )
                     node.end_time = time.time()
                     node.quality_passed = quality_passed
                     if quality_passed:
@@ -377,11 +401,20 @@ tickets."""
 
                     if self.dashboard_state:
                         from hydra.dashboard.state import TicketStatus
-                        status = TicketStatus.COMPLETED if quality_passed else TicketStatus.FAILED
+
+                        status = (
+                            TicketStatus.COMPLETED
+                            if quality_passed
+                            else TicketStatus.FAILED
+                        )
                         self.dashboard_state.update_ticket_status(ticket_id, status)
 
                 duration = node.end_time - node.start_time
-                status_msg = "✅ completed" if quality_passed else "⚠️ completed with quality issues"
+                status_msg = (
+                    "✅ completed"
+                    if quality_passed
+                    else "⚠️ completed with quality issues"
+                )
                 logger.info(f"{status_msg} Ticket {ticket_id} in {duration:.2f}s")
 
                 self.agent_pool.release_agent(agent_id)
@@ -400,6 +433,7 @@ tickets."""
 
                 if self.dashboard_state:
                     from hydra.dashboard.state import TicketStatus
+
                     self.dashboard_state.update_ticket_status(
                         ticket_id, TicketStatus.FAILED, str(e)
                     )
@@ -410,11 +444,11 @@ tickets."""
             return False
         finally:
             # Restore original model setting
-            if 'original_model' in locals():
+            if "original_model" in locals():
                 if original_model:
-                    os.environ['CLAUDE_MODEL'] = original_model
-                elif 'CLAUDE_MODEL' in os.environ:
-                    del os.environ['CLAUDE_MODEL']
+                    os.environ["CLAUDE_MODEL"] = original_model
+                elif "CLAUDE_MODEL" in os.environ:
+                    del os.environ["CLAUDE_MODEL"]
 
     async def _trigger_dependents(self, completed_ticket_id: str):
         """Trigger tickets that were waiting for this dependency."""
@@ -423,13 +457,16 @@ tickets."""
                 # Check if all dependencies are now satisfied
                 node = self.tickets[waiting_ticket]
                 unresolved_deps = [
-                    dep for dep in node.dependencies
+                    dep
+                    for dep in node.dependencies
                     if dep not in self.completed_tickets and dep in self.tickets
                 ]
 
                 if not unresolved_deps and waiting_ticket not in self.running_tickets:
                     await self.ready_queue.put(waiting_ticket)
-                    logger.debug(f"Ticket {waiting_ticket} added to ready queue (deps satisfied)")
+                    logger.debug(
+                        f"Ticket {waiting_ticket} added to ready queue (deps satisfied)"
+                    )
 
             # Clean up
             del self.dependency_waiters[completed_ticket_id]
@@ -446,7 +483,7 @@ tickets."""
                 tickets_path=tickets_path,
                 total_tickets=len(self.tickets),
                 total_waves=1,  # Dynamic scheduling uses a single conceptual wave
-                workers=self.max_concurrent
+                workers=self.max_concurrent,
             )
 
         logger.info("📋 Dynamic Execution Plan")
@@ -474,16 +511,18 @@ tickets."""
                     ticket_id = self.ready_queue.get_nowait()
 
                     # Skip if already processed
-                    if (ticket_id in self.completed_tickets or
-                        ticket_id in self.failed_tickets or
-                        ticket_id in self.running_tickets):
+                    if (
+                        ticket_id in self.completed_tickets
+                        or ticket_id in self.failed_tickets
+                        or ticket_id in self.running_tickets
+                    ):
                         continue
 
-                    task = asyncio.create_task(
-                        process_ticket_with_semaphore(ticket_id)
-                    )
+                    task = asyncio.create_task(process_ticket_with_semaphore(ticket_id))
                     running_tasks.add(task)
-                    logger.info(f"🚀 Started task for ticket {ticket_id} (active: {len(running_tasks)})")
+                    logger.info(
+                        f"🚀 Started task for ticket {ticket_id} (active: {len(running_tasks)})"
+                    )
 
                 except asyncio.QueueEmpty:
                     # No more ready tickets
@@ -512,20 +551,22 @@ tickets."""
             "completed": len(self.completed_tickets),
             "failed": len(self.failed_tickets),
             "blocked": sum(
-                1 for n in self.tickets.values()
-                if n.status == ExecutionStatus.BLOCKED
+                1 for n in self.tickets.values() if n.status == ExecutionStatus.BLOCKED
             ),
             "duration": duration,
             "success_rate": (
                 len(self.completed_tickets) / len(self.tickets) * 100
-                if len(self.tickets) > 0 else 0
+                if len(self.tickets) > 0
+                else 0
             ),
-            "results": all_results
+            "results": all_results,
         }
 
         return summary
 
-    async def execute_plan(self, plan: ExecutionPlan, tickets_path: str) -> Dict[str, Any]:
+    async def execute_plan(
+        self, plan: ExecutionPlan, tickets_path: str
+    ) -> Dict[str, Any]:
         """Execute the full execution plan asynchronously."""
         # For backwards compatibility, delegate to dynamic execution
         return await self.execute_tickets_dynamically(tickets_path)
@@ -533,7 +574,12 @@ tickets."""
     def generate_report(self, summary: Dict[str, Any]) -> str:
         """Generate execution report (same as sync version)."""
         from hydra.ticket_workflow import get_quality_summary
-        quality_summary = get_quality_summary(self.tickets_path) if hasattr(self, 'tickets_path') else None
+
+        quality_summary = (
+            get_quality_summary(self.tickets_path)
+            if hasattr(self, "tickets_path")
+            else None
+        )
 
         lines = [
             f"\n{'='*60}",
@@ -548,13 +594,15 @@ tickets."""
             "",
         ]
 
-        if quality_summary and quality_summary['quality_failed'] > 0:
-            lines.extend([
-                "⚠️ QUALITY ISSUES DETECTED:",
-                f"   {quality_summary['quality_failed']} ticket(s) have failing quality gates",
-                "   Check tickets.md for detailed Quality Gate Results",
-                "",
-            ])
+        if quality_summary and quality_summary["quality_failed"] > 0:
+            lines.extend(
+                [
+                    "⚠️ QUALITY ISSUES DETECTED:",
+                    f"   {quality_summary['quality_failed']} ticket(s) have failing quality gates",
+                    "   Check tickets.md for detailed Quality Gate Results",
+                    "",
+                ]
+            )
 
         lines.append("📋 Ticket Details:")
 
@@ -564,7 +612,7 @@ tickets."""
                 ExecutionStatus.FAILED: "❌",
                 ExecutionStatus.BLOCKED: "⛔",
                 ExecutionStatus.PENDING: "⏳",
-                ExecutionStatus.RUNNING: "🔄"
+                ExecutionStatus.RUNNING: "🔄",
             }.get(node.status, "❓")
 
             line = f"  {status_icon} {ticket_id}: {node.title}"
@@ -587,14 +635,10 @@ tickets."""
     async def save_completion_report(self, summary: Dict[str, Any]) -> str:
         """Save a completion report asynchronously."""
         hydra_dir = self.project_root / ".hydra"
-        await asyncio.get_event_loop().run_in_executor(
-            None, hydra_dir.mkdir, True
-        )
+        await asyncio.get_event_loop().run_in_executor(None, hydra_dir.mkdir, True)
 
         reports_dir = hydra_dir / "reports"
-        await asyncio.get_event_loop().run_in_executor(
-            None, reports_dir.mkdir, True
-        )
+        await asyncio.get_event_loop().run_in_executor(None, reports_dir.mkdir, True)
 
         report_file = reports_dir / f"async_completion_{int(time.time())}.md"
         report_content = self.generate_report(summary)
@@ -614,21 +658,21 @@ View the live dashboard at: http://localhost:8080
 ## ✅ Async Execution Complete!
 """
 
-        async with aiofiles.open(report_file, 'w') as f:
+        async with aiofiles.open(report_file, "w") as f:
             await f.write(full_report)
 
         return str(report_file)
 
-    async def save_execution_log(self, summary: Dict[str, Any], log_dir: Optional[str] = None):
+    async def save_execution_log(
+        self, summary: Dict[str, Any], log_dir: Optional[str] = None
+    ):
         """Save execution log asynchronously."""
         if not log_dir:
             log_dir = self.project_root / ".hydra" / "logs"
         else:
             log_dir = Path(log_dir)
 
-        await asyncio.get_event_loop().run_in_executor(
-            None, log_dir.mkdir, True, True
-        )
+        await asyncio.get_event_loop().run_in_executor(None, log_dir.mkdir, True, True)
 
         log_file = log_dir / f"async_parallel_execution_{int(time.time())}.json"
 
@@ -645,19 +689,19 @@ View the live dashboard at: http://localhost:8080
                     "start_time": node.start_time,
                     "end_time": node.end_time,
                     "error": node.error,
-                    "quality_passed": node.quality_passed
+                    "quality_passed": node.quality_passed,
                 }
                 for ticket_id, node in self.tickets.items()
-            }
+            },
         }
 
-        async with aiofiles.open(log_file, 'w') as f:
+        async with aiofiles.open(log_file, "w") as f:
             await f.write(json.dumps(log_data, indent=2))
 
         return str(log_file)
 
     def shutdown(self):
         """Shutdown the executor and clean up resources."""
-        if hasattr(self, 'agent_pool'):
+        if hasattr(self, "agent_pool"):
             self.agent_pool.stop()
             logger.info("🛑 Async agent pool shutdown complete")

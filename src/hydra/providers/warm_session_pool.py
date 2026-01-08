@@ -3,6 +3,7 @@
 Pre-warms Claude Code sessions for instant allocation to reduce startup overhead
 from 30 seconds to under 1 second.
 """
+
 import logging
 import threading
 import time
@@ -66,7 +67,7 @@ class WarmSessionPool:
         max_pool_size: int = 5,
         idle_timeout: int = 300,  # 5 minutes
         health_check_interval: int = 60,  # 1 minute
-        max_allocation_count: int = 10
+        max_allocation_count: int = 10,
     ):
         """Initialize the warm session pool.
 
@@ -93,13 +94,13 @@ class WarmSessionPool:
 
         # Statistics
         self._stats = {
-            'sessions_created': 0,
-            'sessions_allocated': 0,
-            'sessions_recycled': 0,
-            'health_checks_passed': 0,
-            'health_checks_failed': 0,
-            'allocation_time_avg': 0.0,
-            'workload_history': deque(maxlen=100)
+            "sessions_created": 0,
+            "sessions_allocated": 0,
+            "sessions_recycled": 0,
+            "health_checks_passed": 0,
+            "health_checks_failed": 0,
+            "allocation_time_avg": 0.0,
+            "workload_history": deque(maxlen=100),
         }
 
         # Background threads
@@ -124,14 +125,12 @@ class WarmSessionPool:
             self._health_thread = threading.Thread(
                 target=self._health_check_loop,
                 daemon=True,
-                name="WarmPool-HealthChecker"
+                name="WarmPool-HealthChecker",
             )
             self._health_thread.start()
 
             self._recycler_thread = threading.Thread(
-                target=self._recycler_loop,
-                daemon=True,
-                name="WarmPool-Recycler"
+                target=self._recycler_loop, daemon=True, name="WarmPool-Recycler"
             )
             self._recycler_thread.start()
         except RuntimeError as e:
@@ -164,7 +163,7 @@ class WarmSessionPool:
                 state=PoolSessionState.WARMING,
                 created_at=time.time(),
                 last_health_check=time.time(),
-                last_used=time.time()
+                last_used=time.time(),
             )
 
             with self._lock:
@@ -177,7 +176,7 @@ class WarmSessionPool:
                 self._ready_queue.append(actual_session_id)
 
             with self._stats_lock:
-                self._stats['sessions_created'] += 1
+                self._stats["sessions_created"] += 1
 
             logger.debug(f"Created warm session: {actual_session_id}")
             return pooled_session
@@ -210,7 +209,7 @@ class WarmSessionPool:
                 # Update statistics
                 allocation_time = time.time() - start_time
                 with self._stats_lock:
-                    self._stats['sessions_allocated'] += 1
+                    self._stats["sessions_allocated"] += 1
                     self._update_avg_allocation_time(allocation_time)
 
                 logger.debug(
@@ -272,9 +271,9 @@ class WarmSessionPool:
 
         # Check if session should be recycled
         should_recycle = (
-            session.allocation_count >= self.max_allocation_count or
-            session.age_seconds > (self.idle_timeout * 2) or
-            not self._quick_health_check(session)
+            session.allocation_count >= self.max_allocation_count
+            or session.age_seconds > (self.idle_timeout * 2)
+            or not self._quick_health_check(session)
         )
 
         if should_recycle:
@@ -307,7 +306,7 @@ class WarmSessionPool:
             session.last_health_check = time.time()
 
             with self._stats_lock:
-                self._stats['health_checks_passed'] += 1
+                self._stats["health_checks_passed"] += 1
 
             return True
 
@@ -315,7 +314,7 @@ class WarmSessionPool:
             logger.debug(f"Health check failed for {session.session_id}: {e}")
 
             with self._stats_lock:
-                self._stats['health_checks_failed'] += 1
+                self._stats["health_checks_failed"] += 1
 
             return False
 
@@ -344,12 +343,17 @@ class WarmSessionPool:
                     del self._sessions[session.session_id]
 
             with self._stats_lock:
-                self._stats['sessions_recycled'] += 1
+                self._stats["sessions_recycled"] += 1
 
             # Create replacement if below minimum
             with self._lock:
-                ready_count = len([s for s in self._sessions.values()
-                                if s.state == PoolSessionState.READY])
+                ready_count = len(
+                    [
+                        s
+                        for s in self._sessions.values()
+                        if s.state == PoolSessionState.READY
+                    ]
+                )
 
             if ready_count < self.min_pool_size:
                 self._create_warm_session()
@@ -375,8 +379,10 @@ class WarmSessionPool:
             for session in self._sessions.values():
                 states = [PoolSessionState.READY, PoolSessionState.ALLOCATED]
                 time_since_check = time.time() - session.last_health_check
-                if (session.state in states and
-                    time_since_check > self.health_check_interval):
+                if (
+                    session.state in states
+                    and time_since_check > self.health_check_interval
+                ):
                     sessions_to_check.append(session)
 
         for session in sessions_to_check:
@@ -401,8 +407,10 @@ class WarmSessionPool:
 
         with self._lock:
             for session in self._sessions.values():
-                if (session.state == PoolSessionState.READY and
-                    session.idle_seconds > self.idle_timeout):
+                if (
+                    session.state == PoolSessionState.READY
+                    and session.idle_seconds > self.idle_timeout
+                ):
                     sessions_to_recycle.append(session)
                 elif session.state == PoolSessionState.UNHEALTHY:
                     sessions_to_recycle.append(session)
@@ -417,8 +425,13 @@ class WarmSessionPool:
 
         # Sample current workload
         with self._lock:
-            allocated_count = len([s for s in self._sessions.values()
-                                 if s.state == PoolSessionState.ALLOCATED])
+            allocated_count = len(
+                [
+                    s
+                    for s in self._sessions.values()
+                    if s.state == PoolSessionState.ALLOCATED
+                ]
+            )
             total_count = len(self._sessions)
 
         utilization = allocated_count / max(total_count, 1)
@@ -439,13 +452,12 @@ class WarmSessionPool:
             elif avg_utilization < 0.3 and total_count > self.min_pool_size:
                 # Low utilization, consider shrinking
                 ready_sessions = [
-                    s for s in self._sessions.values()
+                    s
+                    for s in self._sessions.values()
                     if s.state == PoolSessionState.READY
                 ]
                 oldest_session = min(
-                    ready_sessions,
-                    key=lambda s: s.last_used,
-                    default=None
+                    ready_sessions, key=lambda s: s.last_used, default=None
                 )
                 if oldest_session:
                     self._recycle_session(oldest_session)
@@ -458,14 +470,14 @@ class WarmSessionPool:
 
     def _update_avg_allocation_time(self, allocation_time: float):
         """Update average allocation time statistic."""
-        current_avg = self._stats['allocation_time_avg']
-        allocation_count = self._stats['sessions_allocated']
+        current_avg = self._stats["allocation_time_avg"]
+        allocation_count = self._stats["sessions_allocated"]
 
         # Running average
         new_avg = (
             (current_avg * (allocation_count - 1)) + allocation_time
         ) / allocation_count
-        self._stats['allocation_time_avg'] = new_avg
+        self._stats["allocation_time_avg"] = new_avg
 
     def get_stats(self) -> Dict[str, Any]:
         """Get pool statistics.
@@ -475,29 +487,51 @@ class WarmSessionPool:
 
         """
         with self._lock:
-            ready_count = len([s for s in self._sessions.values()
-                             if s.state == PoolSessionState.READY])
-            allocated_count = len([s for s in self._sessions.values()
-                                 if s.state == PoolSessionState.ALLOCATED])
-            warming_count = len([s for s in self._sessions.values()
-                               if s.state == PoolSessionState.WARMING])
-            unhealthy_count = len([s for s in self._sessions.values()
-                                if s.state == PoolSessionState.UNHEALTHY])
+            ready_count = len(
+                [
+                    s
+                    for s in self._sessions.values()
+                    if s.state == PoolSessionState.READY
+                ]
+            )
+            allocated_count = len(
+                [
+                    s
+                    for s in self._sessions.values()
+                    if s.state == PoolSessionState.ALLOCATED
+                ]
+            )
+            warming_count = len(
+                [
+                    s
+                    for s in self._sessions.values()
+                    if s.state == PoolSessionState.WARMING
+                ]
+            )
+            unhealthy_count = len(
+                [
+                    s
+                    for s in self._sessions.values()
+                    if s.state == PoolSessionState.UNHEALTHY
+                ]
+            )
 
         with self._stats_lock:
             stats = self._stats.copy()
 
-        stats.update({
-            'pool_size_current': len(self._sessions),
-            'pool_size_min': self.min_pool_size,
-            'pool_size_max': self.max_pool_size,
-            'sessions_ready': ready_count,
-            'sessions_allocated': allocated_count,
-            'sessions_warming': warming_count,
-            'sessions_unhealthy': unhealthy_count,
-            'idle_timeout': self.idle_timeout,
-            'health_check_interval': self.health_check_interval
-        })
+        stats.update(
+            {
+                "pool_size_current": len(self._sessions),
+                "pool_size_min": self.min_pool_size,
+                "pool_size_max": self.max_pool_size,
+                "sessions_ready": ready_count,
+                "sessions_allocated": allocated_count,
+                "sessions_warming": warming_count,
+                "sessions_unhealthy": unhealthy_count,
+                "idle_timeout": self.idle_timeout,
+                "health_check_interval": self.health_check_interval,
+            }
+        )
 
         return stats
 
@@ -534,4 +568,3 @@ class WarmSessionPool:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.shutdown()
-

@@ -55,7 +55,7 @@ class SessionManager:
             pool_connections=20,
             pool_maxsize=100,
             max_retries=retry_strategy,
-            pool_block=False
+            pool_block=False,
         )
 
         session.mount("http://", adapter)
@@ -70,18 +70,14 @@ class SessionManager:
 
     def _get_provider_headers(self, provider: str) -> Dict[str, str]:
         """Get standard headers for a provider."""
-        headers = {
-            "User-Agent": "hydra-agents/1.0",
-            "Content-Type": "application/json"
-        }
+        headers = {"User-Agent": "hydra-agents/1.0", "Content-Type": "application/json"}
 
         if provider == "anthropic":
             api_key = os.getenv("ANTHROPIC_API_KEY")
             if api_key:
-                headers.update({
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01"
-                })
+                headers.update(
+                    {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+                )
         elif provider == "openai":
             api_key = os.getenv("OPENAI_API_KEY")
             if api_key:

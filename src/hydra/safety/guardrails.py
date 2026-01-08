@@ -16,9 +16,9 @@ import psutil
 
 # Test mode detection to avoid thread creation issues
 TEST_MODE = (
-    os.getenv('TESTING') == '1' or
-    os.getenv('PYTEST_CURRENT_TEST') is not None or
-    'pytest' in str(os.getenv('_', ''))
+    os.getenv("TESTING") == "1"
+    or os.getenv("PYTEST_CURRENT_TEST") is not None
+    or "pytest" in str(os.getenv("_", ""))
 )
 
 
@@ -84,9 +84,7 @@ class ResourceMonitor:
 
         try:
             self.monitor_thread = threading.Thread(
-                target=self._monitor_loop,
-                args=(quota, interval),
-                daemon=True
+                target=self._monitor_loop, args=(quota, interval), daemon=True
             )
             self.monitor_thread.start()
         except RuntimeError:
@@ -113,40 +111,48 @@ class ResourceMonitor:
 
         cpu_percent = self.process.cpu_percent(interval=0.1)
         if cpu_percent > quota.cpu_percent:
-            violations.append({
-                'type': 'cpu',
-                'current': cpu_percent,
-                'limit': quota.cpu_percent,
-                'timestamp': datetime.now()
-            })
+            violations.append(
+                {
+                    "type": "cpu",
+                    "current": cpu_percent,
+                    "limit": quota.cpu_percent,
+                    "timestamp": datetime.now(),
+                }
+            )
 
         memory_mb = self.process.memory_info().rss / (1024 * 1024)
         if memory_mb > quota.memory_mb:
-            violations.append({
-                'type': 'memory',
-                'current': memory_mb,
-                'limit': quota.memory_mb,
-                'timestamp': datetime.now()
-            })
+            violations.append(
+                {
+                    "type": "memory",
+                    "current": memory_mb,
+                    "limit": quota.memory_mb,
+                    "timestamp": datetime.now(),
+                }
+            )
 
         num_threads = self.process.num_threads()
         if num_threads > quota.max_threads:
-            violations.append({
-                'type': 'threads',
-                'current': num_threads,
-                'limit': quota.max_threads,
-                'timestamp': datetime.now()
-            })
+            violations.append(
+                {
+                    "type": "threads",
+                    "current": num_threads,
+                    "limit": quota.max_threads,
+                    "timestamp": datetime.now(),
+                }
+            )
 
         try:
             num_fds = self.process.num_fds()
             if num_fds > quota.max_file_handles:
-                violations.append({
-                    'type': 'file_handles',
-                    'current': num_fds,
-                    'limit': quota.max_file_handles,
-                    'timestamp': datetime.now()
-                })
+                violations.append(
+                    {
+                        "type": "file_handles",
+                        "current": num_fds,
+                        "limit": quota.max_file_handles,
+                        "timestamp": datetime.now(),
+                    }
+                )
         except AttributeError:
             pass
 
@@ -154,21 +160,22 @@ class ResourceMonitor:
 
     def _enforce_limits(self, violations: List[Dict[str, Any]]):
         for violation in violations:
-            if violation['type'] == 'memory':
+            if violation["type"] == "memory":
                 import gc
+
                 gc.collect()
                 gc.collect()
                 gc.collect()
-            elif violation['type'] == 'cpu':
+            elif violation["type"] == "cpu":
                 time.sleep(0.1)
 
     def get_current_usage(self) -> Dict[str, Any]:
         return {
-            'cpu_percent': self.process.cpu_percent(interval=0.1),
-            'memory_mb': self.process.memory_info().rss / (1024 * 1024),
-            'threads': self.process.num_threads(),
-            'open_files': len(self.process.open_files()),
-            'connections': len(self.process.connections())
+            "cpu_percent": self.process.cpu_percent(interval=0.1),
+            "memory_mb": self.process.memory_info().rss / (1024 * 1024),
+            "threads": self.process.num_threads(),
+            "open_files": len(self.process.open_files()),
+            "connections": len(self.process.connections()),
         }
 
 
@@ -183,50 +190,49 @@ class RateLimiter:
         with self.lock:
             if tenant_id not in self.tenant_limiters:
                 self.tenant_limiters[tenant_id] = {
-                    'minute_window': deque(maxlen=config.requests_per_minute),
-                    'hour_window': deque(maxlen=config.requests_per_hour),
-                    'burst_tokens': config.burst_size,
-                    'last_refill': time.time()
+                    "minute_window": deque(maxlen=config.requests_per_minute),
+                    "hour_window": deque(maxlen=config.requests_per_hour),
+                    "burst_tokens": config.burst_size,
+                    "last_refill": time.time(),
                 }
 
             limiter = self.tenant_limiters[tenant_id]
             now = time.time()
 
-            time_since_refill = now - limiter['last_refill']
+            time_since_refill = now - limiter["last_refill"]
             if time_since_refill >= 1.0:
                 tokens_to_add = min(
-                    int(time_since_refill),
-                    config.burst_size - limiter['burst_tokens']
+                    int(time_since_refill), config.burst_size - limiter["burst_tokens"]
                 )
-                limiter['burst_tokens'] += tokens_to_add
-                limiter['last_refill'] = now
+                limiter["burst_tokens"] += tokens_to_add
+                limiter["last_refill"] = now
 
             minute_ago = now - 60
-            limiter['minute_window'] = deque(
-                (t for t in limiter['minute_window'] if t > minute_ago),
-                maxlen=config.requests_per_minute
+            limiter["minute_window"] = deque(
+                (t for t in limiter["minute_window"] if t > minute_ago),
+                maxlen=config.requests_per_minute,
             )
 
             hour_ago = now - 3600
-            limiter['hour_window'] = deque(
-                (t for t in limiter['hour_window'] if t > hour_ago),
-                maxlen=config.requests_per_hour
+            limiter["hour_window"] = deque(
+                (t for t in limiter["hour_window"] if t > hour_ago),
+                maxlen=config.requests_per_hour,
             )
 
-            if len(limiter['minute_window']) >= config.requests_per_minute:
-                wait_time = 60 - (now - limiter['minute_window'][0])
+            if len(limiter["minute_window"]) >= config.requests_per_minute:
+                wait_time = 60 - (now - limiter["minute_window"][0])
                 return False, wait_time
 
-            if len(limiter['hour_window']) >= config.requests_per_hour:
-                wait_time = 3600 - (now - limiter['hour_window'][0])
+            if len(limiter["hour_window"]) >= config.requests_per_hour:
+                wait_time = 3600 - (now - limiter["hour_window"][0])
                 return False, wait_time
 
-            if limiter['burst_tokens'] <= 0:
+            if limiter["burst_tokens"] <= 0:
                 return False, 1.0
 
-            limiter['burst_tokens'] -= 1
-            limiter['minute_window'].append(now)
-            limiter['hour_window'].append(now)
+            limiter["burst_tokens"] -= 1
+            limiter["minute_window"].append(now)
+            limiter["hour_window"].append(now)
 
             return True, None
 
@@ -237,26 +243,26 @@ class RateLimiter:
         with self.lock:
             if tenant_id in self.tenant_limiters:
                 limiter = self.tenant_limiters[tenant_id]
-                limiter['minute_window'].append(timestamp)
-                limiter['hour_window'].append(timestamp)
+                limiter["minute_window"].append(timestamp)
+                limiter["hour_window"].append(timestamp)
 
     def get_usage_stats(self, tenant_id: str) -> Dict[str, Any]:
         with self.lock:
             if tenant_id not in self.tenant_limiters:
-                return {'requests_last_minute': 0, 'requests_last_hour': 0}
+                return {"requests_last_minute": 0, "requests_last_hour": 0}
 
             limiter = self.tenant_limiters[tenant_id]
             now = time.time()
             minute_ago = now - 60
             hour_ago = now - 3600
 
-            minute_count = sum(1 for t in limiter['minute_window'] if t > minute_ago)
-            hour_count = sum(1 for t in limiter['hour_window'] if t > hour_ago)
+            minute_count = sum(1 for t in limiter["minute_window"] if t > minute_ago)
+            hour_count = sum(1 for t in limiter["hour_window"] if t > hour_ago)
 
             return {
-                'requests_last_minute': minute_count,
-                'requests_last_hour': hour_count,
-                'burst_tokens_remaining': limiter['burst_tokens']
+                "requests_last_minute": minute_count,
+                "requests_last_hour": hour_count,
+                "burst_tokens_remaining": limiter["burst_tokens"],
             }
 
 
@@ -265,7 +271,7 @@ class CircuitBreaker:
         self,
         failure_threshold: int = 5,
         recovery_timeout: int = 60,
-        expected_exception: type = Exception
+        expected_exception: type = Exception,
     ):
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -305,8 +311,8 @@ class CircuitBreaker:
 
     def _should_attempt_reset(self) -> bool:
         return (
-            self.last_failure_time and
-            time.time() - self.last_failure_time >= self.recovery_timeout
+            self.last_failure_time
+            and time.time() - self.last_failure_time >= self.recovery_timeout
         )
 
     def _on_success(self):
@@ -339,9 +345,9 @@ class CircuitBreaker:
     def get_state(self) -> Dict[str, Any]:
         with self.lock:
             return {
-                'state': self.state.value,
-                'failure_count': self.failure_count,
-                'last_failure_time': self.last_failure_time
+                "state": self.state.value,
+                "failure_count": self.failure_count,
+                "last_failure_time": self.last_failure_time,
             }
 
 
@@ -375,30 +381,32 @@ class SandboxExecutor:
 
     def _apply_resource_limits(self):
         try:
-            if hasattr(resource, 'RLIMIT_AS'):
+            if hasattr(resource, "RLIMIT_AS"):
                 resource.setrlimit(
                     resource.RLIMIT_AS,
-                    (self.quota.memory_mb * 1024 * 1024,
-                     self.quota.memory_mb * 1024 * 1024)
+                    (
+                        self.quota.memory_mb * 1024 * 1024,
+                        self.quota.memory_mb * 1024 * 1024,
+                    ),
                 )
 
             resource.setrlimit(
                 resource.RLIMIT_CPU,
-                (self.quota.execution_timeout_seconds,
-                 self.quota.execution_timeout_seconds)
+                (
+                    self.quota.execution_timeout_seconds,
+                    self.quota.execution_timeout_seconds,
+                ),
             )
 
             resource.setrlimit(
                 resource.RLIMIT_NOFILE,
-                (self.quota.max_file_handles,
-                 self.quota.max_file_handles)
+                (self.quota.max_file_handles, self.quota.max_file_handles),
             )
 
-            if hasattr(resource, 'RLIMIT_NPROC'):
+            if hasattr(resource, "RLIMIT_NPROC"):
                 resource.setrlimit(
                     resource.RLIMIT_NPROC,
-                    (self.quota.max_processes,
-                     self.quota.max_processes)
+                    (self.quota.max_processes, self.quota.max_processes),
                 )
         except (ValueError, OSError):
             pass
@@ -406,7 +414,7 @@ class SandboxExecutor:
     def _get_current_limits(self) -> Dict[str, tuple]:
         limits = {}
         for limit_name in dir(resource):
-            if limit_name.startswith('RLIMIT_'):
+            if limit_name.startswith("RLIMIT_"):
                 try:
                     limit_const = getattr(resource, limit_name)
                     limits[limit_name] = resource.getrlimit(limit_const)
@@ -435,32 +443,31 @@ class SandboxExecutor:
 
 class CostController:
     def __init__(self):
-        self.tenant_costs = defaultdict(lambda: {
-            'daily': defaultdict(float),
-            'monthly': defaultdict(float),
-            'total': 0.0
-        })
+        self.tenant_costs = defaultdict(
+            lambda: {
+                "daily": defaultdict(float),
+                "monthly": defaultdict(float),
+                "total": 0.0,
+            }
+        )
         self.lock = threading.Lock()
         self.cost_models = {
-            'claude-3-opus': 0.015,
-            'claude-3-sonnet': 0.003,
-            'claude-4-sonnet': 0.004,
-            'claude-4-opus': 0.020
+            "claude-3-opus": 0.015,
+            "claude-3-sonnet": 0.003,
+            "claude-4-sonnet": 0.004,
+            "claude-4-opus": 0.020,
         }
 
     def check_budget(
-        self,
-        tenant_id: str,
-        estimated_cost: float,
-        budget: CostBudget
+        self, tenant_id: str, estimated_cost: float, budget: CostBudget
     ) -> tuple[bool, Optional[str]]:
         with self.lock:
             costs = self.tenant_costs[tenant_id]
             today = datetime.now().date()
-            month = today.strftime('%Y-%m')
+            month = today.strftime("%Y-%m")
 
-            daily_spent = costs['daily'][str(today)]
-            monthly_spent = costs['monthly'][month]
+            daily_spent = costs["daily"][str(today)]
+            monthly_spent = costs["monthly"][month]
 
             if estimated_cost > budget.per_request_limit_usd:
                 return False, f"Request cost ${estimated_cost:.2f} exceeds limit"
@@ -492,18 +499,20 @@ class CostController:
         with self.lock:
             costs = self.tenant_costs[tenant_id]
             today = datetime.now().date()
-            month = today.strftime('%Y-%m')
+            month = today.strftime("%Y-%m")
 
-            costs['daily'][str(today)] += cost
-            costs['monthly'][month] += cost
-            costs['total'] += cost
+            costs["daily"][str(today)] += cost
+            costs["monthly"][month] += cost
+            costs["total"] += cost
 
             if metadata:
-                costs.setdefault('breakdown', []).append({
-                    'timestamp': datetime.now().isoformat(),
-                    'cost': cost,
-                    'metadata': metadata
-                })
+                costs.setdefault("breakdown", []).append(
+                    {
+                        "timestamp": datetime.now().isoformat(),
+                        "cost": cost,
+                        "metadata": metadata,
+                    }
+                )
 
     def estimate_cost(self, model: str, tokens: int) -> float:
         cost_per_1k = self.cost_models.get(model, 0.01)
@@ -513,13 +522,13 @@ class CostController:
         with self.lock:
             costs = self.tenant_costs[tenant_id]
             today = datetime.now().date()
-            month = today.strftime('%Y-%m')
+            month = today.strftime("%Y-%m")
 
             return {
-                'daily_spent': costs['daily'][str(today)],
-                'monthly_spent': costs['monthly'][month],
-                'total_spent': costs['total'],
-                'breakdown': costs.get('breakdown', [])[-10:]
+                "daily_spent": costs["daily"][str(today)],
+                "monthly_spent": costs["monthly"][month],
+                "total_spent": costs["total"],
+                "breakdown": costs.get("breakdown", [])[-10:],
             }
 
 
@@ -538,7 +547,7 @@ class ProductionGuardrails:
         tenant_id: str,
         quota: Optional[ResourceQuota] = None,
         rate_limit: Optional[RateLimitConfig] = None,
-        budget: Optional[CostBudget] = None
+        budget: Optional[CostBudget] = None,
     ) -> TenantContext:
         with self.global_lock:
             if tenant_id not in self.tenants:
@@ -546,7 +555,7 @@ class ProductionGuardrails:
                     tenant_id=tenant_id,
                     quota=quota or ResourceQuota(),
                     rate_limit=rate_limit or RateLimitConfig(),
-                    budget=budget or CostBudget()
+                    budget=budget or CostBudget(),
                 )
             return self.tenants[tenant_id]
 
@@ -563,10 +572,10 @@ class ProductionGuardrails:
             return False, f"Rate limit exceeded. Retry after {wait_time:.1f} seconds"
 
         usage = self.resource_monitor.get_current_usage()
-        if usage['cpu_percent'] > tenant.quota.cpu_percent:
+        if usage["cpu_percent"] > tenant.quota.cpu_percent:
             return False, f"CPU limit exceeded: {usage['cpu_percent']:.1f}%"
 
-        if usage['memory_mb'] > tenant.quota.memory_mb:
+        if usage["memory_mb"] > tenant.quota.memory_mb:
             return False, f"Memory limit exceeded: {usage['memory_mb']:.1f} MB"
 
         return True, None
@@ -577,7 +586,7 @@ class ProductionGuardrails:
         tenant_id: str,
         operation_name: str,
         estimated_tokens: int = 1000,
-        model: str = 'claude-3-sonnet'
+        model: str = "claude-3-sonnet",
     ):
         if tenant_id not in self.tenants:
             raise ValueError(f"Tenant {tenant_id} not registered")
@@ -615,27 +624,32 @@ class ProductionGuardrails:
                 actual_cost = estimated_cost
 
                 self.cost_controller.record_cost(
-                    tenant_id, actual_cost,
-                    {'operation': operation_name, 'duration': duration}
+                    tenant_id,
+                    actual_cost,
+                    {"operation": operation_name, "duration": duration},
                 )
 
-                tenant.request_history.append({
-                    'execution_id': execution_id,
-                    'operation': operation_name,
-                    'timestamp': datetime.now().isoformat(),
-                    'duration': duration,
-                    'cost': actual_cost,
-                    'success': True
-                })
+                tenant.request_history.append(
+                    {
+                        "execution_id": execution_id,
+                        "operation": operation_name,
+                        "timestamp": datetime.now().isoformat(),
+                        "duration": duration,
+                        "cost": actual_cost,
+                        "success": True,
+                    }
+                )
 
             except Exception as e:
-                tenant.request_history.append({
-                    'execution_id': execution_id,
-                    'operation': operation_name,
-                    'timestamp': datetime.now().isoformat(),
-                    'error': str(e),
-                    'success': False
-                })
+                tenant.request_history.append(
+                    {
+                        "execution_id": execution_id,
+                        "operation": operation_name,
+                        "timestamp": datetime.now().isoformat(),
+                        "error": str(e),
+                        "success": False,
+                    }
+                )
                 raise
 
             finally:
@@ -643,22 +657,21 @@ class ProductionGuardrails:
 
     def get_tenant_status(self, tenant_id: str) -> Dict[str, Any]:
         if tenant_id not in self.tenants:
-            return {'error': 'Tenant not found'}
+            return {"error": "Tenant not found"}
 
         tenant = self.tenants[tenant_id]
 
         return {
-            'tenant_id': tenant_id,
-            'created_at': tenant.created_at.isoformat(),
-            'rate_limit_usage': self.rate_limiter.get_usage_stats(tenant_id),
-            'cost_usage': self.cost_controller.get_usage_report(tenant_id),
-            'resource_usage': self.resource_monitor.get_current_usage(),
-            'active_resources': len(tenant.active_resources),
-            'recent_requests': list(tenant.request_history)[-10:],
-            'circuit_breakers': {
-                name: cb.get_state()
-                for name, cb in self.circuit_breakers.items()
-            }
+            "tenant_id": tenant_id,
+            "created_at": tenant.created_at.isoformat(),
+            "rate_limit_usage": self.rate_limiter.get_usage_stats(tenant_id),
+            "cost_usage": self.cost_controller.get_usage_report(tenant_id),
+            "resource_usage": self.resource_monitor.get_current_usage(),
+            "active_resources": len(tenant.active_resources),
+            "recent_requests": list(tenant.request_history)[-10:],
+            "circuit_breakers": {
+                name: cb.get_state() for name, cb in self.circuit_breakers.items()
+            },
         }
 
     def emergency_shutdown(self, tenant_id: Optional[str] = None):
@@ -680,11 +693,13 @@ class ProductionGuardrails:
         with self.global_lock:
             for tenant in self.tenants.values():
                 tenant.request_history = deque(
-                    (req for req in tenant.request_history
-                     if datetime.fromisoformat(req['timestamp']) > cutoff_date),
-                    maxlen=10000
+                    (
+                        req
+                        for req in tenant.request_history
+                        if datetime.fromisoformat(req["timestamp"]) > cutoff_date
+                    ),
+                    maxlen=10000,
                 )
 
 
 guardrails = ProductionGuardrails()
-

@@ -29,8 +29,13 @@ class QualityAutoFixer:
         # Check for AI-generated code first - this can't be auto-fixed
         ai_issues = self._check_ai_generated_code()
         if ai_issues:
-            fixes.append(("AI-generated code detected", False,
-                         f"Found {len(ai_issues)} AI-generated patterns that need manual review"))
+            fixes.append(
+                (
+                    "AI-generated code detected",
+                    False,
+                    f"Found {len(ai_issues)} AI-generated patterns that need manual review",
+                )
+            )
 
         # Fix 1: Add missing __init__.py files
         fixes.extend(self._add_missing_init_files())
@@ -58,19 +63,21 @@ class QualityAutoFixer:
             root_path = Path(root)
 
             # Skip non-Python directories
-            if '__pycache__' in root or '.git' in root:
+            if "__pycache__" in root or ".git" in root:
                 continue
 
             # Check if directory has Python files but no __init__.py
-            py_files = [f for f in files if f.endswith('.py') and f != '__init__.py']
-            if py_files and '__init__.py' not in files:
-                init_file = root_path / '__init__.py'
+            py_files = [f for f in files if f.endswith(".py") and f != "__init__.py"]
+            if py_files and "__init__.py" not in files:
+                init_file = root_path / "__init__.py"
                 init_file.write_text('"""Package initialization."""\n')
-                fixes.append((
-                    f"Missing __init__.py in {root_path.relative_to(self.project_root)}",
-                    True,
-                    "Created __init__.py"
-                ))
+                fixes.append(
+                    (
+                        f"Missing __init__.py in {root_path.relative_to(self.project_root)}",
+                        True,
+                        "Created __init__.py",
+                    )
+                )
 
         return fixes
 
@@ -85,15 +92,11 @@ class QualityAutoFixer:
                 capture_output=True,
                 text=True,
                 cwd=self.project_root,
-                timeout=30
+                timeout=30,
             )
 
             if "fixed" in result.stdout.lower():
-                fixes.append((
-                    "Linting issues",
-                    True,
-                    "Auto-fixed with ruff"
-                ))
+                fixes.append(("Linting issues", True, "Auto-fixed with ruff"))
             elif result.returncode != 0:
                 # Try more aggressive fixes
                 subprocess.run(
@@ -101,19 +104,11 @@ class QualityAutoFixer:
                     capture_output=True,
                     text=True,
                     cwd=self.project_root,
-                    timeout=30
+                    timeout=30,
                 )
-                fixes.append((
-                    "Linting issues",
-                    True,
-                    "Applied unsafe fixes with ruff"
-                ))
+                fixes.append(("Linting issues", True, "Applied unsafe fixes with ruff"))
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            fixes.append((
-                "Ruff linting",
-                False,
-                "Ruff not available"
-            ))
+            fixes.append(("Ruff linting", False, "Ruff not available"))
 
         return fixes
 
@@ -127,15 +122,11 @@ class QualityAutoFixer:
                 capture_output=True,
                 text=True,
                 cwd=self.project_root,
-                timeout=30
+                timeout=30,
             )
 
             if result.returncode == 0:
-                fixes.append((
-                    "Import sorting",
-                    True,
-                    "Fixed with isort"
-                ))
+                fixes.append(("Import sorting", True, "Fixed with isort"))
         except (subprocess.TimeoutExpired, FileNotFoundError):
             # isort not available, try with ruff
             try:
@@ -144,13 +135,9 @@ class QualityAutoFixer:
                     capture_output=True,
                     text=True,
                     cwd=self.project_root,
-                    timeout=30
+                    timeout=30,
                 )
-                fixes.append((
-                    "Import sorting",
-                    True,
-                    "Fixed with ruff"
-                ))
+                fixes.append(("Import sorting", True, "Fixed with ruff"))
             except:
                 pass
 
@@ -168,7 +155,7 @@ class QualityAutoFixer:
             root_path = Path(root)
 
             for file in files:
-                if not file.endswith('.py'):
+                if not file.endswith(".py"):
                     continue
 
                 file_path = root_path / file
@@ -178,15 +165,17 @@ class QualityAutoFixer:
                     # Check if file has module docstring
                     if not content.startswith('"""') and not content.startswith("'''"):
                         # Add minimal module docstring
-                        module_name = file_path.stem.replace('_', ' ').title()
+                        module_name = file_path.stem.replace("_", " ").title()
                         new_content = f'"""{module_name} module."""\n\n{content}'
                         file_path.write_text(new_content)
 
-                        fixes.append((
-                            f"Missing docstring in {file_path.relative_to(self.project_root)}",
-                            True,
-                            "Added module docstring"
-                        ))
+                        fixes.append(
+                            (
+                                f"Missing docstring in {file_path.relative_to(self.project_root)}",
+                                True,
+                                "Added module docstring",
+                            )
+                        )
                 except Exception:
                     pass
 
@@ -201,7 +190,7 @@ class QualityAutoFixer:
                 capture_output=True,
                 text=True,
                 cwd=self.project_root,
-                timeout=30
+                timeout=30,
             )
             return result.returncode == 0
         except:
@@ -215,7 +204,7 @@ class QualityAutoFixer:
                 ["git", "diff", "HEAD"],
                 capture_output=True,
                 text=True,
-                cwd=self.project_root
+                cwd=self.project_root,
             )
 
             if git_diff.returncode != 0:

@@ -45,9 +45,8 @@ class ProgressBar:
         percentage = max(0, min(100, percentage))
         filled_width = int(self.width * percentage / 100)
 
-        bar = (
-            self.fill_char * filled_width +
-            self.empty_char * (self.width - filled_width)
+        bar = self.fill_char * filled_width + self.empty_char * (
+            self.width - filled_width
         )
 
         return f"{prefix} |{bar}| {percentage:5.1f}% {suffix}"
@@ -147,7 +146,7 @@ class TicketDisplay:
             progress_line = self.progress_bar.render(
                 progress.progress_percentage,
                 prefix="Progress:",
-                suffix=f"({progress.current_stage.description})"
+                suffix=f"({progress.current_stage.description})",
             )
             lines.append(f"  {progress_line}")
 
@@ -232,9 +231,7 @@ class ProgressDashboard:
 
         self.running = True
         self._display_thread = threading.Thread(
-            target=self._display_loop,
-            args=(mode,),
-            daemon=True
+            target=self._display_loop, args=(mode,), daemon=True
         )
         self._display_thread.start()
 
@@ -304,7 +301,7 @@ class ProgressDashboard:
         # Stage breakdown
         lines.append("Stage Breakdown:")
         for stage in ProgressStage:
-            count = summary['stage_counts'].get(stage.value, 0)
+            count = summary["stage_counts"].get(stage.value, 0)
             if count > 0:
                 lines.append(f"  {stage.emoji} {stage.description}: {count}")
         lines.append("")
@@ -344,8 +341,7 @@ class ProgressDashboard:
 
         # Sort tickets by status (active first, then by start time)
         sorted_tickets = sorted(
-            all_tickets.values(),
-            key=lambda t: (t.is_completed, t.start_time)
+            all_tickets.values(), key=lambda t: (t.is_completed, t.start_time)
         )
 
         for i, progress in enumerate(sorted_tickets):
@@ -387,8 +383,7 @@ class ProgressDashboard:
         if all_tickets:
             # Sort by status and ID
             sorted_tickets = sorted(
-                all_tickets.values(),
-                key=lambda t: (t.is_completed, int(t.ticket_id))
+                all_tickets.values(), key=lambda t: (t.is_completed, int(t.ticket_id))
             )
 
             for progress in sorted_tickets:
@@ -446,10 +441,12 @@ class ProgressNotifier:
         last_notification = self.last_notifications.get(update.ticket_id)
 
         # Rate limit notifications
-        if (last_notification and
-            now - last_notification < self.notification_interval and
-            update.stage != ProgressStage.COMPLETED and
-            update.stage != ProgressStage.FAILED):
+        if (
+            last_notification
+            and now - last_notification < self.notification_interval
+            and update.stage != ProgressStage.COMPLETED
+            and update.stage != ProgressStage.FAILED
+        ):
             return
 
         self.last_notifications[update.ticket_id] = now
@@ -516,8 +513,8 @@ def print_progress_report(
     print(f"Failed: {summary['failed_tickets']}")
     print(f"Active: {summary['active_tickets']}")
 
-    if summary['total_tickets'] > 0:
-        success_rate = (summary['completed_tickets'] / summary['total_tickets']) * 100
+    if summary["total_tickets"] > 0:
+        success_rate = (summary["completed_tickets"] / summary["total_tickets"]) * 100
         print(f"Success Rate: {success_rate:.1f}%")
         print(f"Total Duration: {summary['total_duration']:.1f}s")
         print(f"Average Duration: {summary['average_duration']:.1f}s")

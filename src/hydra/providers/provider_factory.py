@@ -8,6 +8,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from hydra.prompts.injection import initialize_default_injectors
 from hydra.providers.base_provider import BaseProvider
 from hydra.providers.error_handler import get_error_handler
 from hydra.providers.provider_config import (
@@ -34,11 +35,11 @@ class ProviderFactory:
         self.config_manager = get_config_manager()
         self.error_handler = get_error_handler()
 
+        # Initialize default prompt injectors
+        initialize_default_injectors()
+
     def create(
-        self,
-        provider_type: str,
-        config: Optional[Dict[str, Any]] = None,
-        **kwargs
+        self, provider_type: str, config: Optional[Dict[str, Any]] = None, **kwargs
     ) -> BaseProvider:
         """Create provider instance with configuration.
 
@@ -61,9 +62,7 @@ class ProviderFactory:
         # Create provider using registry
         try:
             provider = self.registry.create_provider(
-                provider_type=provider_type,
-                config=provider_config,
-                **kwargs
+                provider_type=provider_type, config=provider_config, **kwargs
             )
 
             logger.info(f"Created provider instance: {provider_type}")
@@ -73,7 +72,7 @@ class ProviderFactory:
             error = self.error_handler.handle_error(
                 provider=provider_type,
                 error=e,
-                context={'factory': 'create', 'config': config}
+                context={"factory": "create", "config": config},
             )
             raise RuntimeError(f"Failed to create provider: {error}") from e
 
@@ -119,9 +118,13 @@ class ProviderFactory:
         except RuntimeError as e:
             if "not registered" in str(e):
                 # Try common fallbacks
-                logger.warning(f"Provider {provider_type} not available, trying claude_tmux")
+                logger.warning(
+                    f"Provider {provider_type} not available, trying claude_tmux"
+                )
                 fallback_config = self._create_config_from_env("claude_tmux")
-                return self.create("claude_tmux", fallback_config.__dict__ if fallback_config else None)
+                return self.create(
+                    "claude_tmux", fallback_config.__dict__ if fallback_config else None
+                )
             raise
 
     def create_with_fallback(
@@ -129,7 +132,7 @@ class ProviderFactory:
         primary_type: str,
         fallback_types: List[str],
         config: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ) -> BaseProvider:
         """Create provider with fallback options.
 
@@ -168,9 +171,7 @@ class ProviderFactory:
         raise RuntimeError(error_msg)
 
     def _get_provider_config(
-        self,
-        provider_type: str,
-        config_dict: Optional[Dict[str, Any]] = None
+        self, provider_type: str, config_dict: Optional[Dict[str, Any]] = None
     ) -> Optional[ProviderConfig]:
         """Get or create provider configuration.
 
@@ -186,18 +187,14 @@ class ProviderFactory:
             # Create config from dictionary
             # Remove 'name' and 'type' if they exist to avoid duplicates
             config_copy = config_dict.copy()
-            config_copy.pop('name', None)
-            config_copy.pop('type', None)
+            config_copy.pop("name", None)
+            config_copy.pop("type", None)
 
             # Handle legacy 'model' parameter by mapping to 'default_model'
-            if 'model' in config_copy:
-                config_copy['default_model'] = config_copy.pop('model')
+            if "model" in config_copy:
+                config_copy["default_model"] = config_copy.pop("model")
 
-            return ProviderConfig(
-                name=provider_type,
-                type=provider_type,
-                **config_copy
-            )
+            return ProviderConfig(name=provider_type, type=provider_type, **config_copy)
 
         # Get from configuration manager
         return get_provider_config(provider_type)
@@ -212,11 +209,7 @@ class ProviderFactory:
             Minimal provider configuration
 
         """
-        config = ProviderConfig(
-            name=provider_type,
-            type=provider_type,
-            enabled=True
-        )
+        config = ProviderConfig(name=provider_type, type=provider_type, enabled=True)
 
         # Check for common environment variables
         if provider_type == "venice" or provider_type == "venice_api":
@@ -225,7 +218,9 @@ class ProviderFactory:
 
         elif "anthropic" in provider_type:
             config.api_key = os.getenv("ANTHROPIC_API_KEY")
-            config.base_url = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+            config.base_url = os.getenv(
+                "ANTHROPIC_BASE_URL", "https://api.anthropic.com"
+            )
 
         elif "openai" in provider_type:
             config.api_key = os.getenv("OPENAI_API_KEY")
@@ -292,7 +287,7 @@ class ProviderFactory:
         """
         try:
             # Check basic attributes
-            if not hasattr(provider, 'config'):
+            if not hasattr(provider, "config"):
                 logger.error("Provider missing config attribute")
                 return False
 
@@ -355,9 +350,7 @@ def create_provider_from_environment() -> BaseProvider:
 
 
 def create_provider_with_fallback(
-    primary: str,
-    fallbacks: List[str],
-    **kwargs
+    primary: str, fallbacks: List[str], **kwargs
 ) -> BaseProvider:
     """Create provider with fallback options.
 

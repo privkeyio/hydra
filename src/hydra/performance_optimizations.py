@@ -32,11 +32,12 @@ from hydra.providers.session_manager import get_session_manager
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 # Try to import uvloop for better async performance
 try:
     import uvloop
+
     UVLOOP_AVAILABLE = True
 except ImportError:
     UVLOOP_AVAILABLE = False
@@ -55,7 +56,7 @@ def setup_uvloop() -> bool:
         return False
 
     try:
-        if sys.platform != 'win32':  # uvloop doesn't support Windows
+        if sys.platform != "win32":  # uvloop doesn't support Windows
             asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
             logger.info("Successfully configured uvloop as default event loop")
             return True
@@ -122,12 +123,11 @@ class ConnectionPoolManager(metaclass=SingletonMeta):
                 limit=100,
                 limit_per_host=30,
                 ttl_dns_cache=300,
-                enable_cleanup_closed=True
+                enable_cleanup_closed=True,
             )
             timeout = aiohttp.ClientTimeout(total=30)
             self._aiohttp_session = aiohttp.ClientSession(
-                connector=connector,
-                timeout=timeout
+                connector=connector, timeout=timeout
             )
             logger.info("Created new aiohttp session with connection pooling")
         return self._aiohttp_session
@@ -159,10 +159,7 @@ class LLMRequestBatcher:
         )
 
     async def add_request(
-        self,
-        provider: str,
-        request: Dict[str, Any],
-        ticket_id: Optional[str] = None
+        self, provider: str, request: Dict[str, Any], ticket_id: Optional[str] = None
     ) -> Any:
         """Add a request to the batch queue."""
         queue = self._queues[provider]
@@ -172,7 +169,7 @@ class LLMRequestBatcher:
         request_with_metadata = {
             **request,
             "_ticket_id": ticket_id,
-            "_timestamp": time.time()
+            "_timestamp": time.time(),
         }
 
         await queue.put((request_with_metadata, future))
@@ -198,8 +195,7 @@ class LLMRequestBatcher:
             try:
                 timeout = self.batch_timeout - (time.time() - start_time)
                 request, future = await asyncio.wait_for(
-                    queue.get(),
-                    timeout=max(0.01, timeout)
+                    queue.get(), timeout=max(0.01, timeout)
                 )
                 batch.append((request, future))
             except asyncio.TimeoutError:
@@ -210,9 +206,7 @@ class LLMRequestBatcher:
             await self._execute_batch(provider, batch)
 
     async def _execute_batch(
-        self,
-        provider: str,
-        batch: List[Tuple[Dict, asyncio.Future]]
+        self, provider: str, batch: List[Tuple[Dict, asyncio.Future]]
     ):
         """Execute a batch of requests in parallel."""
         try:
@@ -223,8 +217,7 @@ class LLMRequestBatcher:
             for request, _ in batch:
                 # Remove metadata before sending
                 clean_request = {
-                    k: v for k, v in request.items()
-                    if not k.startswith('_')
+                    k: v for k, v in request.items() if not k.startswith("_")
                 }
                 task = self._send_request(session, provider, clean_request)
                 tasks.append(task)
@@ -240,9 +233,7 @@ class LLMRequestBatcher:
                     # Cache successful results
                     if result and "_ticket_id" in request:
                         await self._cache_result(
-                            provider,
-                            request["_ticket_id"],
-                            result
+                            provider, request["_ticket_id"], result
                         )
                     future.set_result(result)
 
@@ -252,10 +243,7 @@ class LLMRequestBatcher:
                 future.set_exception(e)
 
     async def _send_request(
-        self,
-        session: aiohttp.ClientSession,
-        provider: str,
-        request: Dict
+        self, session: aiohttp.ClientSession, provider: str, request: Dict
     ) -> Any:
         """Send individual request to provider."""
         # Provider-specific endpoint configuration
@@ -268,7 +256,7 @@ class LLMRequestBatcher:
             "venice": (
                 os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
                 + "/chat/completions"
-            )
+            ),
         }
 
         headers = self._get_headers(provider)
@@ -284,7 +272,7 @@ class LLMRequestBatcher:
         elif provider == "anthropic":
             return {
                 "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
-                "anthropic-version": "2023-06-01"
+                "anthropic-version": "2023-06-01",
             }
         else:  # venice or default
             return {"Authorization": f"Bearer {os.getenv('VENICE_API_KEY')}"}
@@ -294,9 +282,7 @@ class LLMRequestBatcher:
         cache_key = f"batch_{provider}_{ticket_id}"
         try:
             self._pool_manager.redis_cache.set_task_result(
-                cache_key,
-                result,
-                ttl=3600  # 1 hour TTL
+                cache_key, result, ttl=3600  # 1 hour TTL
             )
         except Exception as e:
             logger.debug(f"Failed to cache batch result: {e}")
@@ -314,28 +300,15 @@ class ResponseCache:
         self._stats = defaultdict(lambda: {"hits": 0, "misses": 0})
 
     def _generate_cache_key(
-        self,
-        provider: str,
-        prompt: str,
-        model: Optional[str] = None,
-        **kwargs
+        self, provider: str, prompt: str, model: Optional[str] = None, **kwargs
     ) -> str:
         """Generate a unique cache key for the request."""
-        data = {
-            "provider": provider,
-            "prompt": prompt,
-            "model": model,
-            **kwargs
-        }
+        data = {"provider": provider, "prompt": prompt, "model": model, **kwargs}
         content = json.dumps(data, sort_keys=True)
         return hashlib.sha256(content.encode()).hexdigest()
 
     async def get_cached_response(
-        self,
-        provider: str,
-        prompt: str,
-        model: Optional[str] = None,
-        **kwargs
+        self, provider: str, prompt: str, model: Optional[str] = None, **kwargs
     ) -> Optional[Any]:
         """Get cached response if available."""
         self._generate_cache_key(provider, prompt, model, **kwargs)
@@ -361,17 +334,14 @@ class ResponseCache:
         response: Any,
         model: Optional[str] = None,
         ttl: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> bool:
         """Cache a response with TTL."""
         ttl = ttl or self.default_ttl
 
         try:
             return self._cache.set_code_cache(
-                prompt,
-                response,
-                language=provider,
-                ttl=ttl
+                prompt, response, language=provider, ttl=ttl
             )
         except Exception as e:
             logger.debug(f"Cache storage error: {e}")
@@ -429,26 +399,30 @@ class PerformanceProfiler:
 
         # Generate text report
         report_file = os.path.join(self.output_dir, f"{name}_{timestamp}.txt")
-        with open(report_file, 'w') as f:
+        with open(report_file, "w") as f:
             stats = pstats.Stats(profiler, stream=f)
             stats.strip_dirs()
-            stats.sort_stats('cumulative')
+            stats.sort_stats("cumulative")
             stats.print_stats(50)  # Top 50 functions
 
     def profile_function(self, func: Callable[..., T]) -> Callable[..., T]:
         """Decorate functions for profiling."""
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             with self.profile(func.__name__):
                 return func(*args, **kwargs)
+
         return wrapper
 
     def profile_async_function(self, func: Callable[..., T]) -> Callable[..., T]:
         """Decorate async functions for profiling."""
+
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             with self.profile(func.__name__):
                 return await func(*args, **kwargs)
+
         return wrapper
 
     def get_hot_paths(self, name: str, top_n: int = 10) -> List[Dict[str, Any]]:
@@ -458,17 +432,19 @@ class PerformanceProfiler:
 
         stats = pstats.Stats(self._profiles[name])
         stats.strip_dirs()
-        stats.sort_stats('cumulative')
+        stats.sort_stats("cumulative")
 
         hot_paths = []
         for func, (_cc, nc, tt, ct, _callers) in list(stats.stats.items())[:top_n]:
-            hot_paths.append({
-                "function": f"{func[0]}:{func[1]}:{func[2]}",
-                "calls": nc,
-                "total_time": tt,
-                "cumulative_time": ct,
-                "time_per_call": tt / nc if nc > 0 else 0
-            })
+            hot_paths.append(
+                {
+                    "function": f"{func[0]}:{func[1]}:{func[2]}",
+                    "calls": nc,
+                    "total_time": tt,
+                    "cumulative_time": ct,
+                    "time_per_call": tt / nc if nc > 0 else 0,
+                }
+            )
 
         return hot_paths
 
@@ -550,7 +526,7 @@ class PerformanceMonitor:
                 durations_sorted[int(count * 0.99)]
                 if count > 100
                 else durations_sorted[-1]
-            )
+            ),
         }
 
     def generate_report(self) -> str:
@@ -608,8 +584,7 @@ def initialize_performance_optimizations(
     # Initialize request batcher if enabled
     if config.enable_batching:
         _request_batcher = LLMRequestBatcher(
-            batch_size=config.batch_size,
-            batch_timeout=config.batch_timeout
+            batch_size=config.batch_size, batch_timeout=config.batch_timeout
         )
         results["request_batching"] = True
 
@@ -679,18 +654,16 @@ def create_performance_report() -> Dict[str, Any]:
         Dictionary containing performance metrics and statistics
 
     """
-    report = {
-        "timestamp": datetime.now().isoformat(),
-        "optimizations": {}
-    }
+    report = {"timestamp": datetime.now().isoformat(), "optimizations": {}}
 
     # Check uvloop status
     report["optimizations"]["uvloop"] = {
         "available": UVLOOP_AVAILABLE,
-        "active": UVLOOP_AVAILABLE and isinstance(
+        "active": UVLOOP_AVAILABLE
+        and isinstance(
             asyncio.get_event_loop_policy(),
-            uvloop.EventLoopPolicy if UVLOOP_AVAILABLE else type(None)
-        )
+            uvloop.EventLoopPolicy if UVLOOP_AVAILABLE else type(None),
+        ),
     }
 
     # Connection pool status
@@ -698,7 +671,7 @@ def create_performance_report() -> Dict[str, Any]:
         report["optimizations"]["connection_pools"] = {
             "status": "active",
             "http_sessions": True,
-            "redis_cache": True
+            "redis_cache": True,
         }
 
     # Request batching status
@@ -706,14 +679,14 @@ def create_performance_report() -> Dict[str, Any]:
         report["optimizations"]["request_batching"] = {
             "status": "active",
             "batch_size": _request_batcher.batch_size,
-            "batch_timeout": _request_batcher.batch_timeout
+            "batch_timeout": _request_batcher.batch_timeout,
         }
 
     # Cache statistics
     if _response_cache:
         report["optimizations"]["response_caching"] = {
             "status": "active",
-            "stats": _response_cache.get_cache_stats()
+            "stats": _response_cache.get_cache_stats(),
         }
 
     # Performance metrics

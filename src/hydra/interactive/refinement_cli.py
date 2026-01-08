@@ -39,7 +39,7 @@ class InteractiveRefinement:
         self.original_content = self.tickets_path.read_text()
 
         # Parse tickets
-        ticket_pattern = r'## Ticket (\d+):(.*?)(?=## Ticket|\Z)'
+        ticket_pattern = r"## Ticket (\d+):(.*?)(?=## Ticket|\Z)"
         matches = re.findall(ticket_pattern, self.original_content, re.DOTALL)
 
         for ticket_num, content in matches:
@@ -67,10 +67,10 @@ class InteractiveRefinement:
             "dependencies": [],
             "description": "",
             "criteria": [],
-            "original_content": content
+            "original_content": content,
         }
 
-        lines = content.strip().split('\n')
+        lines = content.strip().split("\n")
         if lines:
             ticket["title"] = lines[0].strip()
 
@@ -99,7 +99,9 @@ class InteractiveRefinement:
         print(f"  Project type: {analysis['project_type']}")
         print(f"  Framework: {analysis['framework'] or 'None detected'}")
         print(f"  Tech stack: {', '.join(analysis['tech_stack'])}")
-        print(f"  Size: {analysis['size_metrics']['total_loc']} LOC across {analysis['size_metrics']['total_files']} files")
+        print(
+            f"  Size: {analysis['size_metrics']['total_loc']} LOC across {analysis['size_metrics']['total_files']} files"
+        )
 
         # Enhance tickets with complexity scores
         print("\n🎯 Enhancing tickets with complexity analysis...")
@@ -125,7 +127,9 @@ class InteractiveRefinement:
 
                 if suggested_model != ticket["model"]:
                     ticket["suggested_model"] = suggested_model
-                    print(f"  Ticket {ticket['number']}: Suggest {suggested_model} model (currently {ticket['model']})")
+                    print(
+                        f"  Ticket {ticket['number']}: Suggest {suggested_model} model (currently {ticket['model']})"
+                    )
 
     def _extract_files_from_ticket(self, ticket: Dict) -> List[str]:
         """Extract file paths mentioned in ticket.
@@ -138,12 +142,14 @@ class InteractiveRefinement:
 
         """
         files = []
-        text = f"{ticket['title']} {ticket['description']} {' '.join(ticket['criteria'])}"
+        text = (
+            f"{ticket['title']} {ticket['description']} {' '.join(ticket['criteria'])}"
+        )
 
         # Common file patterns
         patterns = [
-            r'(?:src/|tests/|lib/)[a-zA-Z0-9_/]+\.py',
-            r'[a-zA-Z0-9_/]+\.(?:py|js|ts|jsx|tsx)',
+            r"(?:src/|tests/|lib/)[a-zA-Z0-9_/]+\.py",
+            r"[a-zA-Z0-9_/]+\.(?:py|js|ts|jsx|tsx)",
         ]
 
         for pattern in patterns:
@@ -163,7 +169,7 @@ class InteractiveRefinement:
                 "id": ticket["number"],
                 "title": ticket["title"],
                 "description": ticket["description"],
-                "criteria": ticket["criteria"]
+                "criteria": ticket["criteria"],
             }
             tasks.append(task)
 
@@ -177,11 +183,15 @@ class InteractiveRefinement:
             existing = [d.zfill(3) for d in ticket["dependencies"]]
 
             # Find missing dependencies
-            missing = [d for d in suggested if d not in existing and int(d) < int(ticket_id)]
+            missing = [
+                d for d in suggested if d not in existing and int(d) < int(ticket_id)
+            ]
 
             if missing:
                 ticket["missing_dependencies"] = missing
-                print(f"  Ticket {ticket['number']}: Missing dependencies on {', '.join(missing)}")
+                print(
+                    f"  Ticket {ticket['number']}: Missing dependencies on {', '.join(missing)}"
+                )
 
     def interactive_edit(self) -> None:
         """Interactive editing interface."""
@@ -224,7 +234,9 @@ class InteractiveRefinement:
                 elif command == "auto":
                     self.apply_suggestions()
                 elif command == "help":
-                    print("Commands: list, show <num>, model <num> <model>, deps <num> <deps>, auto, save, quit")
+                    print(
+                        "Commands: list, show <num>, model <num> <model>, deps <num> <deps>, auto, save, quit"
+                    )
                 else:
                     print("Unknown command. Type 'help' for commands.")
 
@@ -238,7 +250,12 @@ class InteractiveRefinement:
         print("\n📋 Tickets:")
         for ticket in self.tickets:
             status_icon = "✅" if ticket["status"] == "DONE" else "📝"
-            model_icon = {"fast": "💨", "balanced": "⚡", "smart": "🧠", "coder": "💻"}.get(ticket["model"], "❓")
+            model_icon = {
+                "fast": "💨",
+                "balanced": "⚡",
+                "smart": "🧠",
+                "coder": "💻",
+            }.get(ticket["model"], "❓")
 
             print(f"{status_icon} Ticket {ticket['number']}: {ticket['title'][:50]}...")
             print(f"   {model_icon} Model: {ticket['model']}", end="")
@@ -270,10 +287,14 @@ class InteractiveRefinement:
                 if "suggested_model" in ticket:
                     print(f"**Suggested Model:** {ticket['suggested_model']}")
 
-                print(f"**Dependencies:** {','.join(ticket['dependencies']) if ticket['dependencies'] else 'None'}")
+                print(
+                    f"**Dependencies:** {','.join(ticket['dependencies']) if ticket['dependencies'] else 'None'}"
+                )
 
                 if "missing_dependencies" in ticket:
-                    print(f"**Missing Dependencies:** {','.join(ticket['missing_dependencies'])}")
+                    print(
+                        f"**Missing Dependencies:** {','.join(ticket['missing_dependencies'])}"
+                    )
 
                 print(f"**Description:** {ticket['description']}")
                 print("\n**Acceptance Criteria:**")
@@ -332,13 +353,17 @@ class InteractiveRefinement:
             if "suggested_model" in ticket:
                 ticket["model"] = ticket["suggested_model"]
                 changes_made += 1
-                print(f"✅ Ticket {ticket['number']}: Model → {ticket['suggested_model']}")
+                print(
+                    f"✅ Ticket {ticket['number']}: Model → {ticket['suggested_model']}"
+                )
 
             # Apply missing dependencies
             if "missing_dependencies" in ticket:
                 ticket["dependencies"].extend(ticket["missing_dependencies"])
                 changes_made += 1
-                print(f"✅ Ticket {ticket['number']}: Added dependencies {','.join(ticket['missing_dependencies'])}")
+                print(
+                    f"✅ Ticket {ticket['number']}: Added dependencies {','.join(ticket['missing_dependencies'])}"
+                )
 
         if changes_made > 0:
             print(f"\n✅ Applied {changes_made} suggestions")
@@ -359,7 +384,7 @@ class InteractiveRefinement:
                 f"**Description:** {ticket['description']}",
                 "**Progress:** started",
                 "",
-                "**Acceptance Criteria:**"
+                "**Acceptance Criteria:**",
             ]
 
             for criterion in ticket["criteria"]:

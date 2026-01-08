@@ -1,0 +1,32 @@
+[run]
+source = src/hydra
+omit = 
+    */tests/*
+    */__init__.py
+    */test_*.py
+    */conftest.py
+    */setup.py
+    */migrations/*
+    */dashboard/static/*
+
+[report]
+precision = 2
+skip_covered = False
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstract
+    @abc.abstractmethod
+    except ImportError
+    pass
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

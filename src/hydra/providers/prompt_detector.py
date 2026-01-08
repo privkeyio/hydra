@@ -77,10 +77,12 @@ class DetectionResult:
 class PromptDetector:
     """Universal prompt detection engine with configurable patterns."""
 
-    def __init__(self,
-                 config_manager: Optional[Any] = None,  # ConfigManager removed from system
-                 patterns_dir: Optional[Path] = None,
-                 enable_learning: bool = True):
+    def __init__(
+        self,
+        config_manager: Optional[Any] = None,  # ConfigManager removed from system
+        patterns_dir: Optional[Path] = None,
+        enable_learning: bool = True,
+    ):
         """Initialize the prompt detector.
 
         Args:
@@ -90,7 +92,7 @@ class PromptDetector:
 
         """
         self.config_manager = None  # ConfigManager no longer used
-        self.patterns_dir = patterns_dir or Path.cwd() / '.hydra' / 'patterns'
+        self.patterns_dir = patterns_dir or Path.cwd() / ".hydra" / "patterns"
         self.enable_learning = enable_learning
 
         # Pattern storage
@@ -103,10 +105,10 @@ class PromptDetector:
 
         # Statistics
         self._stats = {
-            'total_detections': 0,
-            'successful_matches': 0,
-            'learning_captures': 0,
-            'safety_blocks': 0
+            "total_detections": 0,
+            "successful_matches": 0,
+            "learning_captures": 0,
+            "safety_blocks": 0,
         }
 
         # Load patterns
@@ -120,75 +122,77 @@ class PromptDetector:
         self._load_builtin_patterns()
 
         # Load custom patterns from configuration files
-        for pattern_file in self.patterns_dir.glob('*.yaml'):
+        for pattern_file in self.patterns_dir.glob("*.yaml"):
             self._load_pattern_file(pattern_file)
 
-        for pattern_file in self.patterns_dir.glob('*.yml'):
+        for pattern_file in self.patterns_dir.glob("*.yml"):
             self._load_pattern_file(pattern_file)
 
-        for pattern_file in self.patterns_dir.glob('*.json'):
+        for pattern_file in self.patterns_dir.glob("*.json"):
             self._load_pattern_file(pattern_file)
 
     def _load_builtin_patterns(self):
         """Load built-in patterns for common AI tools."""
         builtin_patterns = {
-            'claude_permission_request': {
-                'name': 'claude_permission_request',
-                'pattern': (r'Do you want me to proceed\?|Should I continue.*\?|'
-                           r'Would you like me to.*\?|May I proceed'),
-                'match_type': 'regex',
-                'response_strategy': 'prompt_user',
-                'tags': ['claude', 'permission', 'interactive'],
-                'metadata': {'tool': 'claude', 'category': 'permission'}
+            "claude_permission_request": {
+                "name": "claude_permission_request",
+                "pattern": (
+                    r"Do you want me to proceed\?|Should I continue.*\?|"
+                    r"Would you like me to.*\?|May I proceed"
+                ),
+                "match_type": "regex",
+                "response_strategy": "prompt_user",
+                "tags": ["claude", "permission", "interactive"],
+                "metadata": {"tool": "claude", "category": "permission"},
             },
-            'claude_file_creation': {
-                'name': 'claude_file_creation',
-                'pattern': r'I need to create.*file|Should I create.*file',
-                'match_type': 'regex',
-                'response_strategy': 'auto_approve',
-                'response_text': 'yes',
-                'tags': ['claude', 'file_operation'],
-                'metadata': {'tool': 'claude', 'category': 'file_ops'}
+            "claude_file_creation": {
+                "name": "claude_file_creation",
+                "pattern": r"I need to create.*file|Should I create.*file",
+                "match_type": "regex",
+                "response_strategy": "auto_approve",
+                "response_text": "yes",
+                "tags": ["claude", "file_operation"],
+                "metadata": {"tool": "claude", "category": "file_ops"},
             },
-            'git_confirmation': {
-                'name': 'git_confirmation',
-                'pattern': r'git.*commit|git.*push|git.*merge',
-                'match_type': 'regex',
-                'response_strategy': 'deny',
-                'safety_override': True,
-                'tags': ['git', 'dangerous'],
-                'metadata': {
-                    'tool': 'git',
-                    'category': 'version_control',
-                    'danger_level': 'high'
-                }
+            "git_confirmation": {
+                "name": "git_confirmation",
+                "pattern": r"git.*commit|git.*push|git.*merge",
+                "match_type": "regex",
+                "response_strategy": "deny",
+                "safety_override": True,
+                "tags": ["git", "dangerous"],
+                "metadata": {
+                    "tool": "git",
+                    "category": "version_control",
+                    "danger_level": "high",
+                },
             },
-            'tmux_session_prompt': {
-                'name': 'tmux_session_prompt',
-                'pattern': '[tmux]',
-                'match_type': 'substring',
-                'response_strategy': 'auto_approve',
-                'response_text': 'y',
-                'tags': ['tmux', 'session'],
-                'metadata': {'tool': 'tmux', 'category': 'session_management'}
+            "tmux_session_prompt": {
+                "name": "tmux_session_prompt",
+                "pattern": "[tmux]",
+                "match_type": "substring",
+                "response_strategy": "auto_approve",
+                "response_text": "y",
+                "tags": ["tmux", "session"],
+                "metadata": {"tool": "tmux", "category": "session_management"},
             },
-            'generic_yes_no': {
-                'name': 'generic_yes_no',
-                'pattern': r'\(y/n\)|\[y/N\]|\[Y/n\]',
-                'match_type': 'regex',
-                'response_strategy': 'prompt_user',
-                'tags': ['generic', 'confirmation'],
-                'metadata': {'category': 'user_confirmation'}
+            "generic_yes_no": {
+                "name": "generic_yes_no",
+                "pattern": r"\(y/n\)|\[y/N\]|\[Y/n\]",
+                "match_type": "regex",
+                "response_strategy": "prompt_user",
+                "tags": ["generic", "confirmation"],
+                "metadata": {"category": "user_confirmation"},
             },
-            'password_prompt': {
-                'name': 'password_prompt',
-                'pattern': r'password:|Password:|Enter password',
-                'match_type': 'regex',
-                'response_strategy': 'prompt_user',
-                'safety_override': True,
-                'tags': ['security', 'authentication'],
-                'metadata': {'category': 'security', 'sensitive': True}
-            }
+            "password_prompt": {
+                "name": "password_prompt",
+                "pattern": r"password:|Password:|Enter password",
+                "match_type": "regex",
+                "response_strategy": "prompt_user",
+                "safety_override": True,
+                "tags": ["security", "authentication"],
+                "metadata": {"category": "security", "sensitive": True},
+            },
         }
 
         for pattern_data in builtin_patterns.values():
@@ -207,14 +211,14 @@ class PromptDetector:
     def _load_pattern_file(self, pattern_file: Path):
         """Load patterns from a configuration file."""
         try:
-            with open(pattern_file, 'r', encoding='utf-8') as f:
-                if pattern_file.suffix == '.json':
+            with open(pattern_file, "r", encoding="utf-8") as f:
+                if pattern_file.suffix == ".json":
                     data = json.load(f)
                 else:
                     data = yaml.safe_load(f)
 
-            if isinstance(data, dict) and 'patterns' in data:
-                patterns_data = data['patterns']
+            if isinstance(data, dict) and "patterns" in data:
+                patterns_data = data["patterns"]
             elif isinstance(data, list):
                 patterns_data = data
             else:
@@ -252,7 +256,7 @@ class PromptDetector:
             DetectionResult: The detection result
 
         """
-        self._stats['total_detections'] += 1
+        self._stats["total_detections"] += 1
 
         # Clean and normalize text
         normalized_text = text.strip()
@@ -272,14 +276,14 @@ class PromptDetector:
             if self._is_safety_blocked(best_match.pattern, context):
                 best_match.safety_blocked = True
                 best_match.suggested_response = None
-                self._stats['safety_blocks'] += 1
+                self._stats["safety_blocks"] += 1
 
         # Learning mode - capture unknown prompts
         if not best_match.matched and self.enable_learning:
             self._capture_unknown_prompt(normalized_text, context)
 
         if best_match.matched:
-            self._stats['successful_matches'] += 1
+            self._stats["successful_matches"] += 1
 
         return best_match
 
@@ -350,16 +354,16 @@ class PromptDetector:
 
         """
         if pattern.response_strategy == ResponseStrategy.AUTO_APPROVE:
-            return pattern.response_text or 'yes'
+            return pattern.response_text or "yes"
 
         elif pattern.response_strategy == ResponseStrategy.DENY:
-            return pattern.response_text or 'no'
+            return pattern.response_text or "no"
 
         elif pattern.response_strategy == ResponseStrategy.CUSTOM_RESPONSE:
-            response = pattern.response_text or ''
+            response = pattern.response_text or ""
             # Simple template substitution for match groups
             for i, group in enumerate(match_groups):
-                response = response.replace(f'{{group{i}}}', group)
+                response = response.replace(f"{{group{i}}}", group)
             return response
 
         elif pattern.response_strategy == ResponseStrategy.PROMPT_USER:
@@ -381,7 +385,7 @@ class PromptDetector:
 
         """
         # Check if pattern has dangerous tags
-        dangerous_tags = {'dangerous', 'git', 'system', 'security'}
+        dangerous_tags = {"dangerous", "git", "system", "security"}
         if dangerous_tags.intersection(pattern.tags):
             # Check if safety override is enabled
             if not pattern.safety_override:
@@ -390,7 +394,7 @@ class PromptDetector:
         # Check configuration-based safety rules
         if self.config_manager:
             blocked_operations = self.config_manager.get(
-                'security.blocked_operations', []
+                "security.blocked_operations", []
             )
             for blocked_op in blocked_operations:
                 if blocked_op.lower() in pattern.pattern.lower():
@@ -408,14 +412,16 @@ class PromptDetector:
         """
         if len(text.strip()) > 5:
             # Always add to learning buffer for frequency counting
-            self._learning_buffer.append({
-                'text': text,
-                'timestamp': time.time(),
-                'context': context or {},
-                'length': len(text),
-                'word_count': len(text.split())
-            })
-            self._stats['learning_captures'] += 1
+            self._learning_buffer.append(
+                {
+                    "text": text,
+                    "timestamp": time.time(),
+                    "context": context or {},
+                    "length": len(text),
+                    "word_count": len(text.split()),
+                }
+            )
+            self._stats["learning_captures"] += 1
 
             # Track unique prompts separately
             if text not in self._unknown_prompts:
@@ -474,7 +480,7 @@ class PromptDetector:
 
         """
         if filename is None:
-            filename = 'custom_patterns.yaml'
+            filename = "custom_patterns.yaml"
 
         pattern_file = self.patterns_dir / filename
         pattern_file.parent.mkdir(parents=True, exist_ok=True)
@@ -483,21 +489,21 @@ class PromptDetector:
         patterns_data = []
         for pattern in self._patterns.values():
             pattern_dict = {
-                'name': pattern.name,
-                'pattern': pattern.pattern,
-                'match_type': pattern.match_type.value,
-                'response_strategy': pattern.response_strategy.value,
-                'response_text': pattern.response_text,
-                'confidence_threshold': pattern.confidence_threshold,
-                'tags': list(pattern.tags),
-                'metadata': pattern.metadata,
-                'safety_override': pattern.safety_override
+                "name": pattern.name,
+                "pattern": pattern.pattern,
+                "match_type": pattern.match_type.value,
+                "response_strategy": pattern.response_strategy.value,
+                "response_text": pattern.response_text,
+                "confidence_threshold": pattern.confidence_threshold,
+                "tags": list(pattern.tags),
+                "metadata": pattern.metadata,
+                "safety_override": pattern.safety_override,
             }
             patterns_data.append(pattern_dict)
 
-        data = {'patterns': patterns_data}
+        data = {"patterns": patterns_data}
 
-        with open(pattern_file, 'w', encoding='utf-8') as f:
+        with open(pattern_file, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
     def get_learning_data(self) -> Dict[str, Any]:
@@ -508,10 +514,10 @@ class PromptDetector:
 
         """
         return {
-            'unknown_prompts': list(self._unknown_prompts),
-            'learning_buffer': self._learning_buffer.copy(),
-            'statistics': self._stats.copy(),
-            'pattern_count': len(self._patterns)
+            "unknown_prompts": list(self._unknown_prompts),
+            "learning_buffer": self._learning_buffer.copy(),
+            "statistics": self._stats.copy(),
+            "pattern_count": len(self._patterns),
         }
 
     def generate_pattern_suggestions(
@@ -531,7 +537,7 @@ class PromptDetector:
         # Analyze learning buffer for common patterns
         text_frequency = {}
         for entry in self._learning_buffer:
-            text = entry['text'].strip()
+            text = entry["text"].strip()
             if len(text) > 10:  # Only consider substantial prompts
                 text_frequency[text] = text_frequency.get(text, 0) + 1
 
@@ -539,17 +545,17 @@ class PromptDetector:
         for text, frequency in text_frequency.items():
             if frequency >= min_frequency:
                 suggestion = {
-                    'suggested_name': f'learned_pattern_{hash(text) & 0x7fffffff}',
-                    'pattern': re.escape(text[:50]),  # Truncate long patterns
-                    'match_type': 'literal',
-                    'response_strategy': 'prompt_user',
-                    'frequency': frequency,
-                    'sample_text': text,
-                    'confidence': min(frequency / 10.0, 1.0)
+                    "suggested_name": f"learned_pattern_{hash(text) & 0x7fffffff}",
+                    "pattern": re.escape(text[:50]),  # Truncate long patterns
+                    "match_type": "literal",
+                    "response_strategy": "prompt_user",
+                    "frequency": frequency,
+                    "sample_text": text,
+                    "confidence": min(frequency / 10.0, 1.0),
                 }
                 suggestions.append(suggestion)
 
-        return sorted(suggestions, key=lambda x: x['frequency'], reverse=True)
+        return sorted(suggestions, key=lambda x: x["frequency"], reverse=True)
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get detection statistics.
@@ -559,18 +565,18 @@ class PromptDetector:
 
         """
         success_rate = 0.0
-        if self._stats['total_detections'] > 0:
+        if self._stats["total_detections"] > 0:
             success_rate = (
-                self._stats['successful_matches'] / self._stats['total_detections']
+                self._stats["successful_matches"] / self._stats["total_detections"]
             )
 
         return {
             **self._stats,
-            'success_rate': success_rate,
-            'pattern_count': len(self._patterns),
-            'compiled_patterns': len(self._compiled_patterns),
-            'learning_enabled': self.enable_learning,
-            'unknown_prompts_count': len(self._unknown_prompts)
+            "success_rate": success_rate,
+            "pattern_count": len(self._patterns),
+            "compiled_patterns": len(self._compiled_patterns),
+            "learning_enabled": self.enable_learning,
+            "unknown_prompts_count": len(self._unknown_prompts),
         }
 
     def list_patterns(self, tag_filter: Optional[str] = None) -> List[PromptPattern]:
@@ -594,7 +600,7 @@ class PromptDetector:
         """Clear all learning mode data."""
         self._learning_buffer.clear()
         self._unknown_prompts.clear()
-        self._stats['learning_captures'] = 0
+        self._stats["learning_captures"] = 0
 
 
 class PromptHandler:
@@ -610,9 +616,7 @@ class PromptHandler:
         self.detector = detector
         self._response_callbacks = {}
 
-    def handle_prompt(
-        self, text: str, context: Optional[Dict[str, Any]] = None
-    ) -> str:
+    def handle_prompt(self, text: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Handle a prompt with automatic response generation.
 
         Args:
@@ -681,4 +685,3 @@ class PromptHandler:
 
         """
         self._response_callbacks[pattern_name] = callback
-

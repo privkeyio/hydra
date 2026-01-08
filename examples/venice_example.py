@@ -17,8 +17,7 @@ def basic_code_generation():
     """Simple code generation using Venice AI."""
     # Initialize Venice provider
     provider = VeniceProvider(
-        api_key=os.getenv("VENICE_API_KEY"),
-        model="qwen-2.5-coder-32b"
+        api_key=os.getenv("VENICE_API_KEY"), model="qwen-2.5-coder-32b"
     )
 
     # Create a code agent
@@ -29,9 +28,9 @@ def basic_code_generation():
     result = agent.generate_code(task)
 
     print("Generated Code:")
-    print(result['code'])
+    print(result["code"])
     print("\nExplanation:")
-    print(result['description'])
+    print(result["description"])
 
     return result
 
@@ -46,20 +45,20 @@ def parallel_task_execution():
     # Define multiple tasks
     tasks = [
         {
-            'id': 'task1',
-            'description': 'Create a function to parse JSON',
-            'model': 'venice'
+            "id": "task1",
+            "description": "Create a function to parse JSON",
+            "model": "venice",
         },
         {
-            'id': 'task2',
-            'description': 'Create a function to validate URLs',
-            'model': 'venice'
+            "id": "task2",
+            "description": "Create a function to validate URLs",
+            "model": "venice",
         },
         {
-            'id': 'task3',
-            'description': 'Create a function to hash passwords',
-            'model': 'venice'
-        }
+            "id": "task3",
+            "description": "Create a function to hash passwords",
+            "model": "venice",
+        },
     ]
 
     # Execute tasks in parallel
@@ -70,7 +69,7 @@ def parallel_task_execution():
         print(f"\n{'='*50}")
         print(f"Task: {task_id}")
         print(f"Status: {'Success' if result['success'] else 'Failed'}")
-        if result['success']:
+        if result["success"]:
             print(f"Code:\n{result['code']}")
 
     return results
@@ -82,8 +81,8 @@ def monitored_execution():
     guardrails = ProductionGuardrails()
     guardrails.register_tenant(
         "venice_example",
-        rate_limit={'requests_per_minute': 30},
-        budget={'daily_limit_usd': 10.0}
+        rate_limit={"requests_per_minute": 30},
+        budget={"daily_limit_usd": 10.0},
     )
 
     # Set up monitoring
@@ -95,7 +94,7 @@ def monitored_execution():
             tenant_id="venice_example",
             operation_name="generate_api",
             estimated_tokens=2000,
-            model="venice"
+            model="venice",
         ) as exec_id:
             print(f"Execution ID: {exec_id}")
 
@@ -115,13 +114,13 @@ def monitored_execution():
                 "code_generation",
                 duration=2.5,
                 success=True,
-                metadata={'lines': len(result['code'].split('\n'))}
+                metadata={"lines": len(result["code"].split("\n"))},
             )
 
             monitoring.track_agent_lifecycle(agent.name, "stop")
 
             print("Code generated successfully with monitoring!")
-            lines_count = len(result['code'].split('\n'))
+            lines_count = len(result["code"].split("\n"))
             print(f"Lines of code: {lines_count}")
 
             # Get status report
@@ -144,30 +143,30 @@ async def async_venice_workflow():
 
     # Define project specification
     project_spec = {
-        'name': 'microservice_api',
-        'description': 'Build a microservice with Venice AI',
-        'tasks': [
+        "name": "microservice_api",
+        "description": "Build a microservice with Venice AI",
+        "tasks": [
             {
-                'id': 'design',
-                'type': 'analysis',
-                'description': 'Design the API structure',
-                'model': 'venice'
+                "id": "design",
+                "type": "analysis",
+                "description": "Design the API structure",
+                "model": "venice",
             },
             {
-                'id': 'implement',
-                'type': 'code_generation',
-                'description': 'Implement the API endpoints',
-                'dependencies': ['design'],
-                'model': 'venice'
+                "id": "implement",
+                "type": "code_generation",
+                "description": "Implement the API endpoints",
+                "dependencies": ["design"],
+                "model": "venice",
             },
             {
-                'id': 'test',
-                'type': 'code_generation',
-                'description': 'Create unit tests',
-                'dependencies': ['implement'],
-                'model': 'venice'
-            }
-        ]
+                "id": "test",
+                "type": "code_generation",
+                "description": "Create unit tests",
+                "dependencies": ["implement"],
+                "model": "venice",
+            },
+        ],
     }
 
     # Create orchestrator
@@ -202,17 +201,17 @@ def template_based_generation():
 
     # Generate project from template
     params = {
-        'project_name': 'venice_api',
-        'description': 'API generated with Venice AI',
-        'author': 'Venice Developer',
-        'port': 8080
+        "project_name": "venice_api",
+        "description": "API generated with Venice AI",
+        "author": "Venice Developer",
+        "port": 8080,
     }
 
     # Create project
     output_path = engine.create_project(
-        template_name='fastapi_rest_api',
-        output_path='./generated/venice_api',
-        parameters=params
+        template_name="fastapi_rest_api",
+        output_path="./generated/venice_api",
+        parameters=params,
     )
 
     print(f"\nProject generated at: {output_path}")
@@ -225,7 +224,7 @@ def template_based_generation():
     )
 
     print("\nEnhancement code generated:")
-    print(enhancement['code'][:500] + "...")
+    print(enhancement["code"][:500] + "...")
 
     return output_path
 

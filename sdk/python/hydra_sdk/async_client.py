@@ -76,6 +76,7 @@ class HydraAsyncClient(AsyncBaseClient):
     ) -> SignatureResponse:
         if timestamp is None:
             import time
+
             timestamp = int(time.time())
 
         request = SignatureRequest(
@@ -88,7 +89,9 @@ class HydraAsyncClient(AsyncBaseClient):
         return SignatureResponse(**response)
 
     async def query_audit_logs(self, query: AuditLogQuery) -> Dict:
-        response = await self._make_request("POST", "/security/audit-logs", query.dict())
+        response = await self._make_request(
+            "POST", "/security/audit-logs", query.dict()
+        )
         return response
 
     async def wait_for_completion(
@@ -106,6 +109,8 @@ class HydraAsyncClient(AsyncBaseClient):
                 return status
 
             if timeout and (asyncio.get_event_loop().time() - start_time) > timeout:
-                raise TimeoutError(f"Task {task_id} did not complete within {timeout} seconds")
+                raise TimeoutError(
+                    f"Task {task_id} did not complete within {timeout} seconds"
+                )
 
             await asyncio.sleep(poll_interval)

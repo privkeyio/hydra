@@ -75,6 +75,7 @@ class HydraClient(BaseClient):
     ) -> SignatureResponse:
         if timestamp is None:
             import time
+
             timestamp = int(time.time())
 
         request = SignatureRequest(
@@ -97,6 +98,7 @@ class HydraClient(BaseClient):
         timeout: Optional[float] = None,
     ) -> StatusResponse:
         import time
+
         start_time = time.time()
 
         while True:
@@ -106,6 +108,8 @@ class HydraClient(BaseClient):
                 return status
 
             if timeout and (time.time() - start_time) > timeout:
-                raise TimeoutError(f"Task {task_id} did not complete within {timeout} seconds")
+                raise TimeoutError(
+                    f"Task {task_id} did not complete within {timeout} seconds"
+                )
 
             time.sleep(poll_interval)

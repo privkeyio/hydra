@@ -55,7 +55,7 @@ class ProviderProfileData:
     failed_operations: int = 0
     total_time_ms: float = 0.0
     avg_time_ms: float = 0.0
-    min_time_ms: float = float('inf')
+    min_time_ms: float = float("inf")
     max_time_ms: float = 0.0
     p50_time_ms: float = 0.0
     p95_time_ms: float = 0.0
@@ -108,10 +108,7 @@ class PerformanceProfiler:
 
     @contextmanager
     def profile_operation(
-        self,
-        operation: str,
-        provider_type: str,
-        capture_stack: bool = False
+        self, operation: str, provider_type: str, capture_stack: bool = False
     ):
         """Context manager to profile an operation.
 
@@ -130,9 +127,7 @@ class PerformanceProfiler:
 
         # Create metrics
         metrics = OperationMetrics(
-            operation=operation,
-            provider_type=provider_type,
-            start_time=datetime.now()
+            operation=operation, provider_type=provider_type, start_time=datetime.now()
         )
 
         # Capture memory before
@@ -144,7 +139,9 @@ class PerformanceProfiler:
             metrics.call_stack = [
                 f"{frame.filename}:{frame.lineno} ({frame.name})"
                 for frame in traceback.extract_stack()[:-1]
-            ][-10:]  # Keep last 10 frames
+            ][
+                -10:
+            ]  # Keep last 10 frames
 
         # Track active operation
         op_id = id(metrics)
@@ -210,11 +207,13 @@ class PerformanceProfiler:
         # Get statistics
         stream = io.StringIO()
         stats = pstats.Stats(profiler, stream=stream)
-        stats.sort_stats('cumulative')
+        stats.sort_stats("cumulative")
 
         return stats
 
-    def get_hotspots(self, provider_type: Optional[str] = None, top_n: int = 10) -> List[Tuple[str, float]]:
+    def get_hotspots(
+        self, provider_type: Optional[str] = None, top_n: int = 10
+    ) -> List[Tuple[str, float]]:
         """Get performance hotspots.
 
         Args:
@@ -261,7 +260,8 @@ class PerformanceProfiler:
             if profile:
                 # Calculate percentiles
                 times = [
-                    op.duration_ms for op in self._operations
+                    op.duration_ms
+                    for op in self._operations
                     if op.provider_type == provider_type and op.success
                 ]
                 if times:
@@ -277,9 +277,7 @@ class PerformanceProfiler:
             return profile or ProviderProfileData(provider_type)
 
     def get_slow_operations(
-        self,
-        threshold_ms: float = 1000,
-        limit: int = 10
+        self, threshold_ms: float = 1000, limit: int = 10
     ) -> List[OperationMetrics]:
         """Get operations slower than threshold.
 
@@ -292,10 +290,7 @@ class PerformanceProfiler:
 
         """
         with self._lock:
-            slow_ops = [
-                op for op in self._operations
-                if op.duration_ms > threshold_ms
-            ]
+            slow_ops = [op for op in self._operations if op.duration_ms > threshold_ms]
             slow_ops.sort(key=lambda x: x.duration_ms, reverse=True)
             return slow_ops[:limit]
 
@@ -314,8 +309,7 @@ class PerformanceProfiler:
 
         with self._lock:
             leaks = [
-                op for op in self._operations
-                if op.memory_delta > threshold_kb * 1024
+                op for op in self._operations if op.memory_delta > threshold_kb * 1024
             ]
             leaks.sort(key=lambda x: x.memory_delta, reverse=True)
             return leaks
@@ -342,10 +336,16 @@ class PerformanceProfiler:
                 report.append(f"\nProvider: {provider_type}")
                 report.append("-" * 40)
                 report.append(f"  Total operations: {profile.total_operations}")
-                report.append(f"  Success rate: {profile.successful_operations / profile.total_operations:.1%}")
+                report.append(
+                    f"  Success rate: {profile.successful_operations / profile.total_operations:.1%}"
+                )
                 report.append(f"  Average time: {profile.avg_time_ms:.2f}ms")
-                report.append(f"  Min/Max time: {profile.min_time_ms:.2f}ms / {profile.max_time_ms:.2f}ms")
-                report.append(f"  P50/P95/P99: {profile.p50_time_ms:.2f}ms / {profile.p95_time_ms:.2f}ms / {profile.p99_time_ms:.2f}ms")
+                report.append(
+                    f"  Min/Max time: {profile.min_time_ms:.2f}ms / {profile.max_time_ms:.2f}ms"
+                )
+                report.append(
+                    f"  P50/P95/P99: {profile.p50_time_ms:.2f}ms / {profile.p95_time_ms:.2f}ms / {profile.p99_time_ms:.2f}ms"
+                )
 
                 if self._memory_profiling:
                     report.append(f"  Average memory: {profile.avg_memory_kb}KB")
@@ -397,8 +397,10 @@ class PerformanceProfiler:
 
                 # Check for slow initialization
                 init_ops = [
-                    op for op in self._operations
-                    if op.provider_type == provider_type and "init" in op.operation.lower()
+                    op
+                    for op in self._operations
+                    if op.provider_type == provider_type
+                    and "init" in op.operation.lower()
                 ]
                 if init_ops:
                     avg_init = sum(op.duration_ms for op in init_ops) / len(init_ops)
@@ -454,17 +456,19 @@ def profile_provider_operation(operation: str):
         operation: Name of the operation
 
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(self, *args, **kwargs):
             # Get provider type from self if available
-            provider_type = getattr(self, 'provider_type', 'unknown')
+            provider_type = getattr(self, "provider_type", "unknown")
 
             profiler = get_profiler()
             with profiler.profile_operation(operation, provider_type):
                 return func(self, *args, **kwargs)
 
         return wrapper
+
     return decorator
 
 

@@ -78,9 +78,7 @@ class GroupAnalyzer:
         refined_groups = self._refine_groups_for_conflicts(level_groups)
 
         # Identify parallel opportunities
-        parallel_opportunities = self._identify_parallel_opportunities(
-            refined_groups
-        )
+        parallel_opportunities = self._identify_parallel_opportunities(refined_groups)
 
         # Calculate metrics
         parallel_groups_with_tickets = [
@@ -212,9 +210,7 @@ class GroupAnalyzer:
 
                     # Add file conflicts if any
                     if not can_parallel:
-                        group.file_conflicts = self._find_file_conflicts(
-                            conflict_group
-                        )
+                        group.file_conflicts = self._find_file_conflicts(conflict_group)
 
                     refined_groups.append(group)
                     phase_counter += 1
@@ -251,9 +247,7 @@ class GroupAnalyzer:
             # Find first available group
             for group_idx, group in enumerate(groups):
                 # Check if ticket conflicts with any in this group
-                has_conflict = any(
-                    other in conflicts[ticket] for other in group
-                )
+                has_conflict = any(other in conflicts[ticket] for other in group)
                 if not has_conflict:
                     group.append(ticket)
                     assigned[ticket] = group_idx
@@ -278,9 +272,7 @@ class GroupAnalyzer:
         """
         # Check direct file flow dependencies
         for flow in self.file_flows:
-            if (
-                flow.source_ticket == ticket1 and flow.target_ticket == ticket2
-            ) or (
+            if (flow.source_ticket == ticket1 and flow.target_ticket == ticket2) or (
                 flow.source_ticket == ticket2 and flow.target_ticket == ticket1
             ):
                 return True
@@ -305,9 +297,7 @@ class GroupAnalyzer:
                     return True
         return False
 
-    def _find_file_conflicts(
-        self, tickets: List[str]
-    ) -> List[Tuple[str, str]]:
+    def _find_file_conflicts(self, tickets: List[str]) -> List[Tuple[str, str]]:
         """Find all file conflicts within a group.
 
         Args:
@@ -324,9 +314,7 @@ class GroupAnalyzer:
                     conflicts.append((ticket1, ticket2))
         return conflicts
 
-    def _get_resolved_dependencies(
-        self, ticket: str, level: int
-    ) -> Set[str]:
+    def _get_resolved_dependencies(self, ticket: str, level: int) -> Set[str]:
         """Get all resolved dependencies for a ticket.
 
         Args:
@@ -444,9 +432,9 @@ class GroupAnalyzer:
 
         metrics["parallel_phases"] = parallel_phases
         metrics["sequential_phases"] = sequential_phases
-        metrics["average_phase_size"] = (
-            sum(len(g.tickets) for g in analysis.groups) / len(analysis.groups)
-        )
+        metrics["average_phase_size"] = sum(
+            len(g.tickets) for g in analysis.groups
+        ) / len(analysis.groups)
 
         # Calculate parallelization ratio
         total_parallel_tickets = sum(
@@ -519,9 +507,7 @@ class GroupAnalyzer:
 
         return "\n".join(lines)
 
-    def recommend_dependency_changes(
-        self, analysis: DependencyAnalysis
-    ) -> List[str]:
+    def recommend_dependency_changes(self, analysis: DependencyAnalysis) -> List[str]:
         """Recommend dependency changes to improve parallelization.
 
         Args:
@@ -548,19 +534,13 @@ class GroupAnalyzer:
             )
 
         # Check for phases with single tickets that could be merged
-        single_ticket_phases = [
-            g for g in analysis.groups if len(g.tickets) == 1
-        ]
+        single_ticket_phases = [g for g in analysis.groups if len(g.tickets) == 1]
         if len(single_ticket_phases) > analysis.total_levels * 0.5:
             recommendations.append(
                 f"High number of single-ticket phases ({len(single_ticket_phases)}):"
             )
-            recommendations.append(
-                "  - Review dependencies to combine related work"
-            )
-            recommendations.append(
-                "  - Consider batching small tickets together"
-            )
+            recommendations.append("  - Review dependencies to combine related work")
+            recommendations.append("  - Consider batching small tickets together")
 
         # Check parallelization ratio
         metrics = self.calculate_parallelism_metrics(analysis)
@@ -568,15 +548,9 @@ class GroupAnalyzer:
             recommendations.append(
                 f"Low parallelization ratio ({metrics['parallelization_ratio']:.1%}):"
             )
-            recommendations.append(
-                "  - Identify independent work streams"
-            )
-            recommendations.append(
-                "  - Reduce unnecessary dependencies"
-            )
-            recommendations.append(
-                "  - Split large tickets into parallel subtasks"
-            )
+            recommendations.append("  - Identify independent work streams")
+            recommendations.append("  - Reduce unnecessary dependencies")
+            recommendations.append("  - Split large tickets into parallel subtasks")
 
         if not recommendations:
             recommendations.append(
@@ -584,4 +558,3 @@ class GroupAnalyzer:
             )
 
         return recommendations
-

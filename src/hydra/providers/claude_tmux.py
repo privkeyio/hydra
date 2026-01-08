@@ -1,7 +1,29 @@
-"""Claude tmux Provider - Runs Claude Code in tmux sessions for full interactivity."""
+"""Claude tmux Provider - Runs Claude Code in tmux sessions for full interactivity.
+
+DEPRECATED: This module is deprecated and will be removed in v2.0.
+Use hydra.providers.claude_unified.ClaudeUnifiedProvider with mode='tmux' instead.
+
+Migration example:
+    # Old code:
+    from hydra.providers.claude_tmux import ClaudeTmuxProvider
+    provider = ClaudeTmuxProvider(config)
+    
+    # New code:
+    from hydra.providers.unified_factory import create_provider
+    provider = create_provider("claude_tmux")
+"""
+
 import os
 import re
 import subprocess
+import warnings
+
+# Issue deprecation warning on import
+warnings.warn(
+    "ClaudeTmuxProvider is deprecated. Use ClaudeUnifiedProvider with mode='tmux' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 import time
 import uuid
 from datetime import datetime
@@ -21,16 +43,23 @@ from .base_provider import (
     Session,
     SessionState,
 )
+from .error_handler import ErrorCategory, get_error_handler
+from .retry_utils import CircuitBreaker, with_retry
 
 
 class ClaudeTmuxProvider(BaseProvider):
     """Run Claude Code in tmux sessions with full interactive capabilities."""
 
+    def __init__(self, config):
+        """Initialize provider with circuit breaker."""
+        super().__init__(config)
+        self.circuit_breaker = CircuitBreaker("claude_tmux", failure_threshold=3)
+        self.error_handler = get_error_handler()
+
     def validate_config(self):
         """Validate Claude CLI and tmux configuration."""
         self.claude_path = self.config.extra_params.get(
-            'claude_path',
-            os.environ.get('CLAUDE_CLI_PATH', get_claude_cli_path())
+            "claude_path", os.environ.get("CLAUDE_CLI_PATH", get_claude_cli_path())
         )
 
         if not Path(self.claude_path).exists():
@@ -57,56 +86,70 @@ class ClaudeTmuxProvider(BaseProvider):
     def _session_exists(self, session_name: str) -> bool:
         """Check if a tmux session exists."""
         result = subprocess.run(
-            ["tmux", "has-session", "-t", session_name],
-            capture_output=True
+            ["tmux", "has-session", "-t", session_name], capture_output=True
         )
         return result.returncode == 0
 
     def _kill_session(self, session_name: str):
-        """Kill a tmux session if it exists."""
+        """Kill a tmux session if it exists with proper error handling."""
         if self._session_exists(session_name):
-            subprocess.run(
-                ["tmux", "kill-session", "-t", session_name],
-                capture_output=True
-            )
+            try:
+                result = subprocess.run(
+                    ["tmux", "kill-session", "-t", session_name],
+                    capture_output=True,
+                    timeout=10
+                )
+                if result.returncode != 0:
+                    # Log warning but don't fail - session might already be dead
+                    print(f"Warning: Failed to kill tmux session {session_name}")
+            except subprocess.TimeoutExpired:
+                # Force kill if needed
+                try:
+                    subprocess.run(
+                        ["pkill", "-f", f"tmux.*{session_name}"],
+                        capture_output=True,
+                        timeout=5
+                    )
+                except Exception:
+                    pass  # Best effort cleanup
+            except Exception as e:
+                # Log but don't propagate - cleanup should be robust
+                print(f"Warning: Error killing tmux session {session_name}: {e}")
 
     def _send_to_session(self, session_name: str, text: str):
         """Send text to a tmux session."""
         # Clear any pending input first
         subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, "C-u"],
-            capture_output=True
+            ["tmux", "send-keys", "-t", session_name, "C-u"], capture_output=True
         )
         time.sleep(0.1)
-        
+
         # For multi-line text, use paste-buffer which handles it better
-        if '\n' in text:
+        if "\n" in text:
             # Load text into tmux buffer
             process = subprocess.Popen(
                 ["tmux", "load-buffer", "-"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
             )
             process.communicate(input=text)
-            
+
             # Paste the buffer into the session
             subprocess.run(
-                ["tmux", "paste-buffer", "-t", session_name],
-                capture_output=True
+                ["tmux", "paste-buffer", "-t", session_name], capture_output=True
             )
         else:
             # For single-line text, use send-keys with -l flag
             subprocess.run(
                 ["tmux", "send-keys", "-t", session_name, "-l", text],
-                capture_output=True
+                capture_output=True,
             )
-        
+
         # Send Enter to submit
         subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, "Enter"],
-            capture_output=True
+            ["tmux", "send-keys", "-t", session_name, "Enter"], capture_output=True
         )
 
     def _capture_session_output(self, session_name: str) -> str:
@@ -114,14 +157,19 @@ class ClaudeTmuxProvider(BaseProvider):
         result = subprocess.run(
             ["tmux", "capture-pane", "-t", session_name, "-p"],
             capture_output=True,
-            text=True
+            text=True,
         )
         return result.stdout if result.returncode == 0 else ""
 
+    @with_retry(max_retries=2, retry_on=[ErrorCategory.SESSION, ErrorCategory.TIMEOUT])
     def generate(self, prompt: str, **kwargs) -> str:
         """Execute Claude in a tmux session for file operations."""
-        project_dir = kwargs.get('cwd', os.getcwd())
-        ticket_id = kwargs.get('ticket_id', None)
+        return self.circuit_breaker.call(self._generate_impl, prompt, **kwargs)
+
+    def _generate_impl(self, prompt: str, **kwargs) -> str:
+        """Internal implementation of generate with proper resource management."""
+        project_dir = kwargs.get("cwd", os.getcwd())
+        ticket_id = kwargs.get("ticket_id", None)
         session_name = self._create_session_name(ticket_id)
 
         # Initialize file interceptor for this session
@@ -143,11 +191,13 @@ class ClaudeTmuxProvider(BaseProvider):
             done_marker.unlink()
 
         # Check if debug mode is enabled via environment variable
-        debug_mode = os.environ.get('HYDRA_DEBUG', '').lower() in ['true', '1', 'yes']
+        debug_mode = os.environ.get("HYDRA_DEBUG", "").lower() in ["true", "1", "yes"]
 
         # Set up debug logging only if enabled
         if debug_mode:
-            debug_log_path = hydra_dir / "debug" / f"claude_{session_name}_{int(time.time())}.log"
+            debug_log_path = (
+                hydra_dir / "debug" / f"claude_{session_name}_{int(time.time())}.log"
+            )
             debug_log_path.parent.mkdir(exist_ok=True)
             self._current_debug_log_path = debug_log_path
 
@@ -156,16 +206,22 @@ class ClaudeTmuxProvider(BaseProvider):
                 timestamp = time.strftime("%H:%M:%S")
                 log_msg = f"[{timestamp}] {message}"
                 print(f"🔍 DEBUG: {log_msg}")
-                with open(self._current_debug_log_path, 'a') as f:
+                with open(self._current_debug_log_path, "a") as f:
                     f.write(log_msg + "\n")
+
         else:
             # No-op debug function when debug mode is disabled
             def debug_log(message):
                 pass
+
             self._current_debug_log_path = None
 
         # Store as instance method for use throughout
         self._debug_log = debug_log
+
+        start_time = time.time()
+        session_created = False
+        error_occurred = None
 
         try:
             print(f"🖥️  Starting tmux session: {session_name}")
@@ -173,44 +229,66 @@ class ClaudeTmuxProvider(BaseProvider):
             debug_log(f"Starting session: {session_name}")
             debug_log(f"Working directory: {project_dir}")
 
+            # Track session creation for telemetry
+            session_start = time.time()
+
             # Create a new tmux session with Claude
             # Check if we need to specify a model
             # First check kwargs for model, then environment variable
-            model_from_kwargs = kwargs.get('model', '')
-            model_from_env = os.environ.get('CLAUDE_MODEL', '').lower()
+            model_from_kwargs = kwargs.get("model", "")
+            model_from_env = os.environ.get("CLAUDE_MODEL", "").lower()
 
             # Use model from kwargs if provided, otherwise from env
             model_to_use = model_from_kwargs if model_from_kwargs else model_from_env
 
             # Map ticket models to Claude model names
             model_mapping = {
-                'smart': 'opus',      # Complex tasks need Opus
-                'coder': 'opus',      # Complex coding needs Opus
-                'balanced': 'sonnet', # Balanced tasks use Sonnet
-                'fast': 'sonnet',     # Fast tasks also use Sonnet (no Haiku)
+                "smart": "opus",  # Complex tasks need Opus
+                "coder": "opus",  # Complex coding needs Opus
+                "balanced": "sonnet",  # Balanced tasks use Sonnet
+                "fast": "sonnet",  # Fast tasks also use Sonnet (no Haiku)
                 # Also handle direct Claude model names
-                'claude-opus-4-1-20250805': 'opus',
-                'opus': 'opus',
-                'claude-sonnet-4-20250514': 'sonnet',
-                'sonnet': 'sonnet'
+                "claude-opus-4-1-20250805": "opus",
+                "opus": "opus",
+                "claude-sonnet-4-20250514": "sonnet",
+                "sonnet": "sonnet",
             }
 
             # Default to opus for ticket creation, sonnet for everything else
-            default_model = 'opus' if kwargs.get('mode') == 'ticket_generation' else 'sonnet'
+            default_model = (
+                "opus" if kwargs.get("mode") == "ticket_generation" else "sonnet"
+            )
             claude_model = model_mapping.get(model_to_use.lower(), default_model)
 
             # Build the command with model flag
             # IMPORTANT: Start Claude in the project directory to prevent it from modifying Hydra source
             cmd = [
-                "tmux", "new-session", "-d", "-s", session_name,
-                "-c", project_dir,  # Set working directory
-                self.claude_path, "--model", claude_model
+                "tmux",
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                project_dir,  # Set working directory
+                self.claude_path,
+                "--model",
+                claude_model,
             ]
 
             print(f"🤖 Starting Claude with {claude_model.upper()} model")
             debug_log(f"Starting Claude with model: {claude_model}")
 
-            subprocess.run(cmd, check=True)
+            # Create tmux session with timeout and error handling
+            try:
+                result = subprocess.run(cmd, check=True, timeout=60, capture_output=True, text=True)
+                session_created = True
+                debug_log(f"Tmux session created successfully in {time.time() - session_start:.2f}s")
+            except subprocess.TimeoutExpired:
+                raise Exception("Tmux session creation timed out after 60s")
+            except subprocess.CalledProcessError as e:
+                error_msg = f"Failed to create tmux session: {e.stderr or e.stdout or str(e)}"
+                debug_log(f"Session creation failed: {error_msg}")
+                raise Exception(error_msg)
 
             # Wait for Claude to initialize
             print("⏳ Waiting for Claude Code to initialize...")
@@ -221,34 +299,40 @@ class ClaudeTmuxProvider(BaseProvider):
             permission_accepted = False
             while time.time() - start_init < initialization_timeout:
                 output = self._capture_session_output(session_name)
-                
+
                 # First check if Claude is asking for permission (only accept once)
-                if not permission_accepted and "automatic bash execution" in output and "Yes, proceed" in output:
+                if (
+                    not permission_accepted
+                    and "automatic bash execution" in output
+                    and "Yes, proceed" in output
+                ):
                     print("🔐 Accepting bash execution permission...")
                     # Option 1 is already selected by default, just press Enter
                     subprocess.run(
                         ["tmux", "send-keys", "-t", session_name, "Enter"],
-                        capture_output=True
+                        capture_output=True,
                     )
                     permission_accepted = True
                     time.sleep(5)  # Give Claude more time to process and start
                     # After accepting, capture new output
                     output = self._capture_session_output(session_name)
-                
+
                 # Check for Claude being ready - look for the prompt after welcome
                 # Both conditions must be present together
-                if "Welcome to Claude Code" in output and ("Try \"" in output or "> Try" in output or "│ >" in output):
+                if "Welcome to Claude Code" in output and (
+                    'Try "' in output or "> Try" in output or "│ >" in output
+                ):
                     # Make sure we're not still on permission screen
                     if "automatic bash execution" not in output[-500:]:
                         claude_ready = True
                         print("✅ Claude Code is ready")
                         break
-                
+
                 # Debug output every 5 seconds
                 if int(time.time() - start_init) % 5 == 0:
-                    last_line = output.strip().split('\n')[-1] if output else ""
+                    last_line = output.strip().split("\n")[-1] if output else ""
                     print(f"⏳ Waiting... Last line: {last_line[:50]}")
-                
+
                 time.sleep(1)
 
             if not claude_ready:
@@ -268,14 +352,16 @@ class ClaudeTmuxProvider(BaseProvider):
             )
 
             # Parse ticket if available to extract required files
-            ticket = kwargs.get('ticket', None)
+            ticket = kwargs.get("ticket", None)
             file_creation_prompt = ""
             required_files = []  # Initialize to empty list
             if ticket:
                 file_creation_prompt = enforce_file_creation(ticket)
                 required_files = extract_required_files(ticket)
                 if required_files:
-                    print(f"📋 This ticket requires creating {len(required_files)} new files:")
+                    print(
+                        f"📋 This ticket requires creating {len(required_files)} new files:"
+                    )
                     for f in required_files:
                         print(f"   📄 {f}")
 
@@ -283,19 +369,19 @@ class ClaudeTmuxProvider(BaseProvider):
             # Check if this is called from ticket_workflow with full prompt
             if prompt and len(prompt) > 100:  # Full prompt from ticket_workflow
                 # For ticket generation, use the FULL prompt with all instructions
-                is_ticket_generation = kwargs.get('mode') == 'ticket_generation'
+                is_ticket_generation = kwargs.get("mode") == "ticket_generation"
                 if is_ticket_generation:
                     # Just use the full prompt as-is - it has all the instructions
                     prompt_text = prompt
                 elif required_files:
                     # For ticket execution with known files
-                    tickets_file = kwargs.get('tickets_file', 'tickets.yaml')
+                    tickets_file = kwargs.get("tickets_file", "tickets.yaml")
                     file_list = ", ".join(required_files)
                     prompt_text = f"Read {tickets_file} ticket {ticket_id} and create these files: {file_list}"
                 else:
                     # For ticket execution without specific files
-                    tickets_file = kwargs.get('tickets_file', 'tickets.yaml')
-                    
+                    tickets_file = kwargs.get("tickets_file", "tickets.yaml")
+
                     # Build a comprehensive prompt that emphasizes actual implementation
                     prompt_text = (
                         f"Read {tickets_file} and fully implement ticket {ticket_id}.\n\n"
@@ -344,7 +430,11 @@ class ClaudeTmuxProvider(BaseProvider):
                     f"REMINDER: You MUST create ALL files mentioned in the acceptance criteria!"
                 )
                 # Prepend file creation enforcement if available
-                prompt_text = file_creation_prompt + base_prompt if file_creation_prompt else base_prompt
+                prompt_text = (
+                    file_creation_prompt + base_prompt
+                    if file_creation_prompt
+                    else base_prompt
+                )
 
             debug_log("=" * 60)
             debug_log("SENDING PROMPT TO CLAUDE:")
@@ -361,20 +451,20 @@ class ClaudeTmuxProvider(BaseProvider):
             # Give Claude time to process the prompt
             print("⏳ Waiting for Claude to start processing...")
             time.sleep(5)
-            
+
             # Check if Claude received the prompt
             check_output = self._capture_session_output(session_name)
             if prompt_text[:50] in check_output:
                 print("✅ Claude received the prompt")
             else:
                 print("⚠️ Claude may not have received the prompt correctly")
-                
+
             time.sleep(5)  # More time to start processing
 
             # Capture initial response
             initial_response = self._capture_session_output(session_name)
             debug_log("Initial Claude response after prompt:")
-            for line in initial_response.split('\n')[-20:]:  # Last 20 lines
+            for line in initial_response.split("\n")[-20:]:  # Last 20 lines
                 if line.strip():
                     debug_log(f"  > {line[:150]}")
 
@@ -393,16 +483,16 @@ class ClaudeTmuxProvider(BaseProvider):
             idle_timeout = 180  # 3 minutes of no activity suggests completion or stuck
 
             # For ticket generation, check if tickets.yaml was created
-            is_ticket_generation = kwargs.get('mode') == 'ticket_generation'
+            is_ticket_generation = kwargs.get("mode") == "ticket_generation"
             tickets_file = Path(project_dir) / "tickets.yaml"
-            
+
             while time.time() - start_time < max_timeout:
                 # Check if done marker exists
                 if done_marker.exists():
                     print("✅ Claude Code signaled completion")
                     done_marker.unlink()
                     break
-                
+
                 # For ticket generation, check if file was created
                 if is_ticket_generation and tickets_file.exists():
                     # Give Claude a moment to finish writing
@@ -414,7 +504,7 @@ class ClaudeTmuxProvider(BaseProvider):
                 current_output = self._capture_session_output(session_name)
 
                 # Log new content
-                current_lines = current_output.split('\n')
+                current_lines = current_output.split("\n")
                 if len(current_lines) > last_captured_lines:
                     new_lines = current_lines[last_captured_lines:]
                     for line in new_lines:
@@ -429,19 +519,27 @@ class ClaudeTmuxProvider(BaseProvider):
                     # Log status periodically
                     if no_change_count % 30 == 0:
                         debug_log(f"No activity for {no_change_count}s")
-                        print(f"⏳ Waiting for Claude to complete... ({no_change_count}s idle)")
+                        print(
+                            f"⏳ Waiting for Claude to complete... ({no_change_count}s idle)"
+                        )
                         # Log last 10 lines to see what Claude is stuck on
-                        last_10_lines = current_lines[-10:] if len(current_lines) > 10 else current_lines
+                        last_10_lines = (
+                            current_lines[-10:]
+                            if len(current_lines) > 10
+                            else current_lines
+                        )
                         debug_log("Last 10 lines of output:")
                         for line in last_10_lines:
                             debug_log(f"  > {line[:100]}")
 
                     # Check if Claude has returned to prompt (indicates completion)
-                    last_lines = current_output.strip().split('\n')[-10:]
-                    prompt_indicators = ['│ >                                                                            │',
-                                       '│ > ',
-                                       '╰──────────────────────────────────────────────────────────────────────────────╯',
-                                       '? for shortcuts']
+                    last_lines = current_output.strip().split("\n")[-10:]
+                    prompt_indicators = [
+                        "│ >                                                                            │",
+                        "│ > ",
+                        "╰──────────────────────────────────────────────────────────────────────────────╯",
+                        "? for shortcuts",
+                    ]
 
                     # Don't check for prompt completion too early - Claude needs time to work
                     # Only check after significant idle time
@@ -449,9 +547,15 @@ class ClaudeTmuxProvider(BaseProvider):
                         # Check if we see the prompt
                         completion_detected = False
                         for line in last_lines:
-                            if any(indicator in line for indicator in prompt_indicators):
-                                print("✅ Claude returned to prompt after long idle - task likely complete")
-                                debug_log("Detected Claude prompt after 2 min idle - assuming completion")
+                            if any(
+                                indicator in line for indicator in prompt_indicators
+                            ):
+                                print(
+                                    "✅ Claude returned to prompt after long idle - task likely complete"
+                                )
+                                debug_log(
+                                    "Detected Claude prompt after 2 min idle - assuming completion"
+                                )
                                 completion_detected = True
                                 break
                         if completion_detected:
@@ -459,7 +563,9 @@ class ClaudeTmuxProvider(BaseProvider):
 
                     # If no changes for idle_timeout seconds, assume completion or stuck
                     if no_change_count > idle_timeout:
-                        print(f"⏱️  Claude has been idle for {idle_timeout}s - assuming task complete or stuck")
+                        print(
+                            f"⏱️  Claude has been idle for {idle_timeout}s - assuming task complete or stuck"
+                        )
                         debug_log(f"Idle timeout reached after {no_change_count}s")
                         break  # Exit the loop
 
@@ -469,23 +575,34 @@ class ClaudeTmuxProvider(BaseProvider):
                         debug_log(f"Activity detected after {no_change_count}s idle")
                     no_change_count = 0
                     last_output = current_output
-                    
+
                     # Check if Claude is actually creating files
                     if "Write(" in current_output or "wrote" in current_output.lower():
                         print("📝 Claude is writing files...")
-                    elif "Read(" in current_output or "reading" in current_output.lower():
+                    elif (
+                        "Read(" in current_output or "reading" in current_output.lower()
+                    ):
                         print("📖 Claude is reading files...")
-                    elif any(x in current_output.lower() for x in ["creating", "created", "writing"]):
+                    elif any(
+                        x in current_output.lower()
+                        for x in ["creating", "created", "writing"]
+                    ):
                         print("🔨 Claude is working on files...")
 
                     # Check if Claude needs permission for file operations
                     if "do you want to create" in current_output.lower():
-                        print("⚠️  Claude Code asking for file creation permission - auto-approving")
+                        print(
+                            "⚠️  Claude Code asking for file creation permission - auto-approving"
+                        )
                         self._send_to_session(session_name, "1")  # Select "Yes"
                         time.sleep(1)
                     elif "don't ask again" in current_output.lower():
-                        print("⚠️  Claude Code asking for permission - auto-approving file operations")
-                        self._send_to_session(session_name, "2")  # Select "Yes, don't ask again"
+                        print(
+                            "⚠️  Claude Code asking for permission - auto-approving file operations"
+                        )
+                        self._send_to_session(
+                            session_name, "2"
+                        )  # Select "Yes, don't ask again"
                         time.sleep(1)
                     elif "yes, looks good" in current_output.lower():
                         print("⚠️  Claude Code asking for confirmation - auto-approving")
@@ -525,12 +642,12 @@ class ClaudeTmuxProvider(BaseProvider):
                         ["git", "status", "--short"],
                         capture_output=True,
                         text=True,
-                        cwd=project_dir
+                        cwd=project_dir,
                     )
                     # Filter to only show files in the current project directory
                     changed_files = []
                     project_path = Path(project_dir).resolve()
-                    for line in git_status.stdout.strip().split('\n'):
+                    for line in git_status.stdout.strip().split("\n"):
                         if line and not line.endswith("tickets.md"):
                             # Parse the file path
                             parts = line.strip().split(maxsplit=1)
@@ -548,9 +665,13 @@ class ClaudeTmuxProvider(BaseProvider):
                                 else:
                                     # Convert to absolute path and check if it's within project directory
                                     try:
-                                        file_abs_path = (project_path / filepath).resolve()
+                                        file_abs_path = (
+                                            project_path / filepath
+                                        ).resolve()
                                         # Check if the file is within the project directory
-                                        if str(file_abs_path).startswith(str(project_path)):
+                                        if str(file_abs_path).startswith(
+                                            str(project_path)
+                                        ):
                                             changed_files.append(line)
                                     except (ValueError, OSError):
                                         # Skip files that can't be resolved
@@ -562,7 +683,7 @@ class ClaudeTmuxProvider(BaseProvider):
                             file_parts = file.strip().split()
                             if len(file_parts) >= 2:
                                 status = file_parts[0]
-                                filepath = ' '.join(file_parts[1:])
+                                filepath = " ".join(file_parts[1:])
                                 if status == "M":
                                     print(f"   ✏️  Editing: {filepath}")
                                 elif status == "A" or status == "??":
@@ -579,9 +700,13 @@ class ClaudeTmuxProvider(BaseProvider):
             # Save full session output for debugging (only if debug mode is enabled)
             if debug_mode:
                 final_output = self._capture_session_output(session_name)
-                session_log_path = hydra_dir / "debug" / f"full_session_{session_name}_{int(time.time())}.txt"
+                session_log_path = (
+                    hydra_dir
+                    / "debug"
+                    / f"full_session_{session_name}_{int(time.time())}.txt"
+                )
                 session_log_path.parent.mkdir(exist_ok=True)
-                with open(session_log_path, 'w') as f:
+                with open(session_log_path, "w") as f:
                     f.write(final_output)
                 debug_log(f"Full session saved to: {session_log_path}")
 
@@ -591,7 +716,9 @@ class ClaudeTmuxProvider(BaseProvider):
                 debug_log(f"Session: {session_name}")
                 debug_log(f"Duration: {time.time() - start_time:.2f}s")
                 debug_log(f"Ticket ID: {ticket_id}")
-                debug_log(f"Files detected by git: {git_status.stdout if 'git_status' in locals() else 'N/A'}")
+                debug_log(
+                    f"Files detected by git: {git_status.stdout if 'git_status' in locals() else 'N/A'}"
+                )
                 debug_log(f"Debug log: {self._current_debug_log_path}")
                 debug_log(f"Full session: {session_log_path}")
                 print("\n📁 Debug logs saved to:")
@@ -605,7 +732,7 @@ class ClaudeTmuxProvider(BaseProvider):
             time.sleep(10)  # Give Claude plenty of time to finish writing files
 
             # Validate required files were created if we have ticket info
-            if 'required_files' in locals() and required_files:
+            if "required_files" in locals() and required_files:
                 print("\n🔍 Validating required files were created...")
                 missing_files = []
                 for req_file in required_files:
@@ -631,7 +758,9 @@ class ClaudeTmuxProvider(BaseProvider):
                         print(f"   ❌ MISSING: {req_file}")
 
                 if missing_files:
-                    print(f"\n⚠️  WARNING: Claude did not create {len(missing_files)} required files!")
+                    print(
+                        f"\n⚠️  WARNING: Claude did not create {len(missing_files)} required files!"
+                    )
                     print("   This will cause the ticket to fail validation.")
 
             # Check final results
@@ -639,13 +768,13 @@ class ClaudeTmuxProvider(BaseProvider):
                 ["git", "status", "--short"],
                 capture_output=True,
                 text=True,
-                cwd=project_dir
+                cwd=project_dir,
             )
 
             # Filter to only show files in the current project directory
             changed_files = []
             project_path = Path(project_dir).resolve()
-            for line in git_status.stdout.strip().split('\n'):
+            for line in git_status.stdout.strip().split("\n"):
                 if line and not line.endswith("tickets.md"):
                     # Parse the file path
                     parts = line.strip().split(maxsplit=1)
@@ -681,7 +810,7 @@ class ClaudeTmuxProvider(BaseProvider):
                     parts = line.strip().split()
                     if len(parts) >= 2:
                         status = parts[0]
-                        filepath = ' '.join(parts[1:])
+                        filepath = " ".join(parts[1:])
                         if status == "M":
                             modified_files.append(filepath)
                         elif status == "A" or status == "??":
@@ -727,25 +856,87 @@ class ClaudeTmuxProvider(BaseProvider):
                     new_files = subprocess.run(
                         ["find", str(src_dir), "-type", "f", "-mmin", "-2"],
                         capture_output=True,
-                        text=True
+                        text=True,
                     )
                     if new_files.stdout.strip():
                         print("✅ New files created")
                         return "Implementation completed"
 
-                return self._capture_session_output(session_name) or "Claude session completed"
+                return (
+                    self._capture_session_output(session_name)
+                    or "Claude session completed"
+                )
 
         except subprocess.CalledProcessError as e:
+            error_occurred = e
+            # Log the error with context
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "session_name": session_name,
+                    "ticket_id": ticket_id,
+                    "project_dir": project_dir,
+                    "session_created": session_created
+                }
+            )
             raise Exception(f"tmux command failed: {str(e)}") from e
+        except subprocess.TimeoutExpired as e:
+            error_occurred = e
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "session_name": session_name,
+                    "timeout_type": "tmux_operation"
+                }
+            )
+            raise Exception(f"tmux operation timed out: {str(e)}") from e
         except Exception as e:
+            error_occurred = e
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "session_name": session_name,
+                    "ticket_id": ticket_id,
+                    "operation": "generate"
+                }
+            )
             raise Exception(f"Claude tmux error: {str(e)}") from e
         finally:
-            # Release all file locks for this agent
-            file_interceptor.release_agent_locks(agent_id)
-            # Kill the tmux session
-            self._kill_session(session_name)
-            # Clean up marker file
-            done_marker.unlink(missing_ok=True)
+            execution_time = time.time() - start_time
+
+            # Log execution telemetry
+            debug_log(f"Session execution completed in {execution_time:.2f}s")
+            if error_occurred:
+                debug_log(f"Session failed with error: {type(error_occurred).__name__}")
+
+            try:
+                # Release all file locks for this agent
+                file_interceptor.release_agent_locks(agent_id)
+                debug_log("File locks released successfully")
+            except Exception as e:
+                debug_log(f"Warning: Failed to release file locks: {e}")
+
+            try:
+                # Kill the tmux session with enhanced cleanup
+                if session_created or self._session_exists(session_name):
+                    self._kill_session(session_name)
+                    debug_log(f"Tmux session {session_name} cleaned up")
+            except Exception as e:
+                debug_log(f"Warning: Failed to clean up tmux session: {e}")
+
+            try:
+                # Clean up marker file
+                if 'done_marker' in locals():
+                    done_marker.unlink(missing_ok=True)
+                debug_log("Marker files cleaned up")
+            except Exception as e:
+                debug_log(f"Warning: Failed to clean up marker files: {e}")
+
+            # Log final telemetry
+            print(f"🏁 Session completed in {execution_time:.1f}s")
 
     def generate_json(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Not used for tmux mode."""
@@ -769,7 +960,7 @@ class ClaudeTmuxProvider(BaseProvider):
                 supports_streaming=True,
                 supports_interactive=True,
                 cost_per_token=0.00015,
-                metadata={"version": "4.1", "release_date": "2025-08-05"}
+                metadata={"version": "4.1", "release_date": "2025-08-05"},
             ),
             ModelInfo(
                 identifier="claude-sonnet-4-20250514",
@@ -780,7 +971,7 @@ class ClaudeTmuxProvider(BaseProvider):
                 supports_streaming=True,
                 supports_interactive=True,
                 cost_per_token=0.00003,
-                metadata={"version": "4", "release_date": "2025-05-14"}
+                metadata={"version": "4", "release_date": "2025-05-14"},
             ),
         ]
 
@@ -829,26 +1020,64 @@ class ClaudeTmuxProvider(BaseProvider):
     def create_session(self, session_id: str, **kwargs) -> Session:
         """Create a new provider session."""
         session_name = self._create_session_name(session_id)
-        project_dir = kwargs.get('cwd', os.getcwd())
+        project_dir = kwargs.get("cwd", os.getcwd())
 
         # Kill any existing session with the same name
         self._kill_session(session_name)
 
-        # Create new tmux session with resource handling
+        # Create new tmux session with enhanced resource handling
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [
-                    "tmux", "new-session", "-d", "-s", session_name,
-                    "-c", project_dir,
-                    self.claude_path
+                    "tmux",
+                    "new-session",
+                    "-d",
+                    "-s",
+                    session_name,
+                    "-c",
+                    project_dir,
+                    self.claude_path,
                 ],
                 check=True,
-                timeout=30
+                timeout=30,
+                capture_output=True,
+                text=True
             )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-            if isinstance(e, OSError) and e.errno == 11:  # Resource temporarily unavailable
-                raise ValueError(f"Unable to create tmux session - system resources exhausted: {e}")
-            raise ValueError(f"Failed to create tmux session '{session_name}': {e}")
+        except subprocess.TimeoutExpired as e:
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={"operation": "create_session", "session_name": session_name}
+            )
+            raise ValueError(f"Tmux session creation timed out after 30s: {session_name}")
+        except subprocess.CalledProcessError as e:
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={
+                    "operation": "create_session",
+                    "session_name": session_name,
+                    "stderr": e.stderr,
+                    "stdout": e.stdout
+                }
+            )
+            raise ValueError(f"Failed to create tmux session '{session_name}': {e.stderr or e.stdout or str(e)}")
+        except OSError as e:
+            if e.errno == 11:  # Resource temporarily unavailable
+                self.error_handler.handle_error(
+                    provider=self.name,
+                    error=e,
+                    context={"operation": "create_session", "resource_exhausted": True}
+                )
+                raise ValueError(
+                    f"Unable to create tmux session - system resources exhausted: {e}"
+                )
+            self.error_handler.handle_error(
+                provider=self.name,
+                error=e,
+                context={"operation": "create_session", "session_name": session_name}
+            )
+            raise ValueError(f"System error creating tmux session '{session_name}': {e}")
 
         # Create and store session object
         session = Session(
@@ -858,7 +1087,7 @@ class ClaudeTmuxProvider(BaseProvider):
             created_at=datetime.now(),
             last_activity=datetime.now(),
             state=SessionState.ACTIVE,
-            metadata={"tmux_name": session_name, "project_dir": project_dir}
+            metadata={"tmux_name": session_name, "project_dir": project_dir},
         )
 
         self._sessions[session_id] = session
@@ -879,7 +1108,7 @@ class ClaudeTmuxProvider(BaseProvider):
                     created_at=datetime.now(),
                     last_activity=datetime.now(),
                     state=SessionState.ACTIVE,
-                    metadata={"tmux_name": session_name}
+                    metadata={"tmux_name": session_name},
                 )
                 self._sessions[session_id] = session
                 self._current_session = session
@@ -897,12 +1126,12 @@ class ClaudeTmuxProvider(BaseProvider):
         result = subprocess.run(
             ["tmux", "list-sessions", "-F", "#{session_name}"],
             capture_output=True,
-            text=True
+            text=True,
         )
 
         sessions = []
         if result.returncode == 0:
-            for line in result.stdout.strip().split('\n'):
+            for line in result.stdout.strip().split("\n"):
                 if line.startswith("hydra_claude_"):
                     # Extract session ID from tmux name
                     session_id = line.replace("hydra_claude_", "")
@@ -917,7 +1146,7 @@ class ClaudeTmuxProvider(BaseProvider):
                             created_at=datetime.now(),
                             last_activity=datetime.now(),
                             state=SessionState.ACTIVE,
-                            metadata={"tmux_name": line}
+                            metadata={"tmux_name": line},
                         )
                         self._sessions[session_id] = session
                         sessions.append(session)
@@ -953,11 +1182,12 @@ class ClaudeTmuxProvider(BaseProvider):
             "session_id": session_id,
             "tmux_name": tmux_name,
             "output": output,
-            "metadata": session.metadata
+            "metadata": session.metadata,
         }
 
         import json
-        with open(path, 'w') as f:
+
+        with open(path, "w") as f:
             json.dump(save_data, f, indent=2, default=str)
 
         return True
@@ -965,8 +1195,9 @@ class ClaudeTmuxProvider(BaseProvider):
     def restore_session(self, path: str) -> Optional[Session]:
         """Restore session from saved state."""
         import json
+
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 save_data = json.load(f)
 
             session_id = save_data["session_id"]
@@ -976,11 +1207,16 @@ class ClaudeTmuxProvider(BaseProvider):
             project_dir = save_data.get("metadata", {}).get("project_dir", os.getcwd())
             subprocess.run(
                 [
-                    "tmux", "new-session", "-d", "-s", tmux_name,
-                    "-c", project_dir,
-                    self.claude_path
+                    "tmux",
+                    "new-session",
+                    "-d",
+                    "-s",
+                    tmux_name,
+                    "-c",
+                    project_dir,
+                    self.claude_path,
                 ],
-                check=True
+                check=True,
             )
 
             # Restore session object
@@ -991,7 +1227,7 @@ class ClaudeTmuxProvider(BaseProvider):
                 created_at=datetime.now(),
                 last_activity=datetime.now(),
                 state=SessionState.ACTIVE,
-                metadata=save_data.get("metadata", {"tmux_name": tmux_name})
+                metadata=save_data.get("metadata", {"tmux_name": tmux_name}),
             )
 
             self._sessions[session_id] = session
@@ -1011,10 +1247,10 @@ class ClaudeTmuxProvider(BaseProvider):
             metadata={
                 "provider": self.name,
                 "session_based": True,
-                "interactive": True
+                "interactive": True,
             },
             tokens_used=None,  # Tmux doesn't provide token counts
-            execution_time=None
+            execution_time=None,
         )
 
     def extract_code_blocks(self, response: str) -> List[CodeBlock]:
@@ -1022,7 +1258,7 @@ class ClaudeTmuxProvider(BaseProvider):
         code_blocks = []
 
         # Find markdown code blocks
-        pattern = r'```(\w+)?\n(.*?)```'
+        pattern = r"```(\w+)?\n(.*?)```"
         matches = re.findall(pattern, response, re.DOTALL)
 
         for _i, (language, content) in enumerate(matches):
@@ -1030,16 +1266,25 @@ class ClaudeTmuxProvider(BaseProvider):
                 language = "text"
 
             # Determine if it's executable
-            executable = language.lower() in ['python', 'javascript', 'bash', 'sh', 'ruby', 'go']
+            executable = language.lower() in [
+                "python",
+                "javascript",
+                "bash",
+                "sh",
+                "ruby",
+                "go",
+            ]
 
-            code_blocks.append(CodeBlock(
-                language=language,
-                content=content.strip(),
-                line_start=0,  # We don't track line numbers in tmux output
-                line_end=0,
-                executable=executable,
-                filename=None
-            ))
+            code_blocks.append(
+                CodeBlock(
+                    language=language,
+                    content=content.strip(),
+                    line_start=0,  # We don't track line numbers in tmux output
+                    line_end=0,
+                    executable=executable,
+                    filename=None,
+                )
+            )
 
         return code_blocks
 
@@ -1061,7 +1306,10 @@ class ClaudeTmuxProvider(BaseProvider):
         while time.time() - start_time < timeout:
             output = self._capture_session_output(tmux_name)
             # Check for Claude prompts
-            if any(indicator in output for indicator in [">", "Claude Code", "Assistant:", "Human:"]):
+            if any(
+                indicator in output
+                for indicator in [">", "Claude Code", "Assistant:", "Human:"]
+            ):
                 return True
             time.sleep(1)
 
@@ -1096,10 +1344,16 @@ class ClaudeTmuxProvider(BaseProvider):
 
         agent_id = self._current_session.metadata.get("tmux_name", "unknown")
 
-        if operation.operation_type in [FileOperationType.WRITE, FileOperationType.CREATE, FileOperationType.MODIFY]:
-            return file_interceptor.acquire_file_lock(agent_id, operation.path, 'write')
+        if operation.operation_type in [
+            FileOperationType.WRITE,
+            FileOperationType.CREATE,
+            FileOperationType.MODIFY,
+        ]:
+            return file_interceptor.acquire_file_lock(agent_id, operation.path, "write")
         elif operation.operation_type == FileOperationType.DELETE:
-            return file_interceptor.acquire_file_lock(agent_id, operation.path, 'delete')
+            return file_interceptor.acquire_file_lock(
+                agent_id, operation.path, "delete"
+            )
 
         return True  # Allow read operations
 

@@ -8,7 +8,7 @@ import sys
 
 from dotenv import load_dotenv
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 load_dotenv()
 
 from hydra import CodeAgent, execute_workflow
@@ -58,10 +58,7 @@ def build_weather_api_client():
     print("\n🚀 Starting Hydra...")
 
     # Execute the workflow
-    result = execute_workflow(
-        project_spec,
-        agent_name="project_architect"
-    )
+    result = execute_workflow(project_spec, agent_name="project_architect")
 
     print("\n✅ Project generation complete!")
     print("\n📊 Generation Statistics:")
@@ -69,16 +66,16 @@ def build_weather_api_client():
     print(f"   Subtasks identified: {len(result.get('subtasks', []))}")
 
     # Show the task breakdown
-    if result.get('subtasks'):
+    if result.get("subtasks"):
         print("\n📝 Task Breakdown:")
-        for i, subtask in enumerate(result['subtasks'], 1):
+        for i, subtask in enumerate(result["subtasks"], 1):
             print(f"   {i}. {subtask[:70]}...")
 
     # Show agent hierarchy
     print("\n🤖 Agent Collaboration:")
     agents_by_depth = {}
-    for agent in result['agents']:
-        depth = agent.count('_employee')
+    for agent in result["agents"]:
+        depth = agent.count("_employee")
         if depth not in agents_by_depth:
             agents_by_depth[depth] = []
         agents_by_depth[depth].append(agent)
@@ -127,9 +124,9 @@ def analyze_codebase():
 
     print(f"\n📋 Analysis Plan: {plan['plan']}")
 
-    if plan['subtasks']:
+    if plan["subtasks"]:
         print("\n📝 Analysis Steps:")
-        for i, step in enumerate(plan['subtasks'], 1):
+        for i, step in enumerate(plan["subtasks"], 1):
             print(f"   {i}. {step}")
 
 
@@ -172,7 +169,7 @@ def generate_cli_tool():
     print("\n✅ CLI tool generated!")
     print("\n📄 Generated Code Preview (first 20 lines):")
     print("-" * 60)
-    lines = cli_code.split('\n')[:20]
+    lines = cli_code.split("\n")[:20]
     for i, line in enumerate(lines, 1):
         print(f"{i:3d} | {line}")
     print("-" * 60)
@@ -221,13 +218,13 @@ def create_api_wrapper():
     print(f"   Agents involved: {len(result['agents'])}")
 
     # Show how the task was broken down
-    if 'plan' in result:
+    if "plan" in result:
         print(f"\n🎯 Approach: {result['plan'][:150]}...")
 
 
 def main():
     """Run the examples."""
-    if not os.getenv('VENICE_API_KEY'):
+    if not os.getenv("VENICE_API_KEY"):
         print("❌ VENICE_API_KEY not found in environment!")
         return
 
@@ -247,7 +244,7 @@ def main():
         ("2", "Analyze Existing Codebase", analyze_codebase),
         ("3", "Generate CLI Tool", generate_cli_tool),
         ("4", "Create API Wrapper", create_api_wrapper),
-        ("5", "Run All Examples", None)
+        ("5", "Run All Examples", None),
     ]
 
     while True:

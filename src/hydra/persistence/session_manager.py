@@ -44,14 +44,14 @@ class SessionManager:
     def _load_index(self):
         """Load the session index."""
         if self.index_file.exists():
-            with open(self.index_file, 'r') as f:
+            with open(self.index_file, "r") as f:
                 self.index = json.load(f)
         else:
             self.index = {}
 
     def _save_index(self):
         """Save the session index."""
-        with open(self.index_file, 'w') as f:
+        with open(self.index_file, "w") as f:
             json.dump(self.index, f, indent=2)
 
     def save_session(
@@ -59,7 +59,7 @@ class SessionManager:
         session_id: str,
         project_path: str,
         tasks: List[ClaudeCodeTask],
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Save a Claude Code session state."""
         session_dir = self.storage_dir / session_id
@@ -73,7 +73,7 @@ class SessionManager:
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
                 capture_output=True,
                 text=True,
-                cwd=project_path
+                cwd=project_path,
             )
             if result.returncode == 0:
                 git_branch = result.stdout.strip()
@@ -82,7 +82,7 @@ class SessionManager:
                 ["git", "rev-parse", "HEAD"],
                 capture_output=True,
                 text=True,
-                cwd=project_path
+                cwd=project_path,
             )
             if result.returncode == 0:
                 git_commit = result.stdout.strip()
@@ -99,12 +99,12 @@ class SessionManager:
             environment=dict(os.environ),
             git_branch=git_branch,
             git_commit=git_commit,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         # Save state
         state_file = session_dir / "state.pkl"
-        with open(state_file, 'wb') as f:
+        with open(state_file, "wb") as f:
             pickle.dump(state, f)
 
         # Save human-readable summary
@@ -120,9 +120,9 @@ class SessionManager:
             ),
             "git_branch": git_branch,
             "git_commit": git_commit,
-            "metadata": metadata
+            "metadata": metadata,
         }
-        with open(summary_file, 'w') as f:
+        with open(summary_file, "w") as f:
             json.dump(summary, f, indent=2)
 
         # Save file snapshots
@@ -133,7 +133,7 @@ class SessionManager:
             "project_path": project_path,
             "created_at": state.created_at,
             "last_accessed": state.last_accessed,
-            "task_count": len(tasks)
+            "task_count": len(tasks),
         }
         self._save_index()
 
@@ -150,14 +150,14 @@ class SessionManager:
             return None
 
         # Load state
-        with open(state_file, 'rb') as f:
+        with open(state_file, "rb") as f:
             state = pickle.load(f)
 
         # Update last accessed time
         state.last_accessed = time.time()
 
         # Save updated state
-        with open(state_file, 'wb') as f:
+        with open(state_file, "wb") as f:
             pickle.dump(state, f)
 
         # Update index
@@ -174,17 +174,19 @@ class SessionManager:
         for session_id, info in self.index.items():
             session_dir = self.storage_dir / session_id
             if session_dir.exists():
-                sessions.append({
-                    "session_id": session_id,
-                    "project_path": info["project_path"],
-                    "created_at": datetime.fromtimestamp(
-                        info["created_at"]
-                    ).isoformat(),
-                    "last_accessed": datetime.fromtimestamp(
-                        info["last_accessed"]
-                    ).isoformat(),
-                    "task_count": info.get("task_count", 0)
-                })
+                sessions.append(
+                    {
+                        "session_id": session_id,
+                        "project_path": info["project_path"],
+                        "created_at": datetime.fromtimestamp(
+                            info["created_at"]
+                        ).isoformat(),
+                        "last_accessed": datetime.fromtimestamp(
+                            info["last_accessed"]
+                        ).isoformat(),
+                        "task_count": info.get("task_count", 0),
+                    }
+                )
 
         # Sort by last accessed
         sessions.sort(key=lambda x: x["last_accessed"], reverse=True)
@@ -216,18 +218,18 @@ class SessionManager:
                 ["git", "status", "--porcelain"],
                 capture_output=True,
                 text=True,
-                cwd=project_path
+                cwd=project_path,
             )
 
             if result.returncode == 0:
                 modified_files = []
-                for line in result.stdout.strip().split('\n'):
+                for line in result.stdout.strip().split("\n"):
                     if line:
                         parts = line.strip().split(maxsplit=1)
                         if len(parts) > 1:
                             file_path = parts[1]
-                            is_pyc = file_path.endswith('.pyc')
-                            is_pycache = '/__pycache__/' in file_path
+                            is_pyc = file_path.endswith(".pyc")
+                            is_pycache = "/__pycache__/" in file_path
                             if not is_pyc and not is_pycache:
                                 modified_files.append(file_path)
 
@@ -235,7 +237,7 @@ class SessionManager:
                 for file_path in modified_files[:50]:  # Limit to 50 files
                     source_file = Path(project_path) / file_path
                     if source_file.exists() and source_file.is_file():
-                        dest_file = snapshots_dir / file_path.replace('/', '_')
+                        dest_file = snapshots_dir / file_path.replace("/", "_")
                         try:
                             shutil.copy2(source_file, dest_file)
                         except Exception:
@@ -256,7 +258,7 @@ class SessionManager:
         for snapshot_file in snapshots_dir.iterdir():
             if snapshot_file.is_file():
                 # Reconstruct original path
-                original_path = snapshot_file.name.replace('_', '/')
+                original_path = snapshot_file.name.replace("_", "/")
                 dest_file = Path(project_path) / original_path
 
                 try:
@@ -274,7 +276,7 @@ class SessionManager:
         summary_file = session_dir / "summary.json"
 
         if summary_file.exists():
-            with open(summary_file, 'r') as f:
+            with open(summary_file, "r") as f:
                 return json.load(f)
 
         return None
@@ -287,7 +289,7 @@ class SessionManager:
             return False
 
         try:
-            shutil.make_archive(export_path, 'zip', session_dir)
+            shutil.make_archive(export_path, "zip", session_dir)
             return True
         except Exception:
             return False
@@ -300,13 +302,14 @@ class SessionManager:
         try:
             # Extract to temp directory
             import tempfile
+
             with tempfile.TemporaryDirectory() as temp_dir:
                 shutil.unpack_archive(archive_path, temp_dir)
 
                 # Find session ID from extracted files
                 state_file = Path(temp_dir) / "state.pkl"
                 if state_file.exists():
-                    with open(state_file, 'rb') as f:
+                    with open(state_file, "rb") as f:
                         state = pickle.load(f)
 
                     session_id = state.session_id
@@ -322,7 +325,7 @@ class SessionManager:
                         "project_path": state.project_path,
                         "created_at": state.created_at,
                         "last_accessed": time.time(),
-                        "task_count": len(state.tasks)
+                        "task_count": len(state.tasks),
                     }
                     self._save_index()
 

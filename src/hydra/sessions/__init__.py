@@ -16,12 +16,12 @@ from .manager import (
 )
 
 __all__ = [
-    'SessionBackend',
-    'SessionBackendType',
-    'SessionConfig',
-    'SessionInfo',
-    'SessionManager',
-    'TmuxBackend',
-    'DirectProcessBackend',
-    'DockerBackend'
+    "SessionBackend",
+    "SessionBackendType",
+    "SessionConfig",
+    "SessionInfo",
+    "SessionManager",
+    "TmuxBackend",
+    "DirectProcessBackend",
+    "DockerBackend",
 ]

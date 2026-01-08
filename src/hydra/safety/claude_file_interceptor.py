@@ -49,8 +49,14 @@ class ResolutionStrategy(Enum):
 class FileModification:
     """Represents a file modification request."""
 
-    def __init__(self, agent_id: str, file_path: str, operation: OperationType,
-                 ticket_content: str = "", priority: int = 1):
+    def __init__(
+        self,
+        agent_id: str,
+        file_path: str,
+        operation: OperationType,
+        ticket_content: str = "",
+        priority: int = 1,
+    ):
         self.agent_id = agent_id
         self.file_path = str(Path(file_path).resolve())
         self.operation = operation
@@ -65,42 +71,44 @@ class FileModification:
         content = self.ticket_content.lower()
 
         # Detect specific changes with more granular analysis
-        if 'import' in content or 'from' in content:
+        if "import" in content or "from" in content:
             # Make import changes more specific to avoid false conflicts
             import_words = set()
             words = content.split()
             for i, word in enumerate(words):
-                if word == 'import' and i + 1 < len(words):
-                    import_words.add(f'import_{words[i+1]}')
-                elif word == 'from' and i + 1 < len(words):
-                    import_words.add(f'from_{words[i+1]}')
+                if word == "import" and i + 1 < len(words):
+                    import_words.add(f"import_{words[i+1]}")
+                elif word == "from" and i + 1 < len(words):
+                    import_words.add(f"from_{words[i+1]}")
 
             if import_words:
                 changes.update(import_words)
             else:
-                changes.add('imports')
+                changes.add("imports")
 
-        if 'class' in content or 'def' in content:
-            changes.add('definitions')
-        if 'config' in content or 'setting' in content:
-            changes.add('configuration')
-        if 'test' in content:
-            changes.add('tests')
-        if 'style' in content or 'format' in content:
-            changes.add('formatting')
-        if 'rewrite' in content or 'refactor' in content:
-            changes.add('major_restructure')
+        if "class" in content or "def" in content:
+            changes.add("definitions")
+        if "config" in content or "setting" in content:
+            changes.add("configuration")
+        if "test" in content:
+            changes.add("tests")
+        if "style" in content or "format" in content:
+            changes.add("formatting")
+        if "rewrite" in content or "refactor" in content:
+            changes.add("major_restructure")
 
         return changes
 
-    def is_compatible_with(self, other: 'FileModification') -> bool:
+    def is_compatible_with(self, other: "FileModification") -> bool:
         """Check if this modification is compatible with another."""
         if self.file_path != other.file_path:
             return True
 
         # Read operations are compatible with everything
-        if (self.operation == OperationType.READ or
-            other.operation == OperationType.READ):
+        if (
+            self.operation == OperationType.READ
+            or other.operation == OperationType.READ
+        ):
             return True
 
         # Check for non-overlapping changes
@@ -121,7 +129,7 @@ class FileModification:
 
         return False
 
-    def _has_low_content_similarity(self, other: 'FileModification') -> bool:
+    def _has_low_content_similarity(self, other: "FileModification") -> bool:
         """Check if ticket content has low similarity, suggesting different modifications."""
         # Simple word-based similarity check
         self_words = set(self.ticket_content.lower().split())
@@ -137,22 +145,27 @@ class FileModification:
         union = self_words | other_words
 
         similarity = len(intersection) / len(union) if union else 0
-        return similarity < 0.3  # Less than 30% similarity suggests different modifications
+        return (
+            similarity < 0.3
+        )  # Less than 30% similarity suggests different modifications
 
-    def _affects_different_sections(self, other: 'FileModification') -> bool:
+    def _affects_different_sections(self, other: "FileModification") -> bool:
         """Check if modifications affect different file sections."""
         # Simple heuristic based on line numbers mentioned
-        self_lines = set(re.findall(r'line\s+(\d+)',
-                                   self.ticket_content, re.IGNORECASE))
-        other_lines = set(re.findall(r'line\s+(\d+)',
-                                    other.ticket_content, re.IGNORECASE))
+        self_lines = set(
+            re.findall(r"line\s+(\d+)", self.ticket_content, re.IGNORECASE)
+        )
+        other_lines = set(
+            re.findall(r"line\s+(\d+)", other.ticket_content, re.IGNORECASE)
+        )
 
         if self_lines and other_lines:
             # Check if line ranges don't overlap (with buffer)
             self_nums = {int(x) for x in self_lines}
             other_nums = {int(x) for x in other_lines}
-            return (max(self_nums) + 5 < min(other_nums) or
-                   max(other_nums) + 5 < min(self_nums))
+            return max(self_nums) + 5 < min(other_nums) or max(other_nums) + 5 < min(
+                self_nums
+            )
 
         return False
 
@@ -163,21 +176,21 @@ class ClaudeFileInterceptor:
     def __init__(self):
         self.file_lock_manager = get_file_lock_manager()
         self.operation_patterns = {
-            'read': [
-                r'Reading[:\s]+([^\s]+)',
-                r'opening[:\s]+([^\s]+)',
-                r'checking[:\s]+([^\s]+)'
+            "read": [
+                r"Reading[:\s]+([^\s]+)",
+                r"opening[:\s]+([^\s]+)",
+                r"checking[:\s]+([^\s]+)",
             ],
-            'write': [
-                r'Writing[:\s]+([^\s]+)',
-                r'Creating[:\s]+([^\s]+)',
-                r'saving[:\s]+([^\s]+)'
+            "write": [
+                r"Writing[:\s]+([^\s]+)",
+                r"Creating[:\s]+([^\s]+)",
+                r"saving[:\s]+([^\s]+)",
             ],
-            'edit': [
-                r'Editing[:\s]+([^\s]+)',
-                r'modifying[:\s]+([^\s]+)',
-                r'updating[:\s]+([^\s]+)'
-            ]
+            "edit": [
+                r"Editing[:\s]+([^\s]+)",
+                r"modifying[:\s]+([^\s]+)",
+                r"updating[:\s]+([^\s]+)",
+            ],
         }
         self.active_locks: Dict[str, Set[str]] = {}  # agent_id -> set of locked files
 
@@ -215,7 +228,7 @@ class ClaudeFileInterceptor:
 
         """
         # For read operations, we don't need exclusive locks
-        if operation == 'read':
+        if operation == "read":
             return True
 
         try:
@@ -236,14 +249,16 @@ class ClaudeFileInterceptor:
                 print(f"⏳ Waiting for lock: {agent_id} -> {file_path}")
                 # Implement retry with exponential backoff
                 for attempt in range(3):
-                    time.sleep(2 ** attempt)  # 1s, 2s, 4s
+                    time.sleep(2**attempt)  # 1s, 2s, 4s
                     if self.file_lock_manager.acquire_lock(
                         agent_id, file_path, timeout=5
                     ):
                         if agent_id not in self.active_locks:
                             self.active_locks[agent_id] = set()
                         self.active_locks[agent_id].add(file_path)
-                        print(f"🔓 Lock acquired after retry: {agent_id} -> {file_path}")
+                        print(
+                            f"🔓 Lock acquired after retry: {agent_id} -> {file_path}"
+                        )
                         return True
 
                 print(f"❌ Failed to acquire lock: {agent_id} -> {file_path}")
@@ -277,10 +292,10 @@ class ClaudeFileInterceptor:
 
         """
         return {
-            'total_locks': sum(len(files) for files in self.active_locks.values()),
-            'active_agents': len(self.active_locks),
-            'locked_files': self.file_lock_manager.get_locked_files(),
-            'lock_holders': self.file_lock_manager.lock_holders
+            "total_locks": sum(len(files) for files in self.active_locks.values()),
+            "active_agents": len(self.active_locks),
+            "locked_files": self.file_lock_manager.get_locked_files(),
+            "lock_holders": self.file_lock_manager.lock_holders,
         }
 
 
@@ -293,24 +308,26 @@ class SmartFileLockManager:
         self.modification_history: Dict[str, List[FileModification]] = defaultdict(list)
         self.pending_requests: Dict[str, FileModification] = {}
         self.active_modifications: Dict[str, FileModification] = {}
-        self.wait_graph: Dict[str, Set[str]] = defaultdict(set)  # For deadlock detection
+        self.wait_graph: Dict[str, Set[str]] = defaultdict(
+            set
+        )  # For deadlock detection
 
         # Configuration
         self.max_wait_time = max_wait_time
         self.deadlock_check_interval = deadlock_check_interval
         self.resolution_strategies: Dict[str, ResolutionStrategy] = {
-            'default': ResolutionStrategy.WAIT,
-            'compatible': ResolutionStrategy.WAIT,
-            'incompatible': ResolutionStrategy.WAIT,
-            'deadlock': ResolutionStrategy.ABORT
+            "default": ResolutionStrategy.WAIT,
+            "compatible": ResolutionStrategy.WAIT,
+            "incompatible": ResolutionStrategy.WAIT,
+            "deadlock": ResolutionStrategy.ABORT,
         }
 
         # Statistics for reducing false conflicts
         self.conflict_stats = {
-            'predicted_conflicts': 0,
-            'actual_conflicts': 0,
-            'false_conflicts': 0,
-            'resolved_conflicts': 0
+            "predicted_conflicts": 0,
+            "actual_conflicts": 0,
+            "false_conflicts": 0,
+            "resolved_conflicts": 0,
         }
 
         # Don't start deadlock detection thread in __init__ to avoid issues in tests
@@ -321,28 +338,32 @@ class SmartFileLockManager:
         """Start the deadlock monitoring thread if not already started."""
         if not self._deadlock_monitoring:
             try:
-                self._deadlock_thread = threading.Thread(target=self._deadlock_monitor, daemon=True)
+                self._deadlock_thread = threading.Thread(
+                    target=self._deadlock_monitor, daemon=True
+                )
                 self._deadlock_thread.start()
                 self._deadlock_monitoring = True
             except RuntimeError as e:
                 logger.warning(f"Could not start deadlock monitoring thread: {e}")
                 self._deadlock_monitoring = False
 
-    def predict_file_modifications(self, agent_id: str, ticket_content: str) -> List[FileModification]:
+    def predict_file_modifications(
+        self, agent_id: str, ticket_content: str
+    ) -> List[FileModification]:
         """Predict file modifications from ticket description with high accuracy."""
         modifications = []
 
         # Enhanced file pattern matching
         file_patterns = [
             # Explicit file operations
-            r'(?:create|write|edit|modify|update|delete)\s+([^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))',
-            r'(?:in|at|to)\s+([^\s]+/[^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))',
+            r"(?:create|write|edit|modify|update|delete)\s+([^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))",
+            r"(?:in|at|to)\s+([^\s]+/[^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))",
             # Path-like patterns
-            r'(src/[^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))',
-            r'(tests?/[^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))',
-            r'(docs?/[^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))',
+            r"(src/[^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))",
+            r"(tests?/[^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))",
+            r"(docs?/[^\s]+\.(?:py|js|ts|jsx|tsx|css|html|json|yaml|yml|md|txt|sh))",
             # Configuration files
-            r'((?:config|setup|package)\.(?:py|js|json|yaml|yml|toml|ini))',
+            r"((?:config|setup|package)\.(?:py|js|json|yaml|yml|toml|ini))",
         ]
 
         predicted_files = set()
@@ -355,19 +376,19 @@ class SmartFileLockManager:
 
         # Module/component mapping
         module_mappings = {
-            'provider': 'src/hydra/providers/',
-            'safety': 'src/hydra/safety/',
-            'security': 'src/hydra/safety/',
-            'config': 'src/hydra/config/',
-            'monitoring': 'src/hydra/monitoring/',
-            'parallel': 'src/hydra/parallel/',
-            'cli': 'src/hydra/cli.py',
-            'test': 'tests/',
+            "provider": "src/hydra/providers/",
+            "safety": "src/hydra/safety/",
+            "security": "src/hydra/safety/",
+            "config": "src/hydra/config/",
+            "monitoring": "src/hydra/monitoring/",
+            "parallel": "src/hydra/parallel/",
+            "cli": "src/hydra/cli.py",
+            "test": "tests/",
         }
 
         for keyword, path in module_mappings.items():
             if keyword in content_lower:
-                if path.endswith('/'):
+                if path.endswith("/"):
                     # Directory - add likely files
                     predicted_files.add(f"{path}__init__.py")
                     predicted_files.add(f"{path}manager.py")
@@ -378,24 +399,26 @@ class SmartFileLockManager:
         for file_path in predicted_files:
             # Determine operation type from context
             operation = OperationType.EDIT  # Default
-            if 'create' in content_lower and file_path in ticket_content:
+            if "create" in content_lower and file_path in ticket_content:
                 operation = OperationType.CREATE
-            elif 'delete' in content_lower and file_path in ticket_content:
+            elif "delete" in content_lower and file_path in ticket_content:
                 operation = OperationType.DELETE
-            elif 'read' in content_lower and file_path in ticket_content:
+            elif "read" in content_lower and file_path in ticket_content:
                 operation = OperationType.READ
 
             modification = FileModification(
                 agent_id=agent_id,
                 file_path=file_path,
                 operation=operation,
-                ticket_content=ticket_content
+                ticket_content=ticket_content,
             )
             modifications.append(modification)
 
         return modifications
 
-    def analyze_conflict(self, mod1: FileModification, mod2: FileModification) -> ConflictType:
+    def analyze_conflict(
+        self, mod1: FileModification, mod2: FileModification
+    ) -> ConflictType:
         """Analyze conflict type between two modifications."""
         if mod1.file_path != mod2.file_path:
             return ConflictType.NONE
@@ -410,7 +433,9 @@ class SmartFileLockManager:
 
         return ConflictType.INCOMPATIBLE
 
-    def request_file_lock(self, agent_id: str, file_path: str, ticket_content: str = "") -> bool:
+    def request_file_lock(
+        self, agent_id: str, file_path: str, ticket_content: str = ""
+    ) -> bool:
         """Request a file lock with intelligent conflict resolution."""
         file_path = str(Path(file_path).resolve())
 
@@ -419,7 +444,7 @@ class SmartFileLockManager:
             agent_id=agent_id,
             file_path=file_path,
             operation=OperationType.EDIT,
-            ticket_content=ticket_content
+            ticket_content=ticket_content,
         )
 
         # Check for conflicts with active modifications
@@ -436,20 +461,26 @@ class SmartFileLockManager:
 
         # Apply resolution strategy
         compatible_conflicts = [c for c in conflicts if c[1] == ConflictType.COMPATIBLE]
-        incompatible_conflicts = [c for c in conflicts if c[1] == ConflictType.INCOMPATIBLE]
+        incompatible_conflicts = [
+            c for c in conflicts if c[1] == ConflictType.INCOMPATIBLE
+        ]
         deadlock_conflicts = [c for c in conflicts if c[1] == ConflictType.DEADLOCK]
 
         if deadlock_conflicts:
-            strategy = self.resolution_strategies.get('deadlock', ResolutionStrategy.ABORT)
+            strategy = self.resolution_strategies.get(
+                "deadlock", ResolutionStrategy.ABORT
+            )
             return self._handle_conflict(modification, deadlock_conflicts, strategy)
 
         if compatible_conflicts and not incompatible_conflicts:
             # Allow compatible concurrent access
-            self.conflict_stats['predicted_conflicts'] += 1
+            self.conflict_stats["predicted_conflicts"] += 1
             return self._acquire_lock(modification)
 
         if incompatible_conflicts:
-            strategy = self.resolution_strategies.get('incompatible', ResolutionStrategy.WAIT)
+            strategy = self.resolution_strategies.get(
+                "incompatible", ResolutionStrategy.WAIT
+            )
             return self._handle_conflict(modification, incompatible_conflicts, strategy)
 
         return False
@@ -457,31 +488,42 @@ class SmartFileLockManager:
     def _acquire_lock(self, modification: FileModification) -> bool:
         """Acquire lock for a modification."""
         success = self.interceptor.acquire_file_lock(
-            modification.agent_id,
-            modification.file_path,
-            modification.operation.value
+            modification.agent_id, modification.file_path, modification.operation.value
         )
 
         if success:
-            self.active_modifications[f"{modification.agent_id}:{modification.file_path}"] = modification
+            self.active_modifications[
+                f"{modification.agent_id}:{modification.file_path}"
+            ] = modification
             self.modification_history[modification.file_path].append(modification)
 
         return success
 
-    def _handle_conflict(self, modification: FileModification, conflicts: List, strategy: ResolutionStrategy) -> bool:
+    def _handle_conflict(
+        self,
+        modification: FileModification,
+        conflicts: List,
+        strategy: ResolutionStrategy,
+    ) -> bool:
         """Handle conflicts based on resolution strategy."""
         if strategy == ResolutionStrategy.WAIT:
             # Add to pending and wait
-            self.pending_requests[f"{modification.agent_id}:{modification.file_path}"] = modification
+            self.pending_requests[
+                f"{modification.agent_id}:{modification.file_path}"
+            ] = modification
             self._update_wait_graph(modification, conflicts)
             return self._wait_for_resolution(modification)
 
         elif strategy == ResolutionStrategy.SKIP:
-            print(f"⏩ Skipping {modification.file_path} for {modification.agent_id} due to conflict")
+            print(
+                f"⏩ Skipping {modification.file_path} for {modification.agent_id} due to conflict"
+            )
             return False
 
         elif strategy == ResolutionStrategy.ABORT:
-            print(f"🛑 Aborting {modification.file_path} for {modification.agent_id} due to deadlock")
+            print(
+                f"🛑 Aborting {modification.file_path} for {modification.agent_id} due to deadlock"
+            )
             return False
 
         elif strategy == ResolutionStrategy.MERGE:
@@ -490,7 +532,9 @@ class SmartFileLockManager:
 
         return False
 
-    def _wait_for_resolution(self, modification: FileModification, timeout: Optional[int] = None) -> bool:
+    def _wait_for_resolution(
+        self, modification: FileModification, timeout: Optional[int] = None
+    ) -> bool:
         """Wait for conflict resolution with timeout."""
         wait_time = timeout or self.max_wait_time
         start_time = time.time()
@@ -510,7 +554,7 @@ class SmartFileLockManager:
             time.sleep(0.5)  # Wait and retry
 
         # Timeout reached
-        self.conflict_stats['actual_conflicts'] += 1
+        self.conflict_stats["actual_conflicts"] += 1
         return False
 
     def _update_wait_graph(self, modification: FileModification, conflicts: List):
@@ -520,6 +564,7 @@ class SmartFileLockManager:
 
     def _check_circular_dependency(self, agent1: str, agent2: str) -> bool:
         """Check for circular dependency between agents."""
+
         def has_path(start: str, target: str) -> bool:
             if start == target:
                 return True
@@ -594,7 +639,9 @@ class SmartFileLockManager:
             key = f"{lowest_mod.agent_id}:{lowest_mod.file_path}"
             if key in self.pending_requests:
                 del self.pending_requests[key]
-                print(f"🛑 Aborted {lowest_mod.agent_id}'s request for {lowest_mod.file_path}")
+                print(
+                    f"🛑 Aborted {lowest_mod.agent_id}'s request for {lowest_mod.file_path}"
+                )
 
             # Clean up wait graph
             self._cleanup_wait_graph(lowest_mod.agent_id)
@@ -683,30 +730,32 @@ class SmartFileLockManager:
 
     def get_conflict_statistics(self) -> Dict[str, any]:
         """Get statistics on conflict prediction accuracy."""
-        total_predicted = self.conflict_stats['predicted_conflicts']
-        false_conflicts = self.conflict_stats['false_conflicts']
+        total_predicted = self.conflict_stats["predicted_conflicts"]
+        false_conflicts = self.conflict_stats["false_conflicts"]
 
         if total_predicted > 0:
-            false_conflict_rate = (false_conflicts / total_predicted * 100)
+            false_conflict_rate = false_conflicts / total_predicted * 100
             accuracy = 100 - false_conflict_rate
         else:
             false_conflict_rate = 0
             accuracy = 0
 
         return {
-            'predicted_conflicts': total_predicted,
-            'actual_conflicts': self.conflict_stats['actual_conflicts'],
-            'false_conflicts': false_conflicts,
-            'resolved_conflicts': self.conflict_stats['resolved_conflicts'],
-            'false_conflict_rate_percent': round(false_conflict_rate, 1),
-            'prediction_accuracy_percent': round(accuracy, 1),
-            'active_modifications': len(self.active_modifications),
-            'pending_requests': len(self.pending_requests)
+            "predicted_conflicts": total_predicted,
+            "actual_conflicts": self.conflict_stats["actual_conflicts"],
+            "false_conflicts": false_conflicts,
+            "resolved_conflicts": self.conflict_stats["resolved_conflicts"],
+            "false_conflict_rate_percent": round(false_conflict_rate, 1),
+            "prediction_accuracy_percent": round(accuracy, 1),
+            "active_modifications": len(self.active_modifications),
+            "pending_requests": len(self.pending_requests),
         }
 
-    def configure_resolution_strategy(self, conflict_type: str, strategy: ResolutionStrategy):
+    def configure_resolution_strategy(
+        self, conflict_type: str, strategy: ResolutionStrategy
+    ):
         """Configure resolution strategy for a conflict type."""
-        valid_types = ['default', 'compatible', 'incompatible', 'deadlock']
+        valid_types = ["default", "compatible", "incompatible", "deadlock"]
         if conflict_type in valid_types:
             self.resolution_strategies[conflict_type] = strategy
         else:
@@ -717,7 +766,9 @@ class SmartFileLockManager:
         modifications = self.predict_file_modifications("temp", ticket_content)
         return {mod.file_path for mod in modifications}
 
-    def check_conflict_potential(self, ticket1_files: Set[str], ticket2_files: Set[str]) -> float:
+    def check_conflict_potential(
+        self, ticket1_files: Set[str], ticket2_files: Set[str]
+    ) -> float:
         """Calculate conflict potential between ticket file sets (legacy method)."""
         if not ticket1_files or not ticket2_files:
             return 0.0

@@ -1,0 +1,195 @@
+# AI Pattern Detection Configuration
+# This file configures the AI detector for identifying AI-generated code patterns
+
+# Sensitivity level: low, medium, high, paranoid
+sensitivity: medium
+
+# Allow emojis in code and comments
+emoji_allowed: false
+
+# Performance settings
+max_workers: 4
+cache_size: 1000
+
+# AI score thresholds for different sensitivity levels
+# Lower values are more strict
+thresholds:
+  low: 0.7      # Permissive - only flag obvious AI patterns
+  medium: 0.5   # Balanced - flag moderate AI patterns
+  high: 0.3     # Strict - flag subtle AI patterns
+  paranoid: 0.1 # Very strict - flag any suspicious patterns
+
+# Patterns to whitelist (will not be flagged)
+whitelist_patterns:
+  - "TODO: Security review"
+  - "FIXME: Known issue #\\d+"
+  - "XXX: Performance critical section"
+  - "NOTE: See documentation"
+  - "WARNING: Do not modify"
+  - "HACK: Temporary workaround for"
+
+# Files to completely skip
+whitelist_files:
+  - "tests/fixtures/*"
+  - "docs/examples/*"
+  - ".github/*"
+  - "migrations/*"
+  - "vendor/*"
+
+# Custom patterns to detect
+custom_patterns:
+  - category: hydra_specific
+    pattern: "HYDRA_INTERNAL"
+    severity: low
+    description: "Internal Hydra markers"
+  
+  - category: deprecated_patterns
+    pattern: "@deprecated"
+    severity: medium
+    description: "Deprecated code markers"
+  
+  - category: security_markers
+    pattern: "SECURITY_RISK"
+    severity: high
+    description: "Security risk markers"
+  
+  - category: performance_markers
+    pattern: "PERFORMANCE_BOTTLENECK"
+    severity: medium
+    description: "Performance issue markers"
+
+# Severity weights for scoring
+severity_weights:
+  high: 3.0
+  medium: 2.0
+  low: 1.0
+
+# File extensions to scan
+file_extensions:
+  - .py
+  - .js
+  - .ts
+  - .jsx
+  - .tsx
+  - .java
+  - .cpp
+  - .c
+  - .h
+  - .hpp
+  - .go
+  - .rs
+  - .rb
+  - .php
+  - .swift
+  - .kt
+  - .scala
+  - .cs
+  - .vb
+  - .lua
+  - .r
+  - .jl
+
+# Directories to ignore during scanning
+ignore_directories:
+  - node_modules
+  - venv
+  - .venv
+  - env
+  - .env
+  - __pycache__
+  - .git
+  - .svn
+  - .hg
+  - dist
+  - build
+  - target
+  - out
+  - bin
+  - obj
+  - .pytest_cache
+  - .mypy_cache
+  - .tox
+  - htmlcov
+  - .coverage
+  - .idea
+  - .vscode
+  - .vs
+  - *.egg-info
+  - site-packages
+
+# Report generation settings
+report_settings:
+  include_line_numbers: true
+  max_pattern_display: 100
+  group_by_category: true
+  sort_by_severity: true
+  include_recommendations: true
+  export_formats:
+    - json
+    - html
+    - markdown
+
+# Performance optimization settings
+performance:
+  batch_size: 50
+  timeout_per_file: 5
+  max_file_size_mb: 10
+  use_multiprocessing: true
+  cache_results: true
+  cache_ttl_seconds: 3600
+
+# Pattern categories and their descriptions
+pattern_categories:
+  verbose_names:
+    description: "Overly descriptive variable and function names"
+    examples:
+      - "user_input_data_processor_manager"
+      - "handleUserAuthenticationError"
+  
+  placeholder_text:
+    description: "Placeholder or temporary text"
+    examples:
+      - "TODO"
+      - "FIXME"
+      - "Lorem ipsum"
+  
+  excessive_comments:
+    description: "Too many comments or AI-style commenting"
+    examples:
+      - "Multiple consecutive comment lines"
+      - "Step-by-step comments"
+  
+  ai_style_docstrings:
+    description: "Docstrings with AI-characteristic words"
+    examples:
+      - "comprehensive"
+      - "robust"
+      - "sophisticated"
+  
+  generic_exceptions:
+    description: "Poor exception handling"
+    examples:
+      - "except Exception:"
+      - "except: pass"
+  
+  emoji:
+    description: "Emoji characters in code"
+    examples:
+      - "🎉"
+      - "✅"
+      - "❌"
+  
+  ai_comments:
+    description: "Comments with AI-like phrasing"
+    examples:
+      - "# Initialize"
+      - "# Setup"
+      - "# Process"
+
+# Integration settings for verification engine
+integration:
+  enabled: true
+  verification_weight: 0.3
+  fail_on_high_score: true
+  max_retries: 3
+  retry_with_feedback: true

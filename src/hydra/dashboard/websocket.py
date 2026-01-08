@@ -33,7 +33,9 @@ class ConnectionManager:
         self.connection_metadata: Dict[WebSocket, Dict[str, Any]] = {}
         self.lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket, client_id: str, metadata: Optional[Dict] = None):
+    async def connect(
+        self, websocket: WebSocket, client_id: str, metadata: Optional[Dict] = None
+    ):
         """Accept and register a new WebSocket connection."""
         await websocket.accept()
 
@@ -49,10 +51,9 @@ class ConnectionManager:
         # Send initial connection message
         await self.send_personal_message(
             WebSocketMessage(
-                type="connection",
-                data={"status": "connected", "client_id": client_id}
+                type="connection", data={"status": "connected", "client_id": client_id}
             ),
-            websocket
+            websocket,
         )
 
     async def disconnect(self, websocket: WebSocket, client_id: str):
@@ -70,7 +71,9 @@ class ConnectionManager:
 
         logger.info(f"WebSocket disconnected: {client_id}")
 
-    async def send_personal_message(self, message: WebSocketMessage, websocket: WebSocket):
+    async def send_personal_message(
+        self, message: WebSocketMessage, websocket: WebSocket
+    ):
         """Send a message to a specific WebSocket connection."""
         try:
             # Convert datetime to string for JSON serialization
@@ -182,8 +185,7 @@ class DashboardWebSocketHandler:
             await self.handle_unsubscribe(client_id, data.get("channel"))
         elif message_type == "ping":
             await self.manager.send_personal_message(
-                WebSocketMessage(type="pong", data={}),
-                websocket
+                WebSocketMessage(type="pong", data={}), websocket
             )
         else:
             logger.warning(f"Unknown message type from {client_id}: {message_type}")
@@ -197,11 +199,7 @@ class DashboardWebSocketHandler:
 
         # Send confirmation
         await self.manager.broadcast_to_client(
-            WebSocketMessage(
-                type="subscribed",
-                data={"channel": channel}
-            ),
-            client_id
+            WebSocketMessage(type="subscribed", data={"channel": channel}), client_id
         )
 
     async def handle_unsubscribe(self, client_id: str, channel: str):
@@ -214,11 +212,7 @@ class DashboardWebSocketHandler:
 
         # Send confirmation
         await self.manager.broadcast_to_client(
-            WebSocketMessage(
-                type="unsubscribed",
-                data={"channel": channel}
-            ),
-            client_id
+            WebSocketMessage(type="unsubscribed", data={"channel": channel}), client_id
         )
 
     async def unsubscribe_all(self, client_id: str):
@@ -242,8 +236,7 @@ class DashboardWebSocketHandler:
     async def broadcast_ticket_update(self, ticket_id: int, ticket_data: dict):
         """Broadcast ticket update to relevant channels."""
         message = WebSocketMessage(
-            type="ticket_update",
-            data={"ticket_id": ticket_id, "ticket": ticket_data}
+            type="ticket_update", data={"ticket_id": ticket_id, "ticket": ticket_data}
         )
 
         # Broadcast to ticket-specific channel
@@ -251,7 +244,9 @@ class DashboardWebSocketHandler:
 
         # Broadcast to project channel if available
         if "project_id" in ticket_data:
-            await self.broadcast_to_channel(f"project:{ticket_data['project_id']}", message)
+            await self.broadcast_to_channel(
+                f"project:{ticket_data['project_id']}", message
+            )
 
         # Broadcast to global updates channel
         await self.broadcast_to_channel("updates", message)
@@ -260,7 +255,7 @@ class DashboardWebSocketHandler:
         """Broadcast execution update to relevant channels."""
         message = WebSocketMessage(
             type="execution_update",
-            data={"execution_id": execution_id, "execution": execution_data}
+            data={"execution_id": execution_id, "execution": execution_data},
         )
 
         # Broadcast to execution-specific channel
@@ -268,7 +263,9 @@ class DashboardWebSocketHandler:
 
         # Broadcast to ticket channel if available
         if "ticket_id" in execution_data:
-            await self.broadcast_to_channel(f"ticket:{execution_data['ticket_id']}", message)
+            await self.broadcast_to_channel(
+                f"ticket:{execution_data['ticket_id']}", message
+            )
 
         # Broadcast to global updates channel
         await self.broadcast_to_channel("updates", message)
@@ -277,7 +274,7 @@ class DashboardWebSocketHandler:
         """Broadcast session update to relevant channels."""
         message = WebSocketMessage(
             type="session_update",
-            data={"session_id": session_id, "session": session_data}
+            data={"session_id": session_id, "session": session_data},
         )
 
         # Broadcast to session-specific channel
@@ -285,20 +282,20 @@ class DashboardWebSocketHandler:
 
         # Broadcast to project channel if available
         if "project_id" in session_data:
-            await self.broadcast_to_channel(f"project:{session_data['project_id']}", message)
+            await self.broadcast_to_channel(
+                f"project:{session_data['project_id']}", message
+            )
 
         # Broadcast to global updates channel
         await self.broadcast_to_channel("updates", message)
 
-    async def broadcast_log_message(self, level: str, message: str, context: dict = None):
+    async def broadcast_log_message(
+        self, level: str, message: str, context: dict = None
+    ):
         """Broadcast log message to monitoring channels."""
         log_message = WebSocketMessage(
             type="log",
-            data={
-                "level": level,
-                "message": message,
-                "context": context or {}
-            }
+            data={"level": level, "message": message, "context": context or {}},
         )
 
         # Broadcast to logs channel

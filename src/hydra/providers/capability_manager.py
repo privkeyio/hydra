@@ -4,6 +4,7 @@ This module implements capability negotiation that discovers and adapts to diffe
 provider features, enabling dynamic provider selection based on task requirements and
 available capabilities.
 """
+
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -25,29 +26,29 @@ class TaskRequirement:
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
         return {
-            'required_capabilities': [cap.value for cap in self.required_capabilities],
-            'preferred_capabilities': [
+            "required_capabilities": [cap.value for cap in self.required_capabilities],
+            "preferred_capabilities": [
                 cap.value for cap in self.preferred_capabilities
             ],
-            'minimum_providers': self.minimum_providers,
-            'task_type': self.task_type,
-            'metadata': self.metadata
+            "minimum_providers": self.minimum_providers,
+            "task_type": self.task_type,
+            "metadata": self.metadata,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'TaskRequirement':
+    def from_dict(cls, data: Dict) -> "TaskRequirement":
         """Create from dictionary."""
         return cls(
             required_capabilities={
-                ProviderCapability(cap) for cap in data['required_capabilities']
+                ProviderCapability(cap) for cap in data["required_capabilities"]
             },
             preferred_capabilities={
                 ProviderCapability(cap)
-                for cap in data.get('preferred_capabilities', [])
+                for cap in data.get("preferred_capabilities", [])
             },
-            minimum_providers=data.get('minimum_providers', 1),
-            task_type=data.get('task_type', 'general'),
-            metadata=data.get('metadata', {})
+            minimum_providers=data.get("minimum_providers", 1),
+            task_type=data.get("task_type", "general"),
+            metadata=data.get("metadata", {}),
         )
 
 
@@ -81,22 +82,22 @@ class CapabilityCache:
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
         return {
-            'provider_name': self.provider_name,
-            'capabilities': [cap.value for cap in self.capabilities],
-            'last_probed': self.last_probed,
-            'probe_count': self.probe_count,
-            'cache_ttl': self.cache_ttl
+            "provider_name": self.provider_name,
+            "capabilities": [cap.value for cap in self.capabilities],
+            "last_probed": self.last_probed,
+            "probe_count": self.probe_count,
+            "cache_ttl": self.cache_ttl,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'CapabilityCache':
+    def from_dict(cls, data: Dict) -> "CapabilityCache":
         """Create from dictionary."""
         return cls(
-            provider_name=data['provider_name'],
-            capabilities={ProviderCapability(cap) for cap in data['capabilities']},
-            last_probed=data['last_probed'],
-            probe_count=data.get('probe_count', 0),
-            cache_ttl=data.get('cache_ttl', 300.0)
+            provider_name=data["provider_name"],
+            capabilities={ProviderCapability(cap) for cap in data["capabilities"]},
+            last_probed=data["last_probed"],
+            probe_count=data.get("probe_count", 0),
+            cache_ttl=data.get("cache_ttl", 300.0),
         )
 
 
@@ -110,7 +111,7 @@ class FallbackStrategy:
         self,
         missing_capabilities: Set[ProviderCapability],
         available_providers: List[InteractiveAIProvider],
-        task_requirements: TaskRequirement
+        task_requirements: TaskRequirement,
     ) -> Optional[List[InteractiveAIProvider]]:
         """Apply fallback strategy to handle missing capabilities."""
         raise NotImplementedError
@@ -132,7 +133,7 @@ class CapabilitySubstitution(FallbackStrategy):
         self,
         missing_capabilities: Set[ProviderCapability],
         available_providers: List[InteractiveAIProvider],
-        task_requirements: TaskRequirement
+        task_requirements: TaskRequirement,
     ) -> Optional[List[InteractiveAIProvider]]:
         """Find providers that have substitute capabilities."""
         suitable_providers = []
@@ -167,7 +168,7 @@ class ProviderComposition(FallbackStrategy):
         self,
         missing_capabilities: Set[ProviderCapability],
         available_providers: List[InteractiveAIProvider],
-        task_requirements: TaskRequirement
+        task_requirements: TaskRequirement,
     ) -> Optional[List[InteractiveAIProvider]]:
         """Compose multiple providers to collectively meet requirements."""
         if task_requirements.minimum_providers == 1:
@@ -210,7 +211,7 @@ class CapabilityManager:
         self._providers: List[InteractiveAIProvider] = []
         self._fallback_strategies: List[FallbackStrategy] = [
             CapabilitySubstitution(),
-            ProviderComposition()
+            ProviderComposition(),
         ]
         self._probe_stats = defaultdict(int)
 
@@ -239,9 +240,7 @@ class CapabilityManager:
             del self._capability_cache[provider.name]
 
     def probe_provider_capabilities(
-        self,
-        provider: InteractiveAIProvider,
-        force_refresh: bool = False
+        self, provider: InteractiveAIProvider, force_refresh: bool = False
     ) -> Set[ProviderCapability]:
         """Probe a provider's capabilities, using cache when possible.
 
@@ -259,12 +258,12 @@ class CapabilityManager:
         if not force_refresh and provider_name in self._capability_cache:
             cache_entry = self._capability_cache[provider_name]
             if not cache_entry.is_expired():
-                self._probe_stats['cache_hits'] += 1
+                self._probe_stats["cache_hits"] += 1
                 return cache_entry.capabilities
 
         # Perform fresh probe
-        self._probe_stats['cache_misses'] += 1
-        self._probe_stats['total_probes'] += 1
+        self._probe_stats["cache_misses"] += 1
+        self._probe_stats["total_probes"] += 1
 
         try:
             capabilities = provider.detect_capabilities()
@@ -280,16 +279,18 @@ class CapabilityManager:
             probe_count=(
                 self._capability_cache.get(
                     provider_name, CapabilityCache("", set(), 0)
-                ).probe_count + 1
+                ).probe_count
+                + 1
             ),
-            cache_ttl=self.cache_ttl
+            cache_ttl=self.cache_ttl,
         )
         self._capability_cache[provider_name] = cache_entry
 
         return capabilities
 
-    def score_provider(self, provider: InteractiveAIProvider,
-                      task_requirements: TaskRequirement) -> ProviderScore:
+    def score_provider(
+        self, provider: InteractiveAIProvider, task_requirements: TaskRequirement
+    ) -> ProviderScore:
         """Score a provider's suitability for a task.
 
         Args:
@@ -329,7 +330,7 @@ class CapabilityManager:
             preference_score=preference_score,
             total_score=total_score,
             missing_required=missing_required,
-            has_preferred=has_preferred
+            has_preferred=has_preferred,
         )
 
     def select_providers(
@@ -367,7 +368,7 @@ class CapabilityManager:
 
         # If we have enough suitable providers, return them
         if len(suitable_providers) >= task_requirements.minimum_providers:
-            return suitable_providers[:task_requirements.minimum_providers]
+            return suitable_providers[: task_requirements.minimum_providers]
 
         # Apply fallback strategies
         missing_capabilities = set()
@@ -377,13 +378,13 @@ class CapabilityManager:
 
         for strategy in self._fallback_strategies:
             fallback_providers = strategy.apply(
-                missing_capabilities,
-                self._providers,
-                task_requirements
+                missing_capabilities, self._providers, task_requirements
             )
-            if (fallback_providers and
-                len(fallback_providers) >= task_requirements.minimum_providers):
-                return fallback_providers[:task_requirements.minimum_providers]
+            if (
+                fallback_providers
+                and len(fallback_providers) >= task_requirements.minimum_providers
+            ):
+                return fallback_providers[: task_requirements.minimum_providers]
 
         # If no fallback worked, return best available providers
         if suitable_providers:
@@ -431,23 +432,23 @@ class CapabilityManager:
 
         """
         active_entries = sum(
-            1 for entry in self._capability_cache.values()
-            if not entry.is_expired()
+            1 for entry in self._capability_cache.values() if not entry.is_expired()
         )
         expired_entries = len(self._capability_cache) - active_entries
 
         return {
-            'total_entries': len(self._capability_cache),
-            'active_entries': active_entries,
-            'expired_entries': expired_entries,
-            'probe_stats': dict(self._probe_stats),
-            'cache_hit_rate': (
-                self._probe_stats['cache_hits'] /
-                max(
+            "total_entries": len(self._capability_cache),
+            "active_entries": active_entries,
+            "expired_entries": expired_entries,
+            "probe_stats": dict(self._probe_stats),
+            "cache_hit_rate": (
+                self._probe_stats["cache_hits"]
+                / max(
                     1,
-                    self._probe_stats['cache_hits'] + self._probe_stats['cache_misses']
+                    self._probe_stats["cache_hits"] + self._probe_stats["cache_misses"],
                 )
-            ) * 100
+            )
+            * 100,
         }
 
     def clear_expired_cache(self) -> int:
@@ -458,8 +459,7 @@ class CapabilityManager:
 
         """
         expired_keys = [
-            key for key, entry in self._capability_cache.items()
-            if entry.is_expired()
+            key for key, entry in self._capability_cache.items() if entry.is_expired()
         ]
 
         for key in expired_keys:
@@ -475,11 +475,11 @@ class CapabilityManager:
 
         """
         return {
-            'cache_data': {
+            "cache_data": {
                 key: entry.to_dict() for key, entry in self._capability_cache.items()
             },
-            'cache_ttl': self.cache_ttl,
-            'probe_stats': dict(self._probe_stats)
+            "cache_ttl": self.cache_ttl,
+            "probe_stats": dict(self._probe_stats),
         }
 
     def deserialize_cache(self, data: Dict) -> None:
@@ -489,17 +489,17 @@ class CapabilityManager:
             data: Serialized cache data.
 
         """
-        if 'cache_data' in data:
+        if "cache_data" in data:
             self._capability_cache = {
                 key: CapabilityCache.from_dict(entry_data)
-                for key, entry_data in data['cache_data'].items()
+                for key, entry_data in data["cache_data"].items()
             }
 
-        if 'cache_ttl' in data:
-            self.cache_ttl = data['cache_ttl']
+        if "cache_ttl" in data:
+            self.cache_ttl = data["cache_ttl"]
 
-        if 'probe_stats' in data:
-            self._probe_stats.update(data['probe_stats'])
+        if "probe_stats" in data:
+            self._probe_stats.update(data["probe_stats"])
 
     def add_fallback_strategy(self, strategy: FallbackStrategy) -> None:
         """Add a custom fallback strategy.

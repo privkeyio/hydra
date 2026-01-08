@@ -66,9 +66,9 @@ class ModelPerformance:
         complexity_weight = 0.3
 
         return (
-            self.success_rate * success_weight +
-            self.accuracy_vs_estimates * accuracy_weight +
-            self.complexity_handling_score * complexity_weight
+            self.success_rate * success_weight
+            + self.accuracy_vs_estimates * accuracy_weight
+            + self.complexity_handling_score * complexity_weight
         )
 
 
@@ -167,31 +167,35 @@ class TicketAnalyticsData:
         return cls(
             ticket_id=data["ticket_id"],
             model_used=(
-                ModelCategory(data["model_used"])
-                if data.get("model_used") else None
+                ModelCategory(data["model_used"]) if data.get("model_used") else None
             ),
             estimated_effort=(
                 EffortCategory(data["estimated_effort"])
-                if data.get("estimated_effort") else None
+                if data.get("estimated_effort")
+                else None
             ),
             estimated_time=(
                 TimeEstimate(data["estimated_time"])
-                if data.get("estimated_time") else None
+                if data.get("estimated_time")
+                else None
             ),
             actual_duration=data.get("actual_duration"),
             completion_status=(
                 ProgressStage(data["completion_status"])
-                if data.get("completion_status") else None
+                if data.get("completion_status")
+                else None
             ),
             complexity_score=data.get("complexity_score"),
             failure_category=(
                 FailureCategory(data["failure_category"])
-                if data.get("failure_category") else None
+                if data.get("failure_category")
+                else None
             ),
             execution_metadata=data.get("execution_metadata", {}),
             timestamp=(
                 datetime.fromisoformat(data["timestamp"])
-                if data.get("timestamp") else datetime.now()
+                if data.get("timestamp")
+                else datetime.now()
             ),
         )
 
@@ -216,7 +220,7 @@ class ExecutionAnalytics:
             return
 
         try:
-            with open(self.storage_path, 'r') as f:
+            with open(self.storage_path, "r") as f:
                 data = json.load(f)
 
             for ticket_data in data.get("tickets", []):
@@ -237,10 +241,10 @@ class ExecutionAnalytics:
 
             data = {
                 "last_updated": datetime.now().isoformat(),
-                "tickets": [ticket.to_dict() for ticket in self.ticket_data.values()]
+                "tickets": [ticket.to_dict() for ticket in self.ticket_data.values()],
             }
 
-            with open(self.storage_path, 'w') as f:
+            with open(self.storage_path, "w") as f:
                 json.dump(data, f, indent=2)
 
         except Exception:
@@ -252,7 +256,7 @@ class ExecutionAnalytics:
         ticket_id: str,
         estimation_result: Optional[EstimationResult] = None,
         model_used: Optional[ModelCategory] = None,
-        execution_metadata: Optional[Dict[str, Any]] = None
+        execution_metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Record the start of ticket execution.
 
@@ -266,7 +270,7 @@ class ExecutionAnalytics:
         analytics_data = TicketAnalyticsData(
             ticket_id=ticket_id,
             model_used=model_used,
-            execution_metadata=execution_metadata or {}
+            execution_metadata=execution_metadata or {},
         )
 
         if estimation_result:
@@ -281,7 +285,7 @@ class ExecutionAnalytics:
         self,
         ticket_id: str,
         progress: TicketProgress,
-        failure_category: Optional[FailureCategory] = None
+        failure_category: Optional[FailureCategory] = None,
     ) -> None:
         """Update ticket completion data.
 
@@ -321,24 +325,30 @@ class ExecutionAnalytics:
         }
 
         for ticket in self.ticket_data.values():
-            if (ticket.estimated_time and ticket.actual_duration and
-                ticket.completion_status == ProgressStage.COMPLETED):
+            if (
+                ticket.estimated_time
+                and ticket.actual_duration
+                and ticket.completion_status == ProgressStage.COMPLETED
+            ):
 
                 estimated_minutes = time_estimate_to_minutes[ticket.estimated_time]
                 actual_minutes = ticket.actual_duration / 60
 
                 max_time = max(estimated_minutes, actual_minutes)
                 accuracy = 1.0 - abs(estimated_minutes - actual_minutes) / max_time
-                estimates_vs_actual.append({
-                    "ticket_id": ticket.ticket_id,
-                    "estimated_minutes": estimated_minutes,
-                    "actual_minutes": actual_minutes,
-                    "accuracy": max(0.0, accuracy),
-                    "ratio": (
-                        actual_minutes / estimated_minutes
-                        if estimated_minutes > 0 else 0
-                    ),
-                })
+                estimates_vs_actual.append(
+                    {
+                        "ticket_id": ticket.ticket_id,
+                        "estimated_minutes": estimated_minutes,
+                        "actual_minutes": actual_minutes,
+                        "accuracy": max(0.0, accuracy),
+                        "ratio": (
+                            actual_minutes / estimated_minutes
+                            if estimated_minutes > 0
+                            else 0
+                        ),
+                    }
+                )
 
         if not estimates_vs_actual:
             return {"average_accuracy": 0.0, "total_comparisons": 0, "details": []}
@@ -350,16 +360,15 @@ class ExecutionAnalytics:
         return {
             "average_accuracy": average_accuracy * 100,  # Convert to percentage
             "total_comparisons": len(estimates_vs_actual),
-            "underestimated_count": len([
-                item for item in estimates_vs_actual if item["ratio"] > 1.2
-            ]),
-            "overestimated_count": len([
-                item for item in estimates_vs_actual if item["ratio"] < 0.8
-            ]),
-            "accurate_count": len([
-                item for item in estimates_vs_actual
-                if 0.8 <= item["ratio"] <= 1.2
-            ]),
+            "underestimated_count": len(
+                [item for item in estimates_vs_actual if item["ratio"] > 1.2]
+            ),
+            "overestimated_count": len(
+                [item for item in estimates_vs_actual if item["ratio"] < 0.8]
+            ),
+            "accurate_count": len(
+                [item for item in estimates_vs_actual if 0.8 <= item["ratio"] <= 1.2]
+            ),
             "details": estimates_vs_actual,
         }
 
@@ -374,7 +383,8 @@ class ExecutionAnalytics:
 
         for model_category in ModelCategory:
             model_tickets = [
-                ticket for ticket in self.ticket_data.values()
+                ticket
+                for ticket in self.ticket_data.values()
                 if ticket.model_used == model_category
             ]
 
@@ -383,18 +393,21 @@ class ExecutionAnalytics:
                 continue
 
             completed_tickets = [
-                ticket for ticket in model_tickets
+                ticket
+                for ticket in model_tickets
                 if ticket.completion_status == ProgressStage.COMPLETED
             ]
 
             failed_tickets = [
-                ticket for ticket in model_tickets
+                ticket
+                for ticket in model_tickets
                 if ticket.completion_status == ProgressStage.FAILED
             ]
 
             # Calculate average completion time for completed tickets
             completion_times = [
-                ticket.actual_duration for ticket in completed_tickets
+                ticket.actual_duration
+                for ticket in completed_tickets
                 if ticket.actual_duration is not None
             ]
             avg_completion_time = (
@@ -424,7 +437,8 @@ class ExecutionAnalytics:
 
             # Calculate complexity handling score
             complexity_scores = [
-                ticket.complexity_score for ticket in completed_tickets
+                ticket.complexity_score
+                for ticket in completed_tickets
                 if ticket.complexity_score is not None
             ]
             avg_complexity = (
@@ -446,7 +460,8 @@ class ExecutionAnalytics:
                 complexity_handling_score=complexity_handling_score,
                 failure_rate=(
                     (len(failed_tickets) / len(model_tickets)) * 100
-                    if model_tickets else 0.0
+                    if model_tickets
+                    else 0.0
                 ),
             )
 
@@ -460,7 +475,8 @@ class ExecutionAnalytics:
 
         """
         failed_tickets = [
-            ticket for ticket in self.ticket_data.values()
+            ticket
+            for ticket in self.ticket_data.values()
             if ticket.completion_status == ProgressStage.FAILED
         ]
 
@@ -470,26 +486,33 @@ class ExecutionAnalytics:
         # Count failure categories
         failure_counts = {}
         for failure_category in FailureCategory:
-            failure_counts[failure_category.value] = len([
-                ticket for ticket in failed_tickets
-                if ticket.failure_category == failure_category
-            ])
+            failure_counts[failure_category.value] = len(
+                [
+                    ticket
+                    for ticket in failed_tickets
+                    if ticket.failure_category == failure_category
+                ]
+            )
 
         # Analyze failure patterns by model
         model_failure_patterns = {}
         for model_category in ModelCategory:
             model_failures = [
-                ticket for ticket in failed_tickets
+                ticket
+                for ticket in failed_tickets
                 if ticket.model_used == model_category
             ]
 
             if model_failures:
                 model_failure_counts = {}
                 for failure_category in FailureCategory:
-                    count = len([
-                        ticket for ticket in model_failures
-                        if ticket.failure_category == failure_category
-                    ])
+                    count = len(
+                        [
+                            ticket
+                            for ticket in model_failures
+                            if ticket.failure_category == failure_category
+                        ]
+                    )
                     if count > 0:
                         model_failure_counts[failure_category.value] = count
 
@@ -515,7 +538,8 @@ class ExecutionAnalytics:
             "total_failures": len(failed_tickets),
             "failure_rate": (
                 (len(failed_tickets) / len(self.ticket_data)) * 100
-                if self.ticket_data else 0.0
+                if self.ticket_data
+                else 0.0
             ),
             "failure_categories": failure_counts,
             "model_failure_patterns": model_failure_patterns,
@@ -542,8 +566,8 @@ class ExecutionAnalytics:
                 )
 
             underestimated_ratio = (
-                timing_analysis["underestimated_count"] /
-                timing_analysis["total_comparisons"]
+                timing_analysis["underestimated_count"]
+                / timing_analysis["total_comparisons"]
             )
             if underestimated_ratio > 0.3:
                 recommendations.append(
@@ -609,20 +633,29 @@ class ExecutionAnalytics:
 
         """
         total_tickets = len(self.ticket_data)
-        completed_tickets = len([
-            ticket for ticket in self.ticket_data.values()
-            if ticket.completion_status == ProgressStage.COMPLETED
-        ])
-        failed_tickets = len([
-            ticket for ticket in self.ticket_data.values()
-            if ticket.completion_status == ProgressStage.FAILED
-        ])
+        completed_tickets = len(
+            [
+                ticket
+                for ticket in self.ticket_data.values()
+                if ticket.completion_status == ProgressStage.COMPLETED
+            ]
+        )
+        failed_tickets = len(
+            [
+                ticket
+                for ticket in self.ticket_data.values()
+                if ticket.completion_status == ProgressStage.FAILED
+            ]
+        )
 
         # Calculate average execution time
         completion_times = [
-            ticket.actual_duration for ticket in self.ticket_data.values()
-            if (ticket.actual_duration is not None and
-                ticket.completion_status == ProgressStage.COMPLETED)
+            ticket.actual_duration
+            for ticket in self.ticket_data.values()
+            if (
+                ticket.actual_duration is not None
+                and ticket.completion_status == ProgressStage.COMPLETED
+            )
         ]
         avg_execution_time = (
             statistics.mean(completion_times) if completion_times else 0.0
@@ -638,9 +671,12 @@ class ExecutionAnalytics:
         complexity_trends = {}
         for effort_category in EffortCategory:
             category_tickets = [
-                ticket for ticket in self.ticket_data.values()
-                if (ticket.estimated_effort == effort_category and
-                    ticket.complexity_score is not None)
+                ticket
+                for ticket in self.ticket_data.values()
+                if (
+                    ticket.estimated_effort == effort_category
+                    and ticket.complexity_score is not None
+                )
             ]
             complexity_trends[effort_category.value] = [
                 ticket.complexity_score for ticket in category_tickets

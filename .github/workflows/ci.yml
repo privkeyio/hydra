@@ -36,54 +36,58 @@ jobs:
         pip install tiktoken
         pip install -e .[dev]
         pip install psutil
+        # Ensure pytest-asyncio is available (critical for async tests)
+        pip install pytest-asyncio>=0.21.0
+        # Install coverage tools
+        pip install pytest-cov coverage[toml]
     
     - name: Set test environment
       run: |
-        export LLM_PROVIDER=mock
-        export REDIS_URL=redis://localhost:6379/0
-        export DATABASE_URL=sqlite:///test.db
+        echo "LLM_PROVIDER=mock" >> $GITHUB_ENV
+        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
+        echo "DATABASE_URL=sqlite:///test.db" >> $GITHUB_ENV
+        echo "TESTING=1" >> $GITHUB_ENV
+        echo "CI=true" >> $GITHUB_ENV
+        echo "PYTHONPATH=src" >> $GITHUB_ENV
     
     - name: Run linting
       run: |
-        ruff check src/ --exclude="src/hydra/templates/templates" --select=E9,F63,F7,F82 || true
-        echo "Full lint check for review (non-blocking):"
-        ruff check src/ --exclude="src/hydra/templates/templates" --exit-zero
+        echo "Running critical lint checks (build-blocking):"
+        ruff check src/ --exclude="src/hydra/templates/templates" --select=E9,F63,F7,F82
+        if [ $? -ne 0 ]; then
+          echo "Critical linting errors found!"
+          exit 1
+        fi
+        echo "Running full lint check (non-blocking):"
+        ruff check src/ --exclude="src/hydra/templates/templates" || echo "Warning: Non-critical lint issues found"
     
     - name: Run unit tests
-      env:
-        LLM_PROVIDER: mock
-        REDIS_URL: redis://localhost:6379/0
-        DATABASE_URL: sqlite:///test.db
-        TESTING: "1"
-        CI: "true"
       run: |
         # Run deterministic unit tests (skip stress tests in CI)
         timeout 10m python -m pytest tests/unit/ -v --tb=short --timeout=60 \
           -m "not stress" \
           --maxfail=10 \
-          --disable-warnings
+          --disable-warnings \
+          --cov=src/hydra --cov-report=term-missing --cov-report=xml
+        if [ $? -ne 0 ]; then
+          echo "Unit tests failed!"
+          exit 1
+        fi
     
     - name: Run integration tests
-      env:
-        LLM_PROVIDER: mock
-        REDIS_URL: redis://localhost:6379/0
-        DATABASE_URL: sqlite:///test.db
-        TESTING: "1"
-        CI: "true"
       run: |
         # Run integration tests (skip tests requiring API keys, stress tests, external tests, and resource-intensive tests)
         timeout 10m python -m pytest tests/integration/ -v --tb=short --timeout=120 \
           -m "not requires_api_key and not stress and not external and not resource_intensive" \
           --maxfail=10 \
-          --disable-warnings
+          --disable-warnings \
+          --cov=src/hydra --cov-append --cov-report=term-missing --cov-report=xml
+        if [ $? -ne 0 ]; then
+          echo "Integration tests failed!"
+          exit 1
+        fi
     
     - name: Run core workflow tests
-      env:
-        LLM_PROVIDER: mock
-        REDIS_URL: redis://localhost:6379/0
-        DATABASE_URL: sqlite:///test.db
-        TESTING: "1"
-        CI: "true"
       run: |
         # Run critical workflow tests for create/execute/verify
         # Note: test_core_commands.py skipped in CI as it requires full environment
@@ -91,21 +95,86 @@ jobs:
           -v --tb=short --timeout=60 \
           --disable-warnings
     
-    - name: Run resource-intensive tests (with retry)
-      env:
-        LLM_PROVIDER: mock
-        REDIS_URL: redis://localhost:6379/0
-        DATABASE_URL: sqlite:///test.db
-        TESTING: "1"
-        CI: "true"
-        PYTHONUNBUFFERED: "1"
-      continue-on-error: true
+    - name: Run resource-intensive tests
       run: |
-        # Run resource-intensive tests with limited parallelism and retries
-        # These tests spawn many subprocesses and may fail due to resource limits
+        # Run resource-intensive tests with limited parallelism
+        # These tests spawn many subprocesses - fail if they fail
         timeout 5m python -m pytest tests/integration/test_ticket_workflow_e2e.py \
           -v --tb=short --timeout=120 \
           --maxfail=3 \
           --disable-warnings \
-          -k "not scalability" || \
-        echo "Resource-intensive tests failed, this is expected in CI environment"
+          -k "not scalability"
+        if [ $? -ne 0 ]; then
+          echo "Resource-intensive tests failed!"
+          exit 1
+        fi
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Check coverage threshold
+      run: |
+        # Extract coverage percentage
+        coverage report | grep TOTAL | awk '{print $4}' | sed 's/%//' > coverage_percent.txt
+        COVERAGE=$(cat coverage_percent.txt)
+        echo "Current coverage: ${COVERAGE}%"
+        # Set minimum threshold (start with 30%, increase over time)
+        MIN_COVERAGE=30
+        if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
+          echo "Coverage ${COVERAGE}% is below minimum threshold of ${MIN_COVERAGE}%"
+          exit 1
+        fi
+    
+    - name: Run performance benchmarks
+      run: |
+        echo "Running performance benchmarks..."
+        # Create benchmark results directory
+        mkdir -p benchmark_results
+        # Run comprehensive benchmark suite (reduced iterations for CI)
+        timeout 10m python src/hydra/benchmarks/run_all_benchmarks.py
+        echo "Performance benchmarks completed"
+        if [ $? -ne 0 ]; then
+          echo "Performance benchmarks failed!"
+          exit 1
+        fi
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      if: always()  # Upload artifacts even if benchmarks failed
+      with:
+        name: performance-benchmarks-${{ github.sha }}
+        path: |
+          benchmark_results/
+          !benchmark_results/**/*.tmp
+        retention-days: 30
+    
+    - name: Comment benchmark results on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = 'benchmark_results/benchmark_summary.md';
+          
+          if (fs.existsSync(path)) {
+            const summary = fs.readFileSync(path, 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## Performance Benchmark Results\n\n' + summary
+            });
+          } else {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## Performance Benchmark Results\n\n❌ Benchmarks failed to run. Check the CI logs for details.'
+            });
+          }

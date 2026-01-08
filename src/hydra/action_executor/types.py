@@ -83,12 +83,16 @@ class Action:
 
     def __post_init__(self) -> None:
         """Validate action after initialization."""
-        if self.type in [
-            ActionType.CREATE_FILE,
-            ActionType.MODIFY_FILE,
-            ActionType.APPEND_FILE,
-            ActionType.REPLACE_IN_FILE,
-        ] and self.content is None:
+        if (
+            self.type
+            in [
+                ActionType.CREATE_FILE,
+                ActionType.MODIFY_FILE,
+                ActionType.APPEND_FILE,
+                ActionType.REPLACE_IN_FILE,
+            ]
+            and self.content is None
+        ):
             raise ValueError(f"Action type {self.type.name} requires content")
 
     @property
@@ -244,4 +248,3 @@ class ActionBatch:
             visit(i)
 
         return order[::-1]
-

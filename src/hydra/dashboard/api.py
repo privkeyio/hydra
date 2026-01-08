@@ -25,7 +25,9 @@ from hydra.dashboard.database import (
 from hydra.token_tracker import TokenUsage, get_token_tracker
 
 # Configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "hydra-dashboard-secret-key-change-in-production")
+SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY", "hydra-dashboard-secret-key-change-in-production"
+)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
@@ -272,7 +274,8 @@ def get_current_user(
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
         )
 
     return user
@@ -325,6 +328,7 @@ def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
 
     # Hash password (simplified - use bcrypt in production)
     import hashlib
+
     hashed_password = hashlib.sha256(user_data.password.encode()).hexdigest()
 
     # Create user
@@ -346,12 +350,17 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """Login and get access token."""
     # Verify credentials
     import hashlib
+
     hashed_password = hashlib.sha256(login_data.password.encode()).hexdigest()
 
-    user = db.query(User).filter(
-        User.username == login_data.username,
-        User.hashed_password == hashed_password,
-    ).first()
+    user = (
+        db.query(User)
+        .filter(
+            User.username == login_data.username,
+            User.hashed_password == hashed_password,
+        )
+        .first()
+    )
 
     if not user or not user.is_active:
         raise HTTPException(
@@ -401,7 +410,8 @@ def create_project(
     existing = db.query(Project).filter(Project.name == project_data.name).first()
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Project name already exists"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project name already exists",
         )
 
     project = Project(**project_data.dict())
@@ -561,16 +571,16 @@ def get_dashboard_stats(
         tickets_by_status={},
         total_executions=db.query(Execution).count(),
         total_sessions=db.query(DBSession).count(),
-        active_sessions=db.query(DBSession).filter(DBSession.status == "active").count(),
+        active_sessions=db.query(DBSession)
+        .filter(DBSession.status == "active")
+        .count(),
         total_tokens_used=0,
         estimated_cost="$0.00",
     )
 
     # Get tickets by status
     status_counts = (
-        db.query(Ticket.status, db.func.count(Ticket.id))
-        .group_by(Ticket.status)
-        .all()
+        db.query(Ticket.status, db.func.count(Ticket.id)).group_by(Ticket.status).all()
     )
     stats.tickets_by_status = {status: count for status, count in status_counts}
 
@@ -663,12 +673,12 @@ def export_token_usage_csv(
 
     tracker = get_token_tracker()
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as tmp:
         tracker.export_usage_csv(tmp.name, start_date, end_date)
         return FileResponse(
             path=tmp.name,
             filename=f"token_usage_{datetime.utcnow().strftime('%Y%m%d')}.csv",
-            media_type="text/csv"
+            media_type="text/csv",
         )
 
 
@@ -692,30 +702,38 @@ def health_check():
 def get_dashboard_stats_public(db: Session = Depends(get_db)):
     """Get dashboard statistics without authentication."""
     from sqlalchemy import func
-    
+
     total_projects = db.query(func.count(Project.id)).scalar() or 0
-    active_tickets = db.query(func.count(Ticket.id)).filter(
-        Ticket.status.in_(["IN_PROGRESS", "TODO"])
-    ).scalar() or 0
-    completed_today = db.query(func.count(Ticket.id)).filter(
-        Ticket.status == "DONE",
-        func.date(Ticket.updated_at) == func.date(func.now())
-    ).scalar() or 0
-    
+    active_tickets = (
+        db.query(func.count(Ticket.id))
+        .filter(Ticket.status.in_(["IN_PROGRESS", "TODO"]))
+        .scalar()
+        or 0
+    )
+    completed_today = (
+        db.query(func.count(Ticket.id))
+        .filter(
+            Ticket.status == "DONE",
+            func.date(Ticket.updated_at) == func.date(func.now()),
+        )
+        .scalar()
+        or 0
+    )
+
     total_tickets = db.query(func.count(Ticket.id)).scalar() or 0
-    successful_tickets = db.query(func.count(Ticket.id)).filter(
-        Ticket.status == "DONE"
-    ).scalar() or 0
-    
+    successful_tickets = (
+        db.query(func.count(Ticket.id)).filter(Ticket.status == "DONE").scalar() or 0
+    )
+
     success_rate = 0
     if total_tickets > 0:
         success_rate = int((successful_tickets / total_tickets) * 100)
-    
+
     return {
         "total_projects": total_projects,
         "active_tickets": active_tickets,
         "completed_today": completed_today,
-        "success_rate": success_rate
+        "success_rate": success_rate,
     }
 
 
@@ -723,13 +741,17 @@ def get_dashboard_stats_public(db: Session = Depends(get_db)):
 def get_tickets_public(
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get recent tickets without authentication."""
-    tickets = db.query(Ticket).order_by(
-        Ticket.created_at.desc()
-    ).limit(limit).offset(offset).all()
-    
+    tickets = (
+        db.query(Ticket)
+        .order_by(Ticket.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
     return [
         {
             "id": t.id,
@@ -739,7 +761,7 @@ def get_tickets_public(
             "priority": t.priority,
             "model": t.model,
             "created_at": t.created_at.isoformat() if t.created_at else None,
-            "updated_at": t.updated_at.isoformat() if t.updated_at else None
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
         }
         for t in tickets
     ]

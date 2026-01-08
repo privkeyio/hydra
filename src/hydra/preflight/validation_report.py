@@ -179,9 +179,7 @@ class ValidationReport:
 
         """
         failed = [check for check in self.checks if not check.passed]
-        return sorted(
-            failed, key=lambda c: c.level.priority, reverse=True
-        )
+        return sorted(failed, key=lambda c: c.level.priority, reverse=True)
 
     def get_critical_issues(self) -> List[ValidationCheck]:
         """Get all critical issues.
@@ -223,18 +221,18 @@ class ValidationReport:
         ]
 
         if self.end_time:
-            lines.append(
-                f"Completed: {self.end_time.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
+            lines.append(f"Completed: {self.end_time.strftime('%Y-%m-%d %H:%M:%S')}")
             lines.append(f"Duration: {self.duration:.2f} seconds")
 
-        lines.extend([
-            "",
-            f"Total Checks: {self.total_checks}",
-            f"Passed: {self.passed_checks} ({self.pass_rate:.1f}%)",
-            f"Failed: {self.failed_checks}",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                f"Total Checks: {self.total_checks}",
+                f"Passed: {self.passed_checks} ({self.pass_rate:.1f}%)",
+                f"Failed: {self.failed_checks}",
+                "",
+            ]
+        )
 
         # Overall status
         if self.has_critical_issues():
@@ -279,20 +277,20 @@ class ValidationReport:
         ]
 
         if self.end_time:
-            lines.append(
-                f"Completed: {self.end_time.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
+            lines.append(f"Completed: {self.end_time.strftime('%Y-%m-%d %H:%M:%S')}")
             lines.append(f"Duration: {self.duration:.2f} seconds")
 
-        lines.extend([
-            "",
-            "SUMMARY",
-            "-" * 40,
-            f"Total Checks: {self.total_checks}",
-            f"Passed: {self.passed_checks} ({self.pass_rate:.1f}%)",
-            f"Failed: {self.failed_checks}",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "SUMMARY",
+                "-" * 40,
+                f"Total Checks: {self.total_checks}",
+                f"Passed: {self.passed_checks} ({self.pass_rate:.1f}%)",
+                f"Failed: {self.failed_checks}",
+                "",
+            ]
+        )
 
         # Overall status
         if self.has_critical_issues():
@@ -304,11 +302,13 @@ class ValidationReport:
         else:
             lines.append("✅ ALL CHECKS PASSED - READY FOR EXECUTION")
 
-        lines.extend([
-            "",
-            "DETAILED CHECK RESULTS",
-            "=" * 60,
-        ])
+        lines.extend(
+            [
+                "",
+                "DETAILED CHECK RESULTS",
+                "=" * 60,
+            ]
+        )
 
         # Sort checks by severity and status
         sorted_checks = sorted(
@@ -323,11 +323,13 @@ class ValidationReport:
             lines.append(check.format_detailed())
 
         if self.metadata:
-            lines.extend([
-                "",
-                "METADATA",
-                "-" * 40,
-            ])
+            lines.extend(
+                [
+                    "",
+                    "METADATA",
+                    "-" * 40,
+                ]
+            )
             for key, value in self.metadata.items():
                 lines.append(f"{key}: {value}")
 
@@ -463,4 +465,3 @@ class ValidationReport:
                     skippable.append(check.name)
 
         return skippable
-

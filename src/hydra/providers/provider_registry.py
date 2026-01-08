@@ -63,7 +63,7 @@ class ProviderRegistry:
 
     def __init__(self):
         """Initialize the registry."""
-        if not hasattr(self, '_initialized'):
+        if not hasattr(self, "_initialized"):
             self._providers: Dict[str, Type[BaseProvider]] = {}
             self._instances: Dict[str, BaseProvider] = {}
             self._config_manager = get_config_manager()
@@ -94,7 +94,7 @@ class ProviderRegistry:
 
         """
         try:
-            module_path, class_name = class_path.rsplit('.', 1)
+            module_path, class_name = class_path.rsplit(".", 1)
             module = importlib.import_module(module_path)
             provider_class = getattr(module, class_name)
 
@@ -132,8 +132,7 @@ class ProviderRegistry:
         try:
             # Dynamic import of plugin module
             spec = importlib.util.spec_from_file_location(
-                f"plugin_{plugin_path.parent.name}",
-                plugin_path
+                f"plugin_{plugin_path.parent.name}", plugin_path
             )
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)
@@ -141,10 +140,12 @@ class ProviderRegistry:
 
                 # Find provider classes in module
                 for name, obj in inspect.getmembers(module):
-                    if (inspect.isclass(obj) and
-                        issubclass(obj, BaseProvider) and
-                        obj != BaseProvider):
-                        provider_type = getattr(obj, 'PROVIDER_TYPE', name.lower())
+                    if (
+                        inspect.isclass(obj)
+                        and issubclass(obj, BaseProvider)
+                        and obj != BaseProvider
+                    ):
+                        provider_type = getattr(obj, "PROVIDER_TYPE", name.lower())
                         self._providers[provider_type] = obj
                         logger.info(f"Discovered plugin provider: {provider_type}")
         except Exception as e:
@@ -165,16 +166,19 @@ class ProviderRegistry:
                                 config = config.to_llm_config()
                             else:
                                 from hydra.providers.base import LLMConfig
+
                                 config = LLMConfig(provider_type=ptype)
                         return cls(config)
+
                     return callback
 
                 self._provider_pool.register_init_callback(
-                    provider_type,
-                    create_callback(provider_class, provider_type)
+                    provider_type, create_callback(provider_class, provider_type)
                 )
 
-    def register_provider(self, provider_type: str, provider_class: Type[BaseProvider]) -> None:
+    def register_provider(
+        self, provider_type: str, provider_class: Type[BaseProvider]
+    ) -> None:
         """Register a new provider type.
 
         Args:
@@ -238,7 +242,7 @@ class ProviderRegistry:
         self,
         provider_type: Optional[str] = None,
         config: Optional[Any] = None,  # Accept both ProviderConfig and LLMConfig
-        **kwargs
+        **kwargs,
     ) -> BaseProvider:
         """Create a provider instance.
 
@@ -273,7 +277,7 @@ class ProviderRegistry:
         self,
         provider_type: Optional[str],
         config: Optional[ProviderConfig],
-        kwargs: dict
+        kwargs: dict,
     ) -> Tuple[str, ProviderConfig]:
         """Resolve provider type and configuration.
 
@@ -292,9 +296,7 @@ class ProviderRegistry:
                 if not config:
                     # Create minimal config
                     config = ProviderConfig(
-                        name=provider_type,
-                        type=provider_type,
-                        **kwargs
+                        name=provider_type, type=provider_type, **kwargs
                     )
         elif config:
             provider_type = config.type
@@ -312,7 +314,7 @@ class ProviderRegistry:
         provider_type: str,
         provider_class: Type[BaseProvider],
         config: Any,  # Accept both ProviderConfig and LLMConfig
-        kwargs: dict
+        kwargs: dict,
     ) -> BaseProvider:
         """Create the actual provider instance.
 
@@ -335,7 +337,7 @@ class ProviderRegistry:
                 return provider
 
             # Handle both ProviderConfig and LLMConfig
-            if hasattr(config, 'to_llm_config'):
+            if hasattr(config, "to_llm_config"):
                 # It's a ProviderConfig
                 llm_config = config.to_llm_config()
             else:
@@ -346,7 +348,7 @@ class ProviderRegistry:
             for key, value in kwargs.items():
                 if hasattr(llm_config, key):
                     setattr(llm_config, key, value)
-                elif hasattr(llm_config, 'extra_params'):
+                elif hasattr(llm_config, "extra_params"):
                     llm_config.extra_params[key] = value
 
             provider = provider_class(llm_config)
@@ -370,7 +372,7 @@ class ProviderRegistry:
         provider_type: Optional[str] = None,
         cache: bool = True,
         lazy: bool = False,
-        **kwargs
+        **kwargs,
     ) -> BaseProvider:
         """Get existing provider instance or create new one.
 
@@ -412,6 +414,7 @@ class ProviderRegistry:
                 llm_config = config.to_llm_config()
             else:
                 from hydra.providers.base import LLMConfig
+
                 llm_config = LLMConfig(provider_type=provider_type)
             return LazyProviderProxy(provider_type, llm_config)
 
@@ -527,7 +530,7 @@ class ProviderRegistry:
             "providers": self._performance_monitor.get_metrics(),
             "pool_metrics": self._provider_pool.get_metrics(),
             "cache_stats": self._config_cache.get_stats(),
-            "recommendations": self._performance_monitor.get_recommendations()
+            "recommendations": self._performance_monitor.get_recommendations(),
         }
 
     def optimize_for_performance(self) -> None:
@@ -586,7 +589,7 @@ class ProviderRegistry:
                     "streaming": config.features.streaming,
                     "file_interception": config.features.file_interception,
                     "session_persistence": config.features.session_persistence,
-                }
+                },
             }
 
         return info

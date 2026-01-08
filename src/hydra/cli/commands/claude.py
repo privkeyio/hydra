@@ -7,92 +7,62 @@ def add_claude_parser(subparsers):
     """Add Claude Code subcommands to the parser."""
     claude_parser = subparsers.add_parser(
         "claude",
-        help="Claude Code CLI orchestration - manage and execute tasks with Claude Code"
+        help="Claude Code CLI orchestration - manage and execute tasks with Claude Code",
     )
     claude_subparsers = claude_parser.add_subparsers(
-        dest="claude_action",
-        help="Claude Code operations"
+        dest="claude_action", help="Claude Code operations"
     )
 
     # Execute task with Claude Code
     execute_parser = claude_subparsers.add_parser(
-        "execute",
-        help="Execute a task with Claude Code"
+        "execute", help="Execute a task with Claude Code"
     )
     execute_parser.add_argument(
-        "task",
-        help="Task description for Claude Code to execute"
+        "task", help="Task description for Claude Code to execute"
     )
     execute_parser.add_argument(
-        "--timeout",
-        type=int,
-        default=300,
-        help="Timeout in seconds (default: 300)"
+        "--timeout", type=int, default=300, help="Timeout in seconds (default: 300)"
     )
     execute_parser.add_argument(
         "--cwd",
-        help="Working directory for task execution (default: current directory)"
+        help="Working directory for task execution (default: current directory)",
     )
 
     # Create development session
     session_parser = claude_subparsers.add_parser(
-        "session",
-        help="Create a Claude Code development session"
+        "session", help="Create a Claude Code development session"
     )
+    session_parser.add_argument("project_path", help="Path to the project directory")
     session_parser.add_argument(
-        "project_path",
-        help="Path to the project directory"
-    )
-    session_parser.add_argument(
-        "--name",
-        help="Session name (auto-generated if not provided)"
+        "--name", help="Session name (auto-generated if not provided)"
     )
 
     # List sessions
-    claude_subparsers.add_parser(
-        "list",
-        help="List all active Claude Code sessions"
-    )
+    claude_subparsers.add_parser("list", help="List all active Claude Code sessions")
 
     # Attach to session
     attach_parser = claude_subparsers.add_parser(
-        "attach",
-        help="Attach to an existing Claude Code session"
+        "attach", help="Attach to an existing Claude Code session"
     )
-    attach_parser.add_argument(
-        "session_name",
-        help="Name of the session to attach to"
-    )
+    attach_parser.add_argument("session_name", help="Name of the session to attach to")
 
     # Kill session
     kill_parser = claude_subparsers.add_parser(
-        "kill",
-        help="Kill a Claude Code session"
+        "kill", help="Kill a Claude Code session"
     )
-    kill_parser.add_argument(
-        "session_name",
-        help="Name of the session to kill"
-    )
+    kill_parser.add_argument("session_name", help="Name of the session to kill")
 
     # Save session
     save_parser = claude_subparsers.add_parser(
-        "save",
-        help="Save Claude Code session state"
+        "save", help="Save Claude Code session state"
     )
-    save_parser.add_argument(
-        "session_name",
-        help="Name of the session to save"
-    )
+    save_parser.add_argument("session_name", help="Name of the session to save")
 
     # Restore session
     restore_parser = claude_subparsers.add_parser(
-        "restore",
-        help="Restore a Claude Code session from saved state"
+        "restore", help="Restore a Claude Code session from saved state"
     )
-    restore_parser.add_argument(
-        "session_name",
-        help="Name of the session to restore"
-    )
+    restore_parser.add_argument("session_name", help="Name of the session to restore")
 
 
 def _handle_claude_execute(orchestrator, args):
@@ -101,7 +71,7 @@ def _handle_claude_execute(orchestrator, args):
         description=args.task[:50],
         prompt=args.task,
         working_directory=args.cwd,
-        timeout=args.timeout
+        timeout=args.timeout,
     )
 
     print("🚀 Executing task with Claude Code CLI...")
@@ -110,7 +80,7 @@ def _handle_claude_execute(orchestrator, args):
     if result.status.value == "completed":
         print("✅ Task completed successfully")
         if result.files_changed:
-            changed_files = ', '.join(result.files_changed)
+            changed_files = ", ".join(result.files_changed)
             print(f"📝 Files changed: {changed_files}")
         return 0
     else:
@@ -145,6 +115,7 @@ def _handle_claude_session_management(orchestrator, args):
 def _handle_claude_persistence(orchestrator, args):
     """Handle save/restore commands."""
     from hydra.persistence.session_manager import SessionManager
+
     manager = SessionManager()
 
     if args.claude_action == "save":
@@ -190,4 +161,3 @@ def handle_claude_command(args):
 
     print("Unknown Claude action")
     return 1
-

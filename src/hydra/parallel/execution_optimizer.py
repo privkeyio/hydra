@@ -302,9 +302,7 @@ class ExecutionOptimizer:
                     if dep in ticket_phase:
                         dep_phase = ticket_phase[dep]
                         dep_duration = next(
-                            g.estimated_duration
-                            for g in groups
-                            if g.phase == dep_phase
+                            g.estimated_duration for g in groups if g.phase == dep_phase
                         )
                         earliest_start = max(earliest_start, dep_duration * dep_phase)
 
@@ -390,9 +388,7 @@ class ExecutionOptimizer:
             return 1.0
 
         # Calculate sequential time (sum of all ticket durations)
-        sequential_time = sum(
-            len(g.tickets) * g.estimated_duration for g in groups
-        )
+        sequential_time = sum(len(g.tickets) * g.estimated_duration for g in groups)
 
         # Calculate parallel time (sum of group durations)
         parallel_time = sum(g.estimated_duration for g in groups)
@@ -489,9 +485,7 @@ class ExecutionOptimizer:
             lines.append(
                 f"  - {len(bottleneck_groups)} sequential bottlenecks detected"
             )
-            lines.append(
-                "    Consider breaking dependencies to enable parallelization"
-            )
+            lines.append("    Consider breaking dependencies to enable parallelization")
 
         # Check for imbalanced groups
         if parallel_groups:
@@ -525,9 +519,7 @@ class ExecutionOptimizer:
             if ticket_id in self.metrics:
                 metric = self.metrics[ticket_id]
                 if metric.slack_time == 0:
-                    bottlenecks.append(
-                        (ticket_id, "Critical path ticket - no slack")
-                    )
+                    bottlenecks.append((ticket_id, "Critical path ticket - no slack"))
 
         # Check for sequential phases with multiple tickets
         for group in execution_plan.groups:
@@ -539,9 +531,7 @@ class ExecutionOptimizer:
 
         return bottlenecks
 
-    def suggest_optimizations(
-        self, execution_plan: ExecutionPlan
-    ) -> List[str]:
+    def suggest_optimizations(self, execution_plan: ExecutionPlan) -> List[str]:
         """Suggest potential optimizations for the execution plan.
 
         Args:
@@ -596,4 +586,3 @@ class ExecutionOptimizer:
             )
 
         return suggestions
-

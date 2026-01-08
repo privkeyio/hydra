@@ -135,7 +135,7 @@ app = FastAPI(
     description="REST API for Hydra AI agent system",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 app.add_middleware(AuthMiddleware)
@@ -154,6 +154,7 @@ async def shutdown_event():
     """Cleanup performance resources on shutdown."""
     await cleanup_performance_resources()
 
+
 @app.middleware("http")
 async def monitoring_middleware(request: Request, call_next):
     start_time = time.time()
@@ -167,7 +168,7 @@ async def monitoring_middleware(request: Request, call_next):
         method=request.method,
         endpoint=request.url.path,
         status_code=response.status_code,
-        duration=duration
+        duration=duration,
     )
 
     response.headers["x-correlation-id"] = monitoring.get_correlation_id()
@@ -176,6 +177,7 @@ async def monitoring_middleware(request: Request, call_next):
     response = SecurityHeaders.apply_headers(response)
 
     return response
+
 
 tasks_store: Dict[str, Dict[str, Any]] = {}
 admin_websockets: Set[WebSocket] = set()
@@ -188,21 +190,22 @@ async def process_generate_task(task_id: str, request: GenerateRequest, api_key:
         tasks_store[task_id]["status"] = TaskStatus.IN_PROGRESS
         tasks_store[task_id]["progress"] = 10
 
-        await notify_admin_clients("task_update", {
-            "task": {
-                "id": task_id,
-                "status": TaskStatus.IN_PROGRESS,
-                "progress": 10,
-                "created_at": tasks_store[task_id]["created_at"].isoformat()
-            }
-        })
+        await notify_admin_clients(
+            "task_update",
+            {
+                "task": {
+                    "id": task_id,
+                    "status": TaskStatus.IN_PROGRESS,
+                    "progress": 10,
+                    "created_at": tasks_store[task_id]["created_at"].isoformat(),
+                }
+            },
+        )
 
         cache = get_cache()
 
         cached_code = cache.get_code_cache(
-            request.prompt,
-            language=request.language,
-            max_tokens=request.max_tokens
+            request.prompt, language=request.language, max_tokens=request.max_tokens
         )
 
         if cached_code:
@@ -217,27 +220,30 @@ async def process_generate_task(task_id: str, request: GenerateRequest, api_key:
 
         tasks_store[task_id]["progress"] = 50
 
-        await notify_admin_clients("task_update", {
-            "task": {
-                "id": task_id,
-                "status": TaskStatus.IN_PROGRESS,
-                "progress": 50,
-                "created_at": tasks_store[task_id]["created_at"].isoformat()
-            }
-        })
+        await notify_admin_clients(
+            "task_update",
+            {
+                "task": {
+                    "id": task_id,
+                    "status": TaskStatus.IN_PROGRESS,
+                    "progress": 50,
+                    "created_at": tasks_store[task_id]["created_at"].isoformat(),
+                }
+            },
+        )
 
         result = await asyncio.to_thread(
             agent.generate_code,
             request.prompt,
             language=request.language,
-            max_tokens=request.max_tokens
+            max_tokens=request.max_tokens,
         )
 
         cache.set_code_cache(
             request.prompt,
             result,
             language=request.language,
-            max_tokens=request.max_tokens
+            max_tokens=request.max_tokens,
         )
 
         tasks_store[task_id]["status"] = TaskStatus.COMPLETED
@@ -250,6 +256,7 @@ async def process_generate_task(task_id: str, request: GenerateRequest, api_key:
         # Track usage for billing
         try:
             from hydra.models.db import get_db
+
             db = get_db()
             api_key_obj = db.query(APIKey).filter(APIKey.key == api_key).first()
             if api_key_obj:
@@ -260,12 +267,13 @@ async def process_generate_task(task_id: str, request: GenerateRequest, api_key:
                     prompt=request.prompt,
                     response=result,
                     model=config.llm_provider.model,
-                    task_id=task_id
+                    task_id=task_id,
                 )
             db.close()
         except Exception as e:
             # Don't fail the task if billing tracking fails
             import logging
+
             logging.getLogger(__name__).error(f"Billing tracking failed: {e}")
 
     except Exception as e:
@@ -290,7 +298,7 @@ async def process_workflow_task(task_id: str, request: WorkflowRequest, api_key:
             request.task,
             num_agents=request.agents,
             max_iterations=request.max_iterations,
-            config=config
+            config=config,
         )
 
         tasks_store[task_id]["status"] = TaskStatus.COMPLETED
@@ -304,6 +312,7 @@ async def process_workflow_task(task_id: str, request: WorkflowRequest, api_key:
         # Track usage for billing
         try:
             from hydra.models.db import get_db
+
             db = get_db()
             api_key_obj = db.query(APIKey).filter(APIKey.key == api_key).first()
             if api_key_obj:
@@ -316,11 +325,12 @@ async def process_workflow_task(task_id: str, request: WorkflowRequest, api_key:
                     prompt=request.task,
                     response=response_text,
                     model=config.llm_provider.model,
-                    task_id=task_id
+                    task_id=task_id,
                 )
             db.close()
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error(f"Billing tracking failed: {e}")
 
     except Exception as e:
@@ -335,7 +345,7 @@ async def generate_code(
     background_tasks: BackgroundTasks,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
     tenant: Annotated[Tenant, Depends(get_current_tenant)],
-    req: Request = None
+    req: Request = None,
 ):
     """Generate code using a single agent."""
     # Sanitize input
@@ -345,7 +355,7 @@ async def generate_code(
             "INPUT_VALIDATION_FAILED",
             "HIGH",
             f"Dangerous input detected: {sanitized}",
-            {"user": api_key_info[0], "ip_address": req.client.host}
+            {"user": api_key_info[0], "ip_address": req.client.host},
         )
         raise HTTPException(status_code=400, detail=sanitized)
 
@@ -353,13 +363,8 @@ async def generate_code(
     task_id = str(uuid.uuid4())
 
     # Check tenant quota
-    if not check_tenant_quota(
-        tenant.id, tokens=request.max_tokens, task_id=task_id
-    ):
-        raise HTTPException(
-            status_code=429,
-            detail="Tenant quota exceeded"
-        )
+    if not check_tenant_quota(tenant.id, tokens=request.max_tokens, task_id=task_id):
+        raise HTTPException(status_code=429, detail="Tenant quota exceeded")
 
     # Audit log
     audit_logger.log_operation(
@@ -371,8 +376,8 @@ async def generate_code(
             "tenant_id": tenant.id,
             "language": request.language,
             "max_tokens": request.max_tokens,
-            "ip_address": req.client.host if req else None
-        }
+            "ip_address": req.client.host if req else None,
+        },
     )
 
     # Queue tenant-specific task
@@ -382,15 +387,15 @@ async def generate_code(
             "language": request.language,
             "max_tokens": request.max_tokens,
             "task_id": task_id,
-            "is_priority": api_key_info[1]
+            "is_priority": api_key_info[1],
         },
-        task_id=task_id
+        task_id=task_id,
     )
 
     return TaskResponse(
         task_id=task_id,
         status=TaskStatus.PENDING,
-        message="Code generation task queued"
+        message="Code generation task queued",
     )
 
 
@@ -399,7 +404,7 @@ async def generate_code_streaming(
     request: GenerateRequest,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
     tenant: Annotated[Tenant, Depends(get_current_tenant)],
-    req: Request = None
+    req: Request = None,
 ):
     """Generate code with streaming response."""
     # Sanitize input
@@ -411,9 +416,7 @@ async def generate_code_streaming(
     task_id = str(uuid.uuid4())
 
     # Check tenant quota
-    if not check_tenant_quota(
-        tenant.id, tokens=request.max_tokens, task_id=task_id
-    ):
+    if not check_tenant_quota(tenant.id, tokens=request.max_tokens, task_id=task_id):
         raise HTTPException(status_code=429, detail="Tenant quota exceeded")
 
     config = get_config()
@@ -424,7 +427,7 @@ async def generate_code_streaming(
         "messages": [{"role": "user", "content": request.prompt}],
         "max_tokens": request.max_tokens,
         "temperature": 0.2,
-        "stream": True
+        "stream": True,
     }
 
     # Start streaming
@@ -440,10 +443,7 @@ async def generate_code_streaming(
                 break
             yield f"data: {chunk}\n\n"
 
-    return StreamingResponse(
-        stream_generator(),
-        media_type="text/event-stream"
-    )
+    return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
 
 @app.post("/workflow", response_model=TaskResponse)
@@ -452,7 +452,7 @@ async def execute_workflow_endpoint(
     background_tasks: BackgroundTasks,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
     tenant: Annotated[Tenant, Depends(get_current_tenant)],
-    req: Request = None
+    req: Request = None,
 ):
     """Execute a multi-agent workflow."""
     # Sanitize input
@@ -462,7 +462,7 @@ async def execute_workflow_endpoint(
             "INPUT_VALIDATION_FAILED",
             "HIGH",
             f"Dangerous workflow input: {sanitized}",
-            {"user": api_key_info[0], "ip_address": req.client.host}
+            {"user": api_key_info[0], "ip_address": req.client.host},
         )
         raise HTTPException(status_code=400, detail=sanitized)
 
@@ -473,13 +473,8 @@ async def execute_workflow_endpoint(
     estimated_tokens = request.agents * request.max_iterations * 1000
 
     # Check tenant quota
-    if not check_tenant_quota(
-        tenant.id, tokens=estimated_tokens, task_id=task_id
-    ):
-        raise HTTPException(
-            status_code=429,
-            detail="Tenant quota exceeded"
-        )
+    if not check_tenant_quota(tenant.id, tokens=estimated_tokens, task_id=task_id):
+        raise HTTPException(status_code=429, detail="Tenant quota exceeded")
 
     # Audit log
     audit_logger.log_operation(
@@ -491,8 +486,8 @@ async def execute_workflow_endpoint(
             "tenant_id": tenant.id,
             "agents": request.agents,
             "max_iterations": request.max_iterations,
-            "ip_address": req.client.host if req else None
-        }
+            "ip_address": req.client.host if req else None,
+        },
     )
 
     # Queue tenant-specific task
@@ -502,15 +497,15 @@ async def execute_workflow_endpoint(
             "num_agents": request.agents,
             "max_iterations": request.max_iterations,
             "task_id": task_id,
-            "is_priority": api_key_info[1]
+            "is_priority": api_key_info[1],
         },
-        task_id=task_id
+        task_id=task_id,
     )
 
     return TaskResponse(
         task_id=task_id,
         status=TaskStatus.PENDING,
-        message="Workflow execution task queued"
+        message="Workflow execution task queued",
     )
 
 
@@ -531,7 +526,7 @@ async def get_task_status(
         created_at=task_data["created_at"],
         completed_at=task_data.get("completed_at"),
         result=task_data.get("result"),
-        error=task_data.get("error")
+        error=task_data.get("error"),
     )
 
 
@@ -549,22 +544,18 @@ async def health_check():
             provider_status["default"] = "unknown"
 
         return HealthResponse(
-            status="healthy",
-            timestamp=datetime.utcnow(),
-            providers=provider_status
+            status="healthy", timestamp=datetime.utcnow(), providers=provider_status
         )
     except Exception as e:
         return HealthResponse(
-            status="unhealthy",
-            timestamp=datetime.utcnow(),
-            providers={"error": str(e)}
+            status="unhealthy", timestamp=datetime.utcnow(), providers={"error": str(e)}
         )
 
 
 @app.post("/cache/invalidate", response_model=CacheInvalidateResponse)
 async def invalidate_cache(
     request: CacheInvalidateRequest,
-    api_key_info: Annotated[tuple, Depends(get_current_api_key)]
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
 ):
     """Invalidate cache entries."""
     cache = get_cache()
@@ -572,9 +563,9 @@ async def invalidate_cache(
     try:
         if request.cache_type == "all":
             keys_deleted = (
-                cache.invalidate_code_cache() +
-                cache.invalidate_task_cache() +
-                cache.invalidate_api_cache()
+                cache.invalidate_code_cache()
+                + cache.invalidate_task_cache()
+                + cache.invalidate_api_cache()
             )
             message = "All cache entries invalidated"
         elif request.cache_type == "code":
@@ -597,19 +588,17 @@ async def invalidate_cache(
         else:
             raise HTTPException(
                 status_code=400,
-                detail="Invalid cache_type. Must be 'code', 'task', 'api', or 'all'"
+                detail="Invalid cache_type. Must be 'code', 'task', 'api', or 'all'",
             )
 
         return CacheInvalidateResponse(
-            success=True,
-            keys_deleted=keys_deleted,
-            message=message
+            success=True, keys_deleted=keys_deleted, message=message
         )
     except Exception as e:
         return CacheInvalidateResponse(
             success=False,
             keys_deleted=0,
-            message=f"Cache invalidation failed: {str(e)}"
+            message=f"Cache invalidation failed: {str(e)}",
         )
 
 
@@ -640,14 +629,11 @@ class SignatureResponse(BaseModel):
 @app.post("/security/sign", response_model=SignatureResponse)
 async def generate_signature(
     request: SignatureRequest,
-    api_key_info: Annotated[tuple, Depends(get_current_api_key)]
+    api_key_info: Annotated[tuple, Depends(get_current_api_key)],
 ):
     """Generate HMAC signature for API requests."""
     signature = request_signer.sign_request(
-        request.method,
-        request.path,
-        request.body,
-        request.timestamp
+        request.method, request.path, request.body, request.timestamp
     )
 
     audit_logger.log_operation(
@@ -655,13 +641,10 @@ async def generate_signature(
         api_key_info[0],
         request.path,
         "SUCCESS",
-        {"method": request.method}
+        {"method": request.method},
     )
 
-    return SignatureResponse(
-        signature=signature,
-        timestamp=request.timestamp
-    )
+    return SignatureResponse(signature=signature, timestamp=request.timestamp)
 
 
 class AuditLogQuery(BaseModel):
@@ -674,47 +657,41 @@ class AuditLogQuery(BaseModel):
 
 @app.post("/security/audit-logs")
 async def query_audit_logs(
-    query: AuditLogQuery,
-    api_key_info: Annotated[tuple, Depends(get_current_api_key)]
+    query: AuditLogQuery, api_key_info: Annotated[tuple, Depends(get_current_api_key)]
 ):
     """Query audit logs (admin only)."""
     # Check if user has admin privileges
     if not api_key_info[1]:  # Not a priority/admin user
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
         )
 
     # This would normally query from a database
     # For now, return a simple response
-    return {
-        "logs": [],
-        "message": "Audit log querying requires database integration"
-    }
+    return {"logs": [], "message": "Audit log querying requires database integration"}
 
 
 @app.get("/admin/metrics/realtime")
 async def get_realtime_metrics(
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Get real-time metrics for admin dashboard."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
 
     active_tasks = sum(
-        1 for t in tasks_store.values()
+        1
+        for t in tasks_store.values()
         if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
     )
     queue_size = sum(
-        1 for t in tasks_store.values()
-        if t["status"] == TaskStatus.PENDING
+        1 for t in tasks_store.values() if t["status"] == TaskStatus.PENDING
     )
 
     recent_requests = db.query(Usage).order_by(desc(Usage.timestamp)).limit(100).all()
     error_count = sum(
-        1 for t in tasks_store.values()
-        if t["status"] == TaskStatus.FAILED
+        1 for t in tasks_store.values() if t["status"] == TaskStatus.FAILED
     )
 
     avg_latency = 0
@@ -727,7 +704,7 @@ async def get_realtime_metrics(
         "error_rate": (error_count / len(tasks_store) * 100) if tasks_store else 0,
         "avg_latency": avg_latency,
         "active_tasks": active_tasks,
-        "queue_size": queue_size
+        "queue_size": queue_size,
     }
 
 
@@ -737,16 +714,13 @@ async def get_usage_metrics(
     end: str,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
     db: Annotated[Session, Depends(get_db)],
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
 ):
     """Get usage metrics with date filtering."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    query = db.query(Usage).filter(
-        Usage.timestamp >= start,
-        Usage.timestamp <= end
-    )
+    query = db.query(Usage).filter(Usage.timestamp >= start, Usage.timestamp <= end)
 
     if api_key:
         query = query.filter(Usage.api_key_id == api_key)
@@ -759,7 +733,7 @@ async def get_usage_metrics(
             "api_key_id": r.api_key_id,
             "endpoint": r.endpoint,
             "tokens_used": r.tokens_used,
-            "task_id": r.task_id
+            "task_id": r.task_id,
         }
         for r in results
     ]
@@ -768,7 +742,7 @@ async def get_usage_metrics(
 @app.get("/admin/tasks/queue")
 async def get_task_queue(
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Get current task queue status."""
     if not api_key_info[1]:
@@ -776,17 +750,20 @@ async def get_task_queue(
 
     tasks = []
     for task_id, task_data in tasks_store.items():
-        tasks.append({
-            "id": task_id,
-            "status": task_data["status"],
-            "created_at": task_data["created_at"].isoformat(),
-            "completed_at": (
-                task_data["completed_at"].isoformat()
-                if task_data["completed_at"] else None
-            ),
-            "agent_count": task_data.get("agent_count", 1),
-            "progress": task_data.get("progress", 0)
-        })
+        tasks.append(
+            {
+                "id": task_id,
+                "status": task_data["status"],
+                "created_at": task_data["created_at"].isoformat(),
+                "completed_at": (
+                    task_data["completed_at"].isoformat()
+                    if task_data["completed_at"]
+                    else None
+                ),
+                "agent_count": task_data.get("agent_count", 1),
+                "progress": task_data.get("progress", 0),
+            }
+        )
 
     return sorted(tasks, key=lambda x: x["created_at"], reverse=True)[:50]
 
@@ -794,7 +771,7 @@ async def get_task_queue(
 @app.get("/admin/api-keys")
 async def list_api_keys(
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """List all API keys."""
     if not api_key_info[1]:
@@ -807,7 +784,7 @@ async def list_api_keys(
             "name": k.name,
             "created_at": k.created_at.isoformat(),
             "is_active": k.is_active,
-            "rate_limit": k.rate_limit
+            "rate_limit": k.rate_limit,
         }
         for k in keys
     ]
@@ -817,7 +794,7 @@ async def list_api_keys(
 async def create_api_key(
     data: dict,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Create new API key."""
     if not api_key_info[1]:
@@ -831,15 +808,18 @@ async def create_api_key(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    key = "sk-" + hashlib.sha256(
-        f"{data['name']}-{datetime.utcnow()}".encode()
-    ).hexdigest()[:32]
+    key = (
+        "sk-"
+        + hashlib.sha256(f"{data['name']}-{datetime.utcnow()}".encode()).hexdigest()[
+            :32
+        ]
+    )
 
     api_key = APIKey(
         key=key,
         name=data["name"],
         tenant_id=data["tenant_id"],
-        rate_limit=data.get("rate_limit", 1000)
+        rate_limit=data.get("rate_limit", 1000),
     )
 
     db.add(api_key)
@@ -850,7 +830,7 @@ async def create_api_key(
         api_key_info[0],
         key,
         "SUCCESS",
-        {"name": data["name"], "tenant_id": data["tenant_id"]}
+        {"name": data["name"], "tenant_id": data["tenant_id"]},
     )
 
     return {"key": key, "name": data["name"], "tenant_id": data["tenant_id"]}
@@ -861,7 +841,7 @@ async def update_api_key(
     key: str,
     data: dict,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Update API key."""
     if not api_key_info[1]:
@@ -880,13 +860,7 @@ async def update_api_key(
 
     db.commit()
 
-    audit_logger.log_operation(
-        "API_KEY_UPDATED",
-        api_key_info[0],
-        key,
-        "SUCCESS",
-        data
-    )
+    audit_logger.log_operation("API_KEY_UPDATED", api_key_info[0], key, "SUCCESS", data)
 
     return {"success": True}
 
@@ -895,7 +869,7 @@ async def update_api_key(
 async def delete_api_key(
     key: str,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Delete API key."""
     if not api_key_info[1]:
@@ -909,11 +883,7 @@ async def delete_api_key(
     db.commit()
 
     audit_logger.log_operation(
-        "API_KEY_DELETED",
-        api_key_info[0],
-        key,
-        "SUCCESS",
-        {"name": api_key.name}
+        "API_KEY_DELETED", api_key_info[0], key, "SUCCESS", {"name": api_key.name}
     )
 
     return {"success": True}
@@ -924,33 +894,33 @@ async def export_usage_data(
     start: str,
     end: str,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Export usage data as CSV."""
     if not api_key_info[1]:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    usage_data = db.query(Usage).filter(
-        Usage.timestamp >= start,
-        Usage.timestamp <= end
-    ).all()
+    usage_data = (
+        db.query(Usage).filter(Usage.timestamp >= start, Usage.timestamp <= end).all()
+    )
 
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "Timestamp", "API Key", "Endpoint",
-        "Tokens Used", "Task ID", "Response Time"
-    ])
+    writer.writerow(
+        ["Timestamp", "API Key", "Endpoint", "Tokens Used", "Task ID", "Response Time"]
+    )
 
     for u in usage_data:
-        writer.writerow([
-            u.timestamp.isoformat(),
-            u.api_key_id,
-            u.endpoint,
-            u.tokens_used,
-            u.task_id or "",
-            u.response_time or ""
-        ])
+        writer.writerow(
+            [
+                u.timestamp.isoformat(),
+                u.api_key_id,
+                u.endpoint,
+                u.tokens_used,
+                u.task_id or "",
+                u.response_time or "",
+            ]
+        )
 
     output.seek(0)
 
@@ -958,10 +928,8 @@ async def export_usage_data(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={
-            "Content-Disposition": (
-                f"attachment; filename=usage_{start}_to_{end}.csv"
-            )
-        }
+            "Content-Disposition": (f"attachment; filename=usage_{start}_to_{end}.csv")
+        },
     )
 
 
@@ -992,13 +960,13 @@ async def admin_websocket_endpoint(websocket: WebSocket):
             "error_rate": 0,
             "avg_latency": 0,
             "active_tasks": sum(
-                1 for t in tasks_store.values()
+                1
+                for t in tasks_store.values()
                 if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
             ),
             "queue_size": sum(
-                1 for t in tasks_store.values()
-                if t["status"] == TaskStatus.PENDING
-            )
+                1 for t in tasks_store.values() if t["status"] == TaskStatus.PENDING
+            ),
         }
         await websocket.send_text(json.dumps({"type": "metrics", "metrics": metrics}))
 
@@ -1009,19 +977,23 @@ async def admin_websocket_endpoint(websocket: WebSocket):
             metrics = {
                 "request_count": len(tasks_store),
                 "error_rate": (
-                    sum(1 for t in tasks_store.values()
-                        if t["status"] == TaskStatus.FAILED)
-                    / max(len(tasks_store), 1) * 100
+                    sum(
+                        1
+                        for t in tasks_store.values()
+                        if t["status"] == TaskStatus.FAILED
+                    )
+                    / max(len(tasks_store), 1)
+                    * 100
                 ),
                 "avg_latency": 0,
                 "active_tasks": sum(
-                    1 for t in tasks_store.values()
+                    1
+                    for t in tasks_store.values()
                     if t["status"] in [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]
                 ),
                 "queue_size": sum(
-                    1 for t in tasks_store.values()
-                    if t["status"] == TaskStatus.PENDING
-                )
+                    1 for t in tasks_store.values() if t["status"] == TaskStatus.PENDING
+                ),
             }
             await websocket.send_text(
                 json.dumps({"type": "metrics", "metrics": metrics})
@@ -1038,7 +1010,7 @@ async def get_usage_history(
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
     db: Annotated[Session, Depends(get_db)],
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
 ):
     """Get usage history for the current API key."""
     billing_service = get_billing_service()
@@ -1058,7 +1030,7 @@ async def get_monthly_report(
     year: int,
     month: int,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Get monthly usage report for the current API key."""
     billing_service = get_billing_service()
@@ -1072,7 +1044,7 @@ async def get_monthly_report(
 async def get_usage_limits(
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
     db: Annotated[Session, Depends(get_db)],
-    monthly_limit: Optional[float] = None
+    monthly_limit: Optional[float] = None,
 ):
     """Check usage limits and get alerts."""
     from decimal import Decimal
@@ -1091,7 +1063,7 @@ async def export_usage_csv(
     year: int,
     month: int,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Export usage data as CSV for admin users."""
     if not api_key_info[1]:
@@ -1103,18 +1075,20 @@ async def export_usage_csv(
     output = StringIO()
     writer = csv.writer(output)
 
-    writer.writerow([
-        "Timestamp", "Endpoint", "Tokens Used", "Estimated Cost", "Task ID"
-    ])
+    writer.writerow(
+        ["Timestamp", "Endpoint", "Tokens Used", "Estimated Cost", "Task ID"]
+    )
 
     for record in report["usage_records"]:
-        writer.writerow([
-            record["timestamp"],
-            record["endpoint"],
-            record["tokens_used"],
-            record["estimated_cost"],
-            record["task_id"] or ""
-        ])
+        writer.writerow(
+            [
+                record["timestamp"],
+                record["endpoint"],
+                record["tokens_used"],
+                record["estimated_cost"],
+                record["task_id"] or "",
+            ]
+        )
 
     output.seek(0)
 
@@ -1125,7 +1099,7 @@ async def export_usage_csv(
             "Content-Disposition": (
                 f"attachment; filename=usage_{api_key}_{year}_{month}.csv"
             )
-        }
+        },
     )
 
 
@@ -1138,9 +1112,7 @@ class TenantRequest(BaseModel):
     max_tokens_per_month: Optional[int] = Field(
         1000000, description="Max tokens per month"
     )
-    max_concurrent_tasks: Optional[int] = Field(
-        10, description="Max concurrent tasks"
-    )
+    max_concurrent_tasks: Optional[int] = Field(10, description="Max concurrent tasks")
 
 
 class TenantResponse(BaseModel):
@@ -1168,7 +1140,7 @@ class TenantUsageResponse(BaseModel):
 async def create_tenant(
     request: TenantRequest,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Create a new tenant (admin only)."""
     if not api_key_info[1]:
@@ -1184,7 +1156,7 @@ async def create_tenant(
         name=request.name,
         max_requests_per_minute=request.max_requests_per_minute,
         max_tokens_per_month=request.max_tokens_per_month,
-        max_concurrent_tasks=request.max_concurrent_tasks
+        max_concurrent_tasks=request.max_concurrent_tasks,
     )
 
     db.add(tenant)
@@ -1192,11 +1164,7 @@ async def create_tenant(
     db.refresh(tenant)
 
     audit_logger.log_operation(
-        "TENANT_CREATED",
-        api_key_info[0],
-        tenant.id,
-        "SUCCESS",
-        {"name": request.name}
+        "TENANT_CREATED", api_key_info[0], tenant.id, "SUCCESS", {"name": request.name}
     )
 
     return TenantResponse(
@@ -1206,14 +1174,14 @@ async def create_tenant(
         is_active=tenant.is_active,
         max_requests_per_minute=tenant.max_requests_per_minute,
         max_tokens_per_month=tenant.max_tokens_per_month,
-        max_concurrent_tasks=tenant.max_concurrent_tasks
+        max_concurrent_tasks=tenant.max_concurrent_tasks,
     )
 
 
 @app.get("/admin/tenants", response_model=List[TenantResponse])
 async def list_tenants(
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """List all tenants (admin only)."""
     if not api_key_info[1]:
@@ -1229,7 +1197,7 @@ async def list_tenants(
             is_active=t.is_active,
             max_requests_per_minute=t.max_requests_per_minute,
             max_tokens_per_month=t.max_tokens_per_month,
-            max_concurrent_tasks=t.max_concurrent_tasks
+            max_concurrent_tasks=t.max_concurrent_tasks,
         )
         for t in tenants
     ]
@@ -1239,7 +1207,7 @@ async def list_tenants(
 async def get_tenant(
     tenant_id: str,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Get tenant details (admin only)."""
     if not api_key_info[1]:
@@ -1256,7 +1224,7 @@ async def get_tenant(
         is_active=tenant.is_active,
         max_requests_per_minute=tenant.max_requests_per_minute,
         max_tokens_per_month=tenant.max_tokens_per_month,
-        max_concurrent_tasks=tenant.max_concurrent_tasks
+        max_concurrent_tasks=tenant.max_concurrent_tasks,
     )
 
 
@@ -1265,7 +1233,7 @@ async def update_tenant(
     tenant_id: str,
     data: dict,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Update tenant configuration (admin only)."""
     if not api_key_info[1]:
@@ -1290,11 +1258,7 @@ async def update_tenant(
     db.refresh(tenant)
 
     audit_logger.log_operation(
-        "TENANT_UPDATED",
-        api_key_info[0],
-        tenant_id,
-        "SUCCESS",
-        data
+        "TENANT_UPDATED", api_key_info[0], tenant_id, "SUCCESS", data
     )
 
     return TenantResponse(
@@ -1304,7 +1268,7 @@ async def update_tenant(
         is_active=tenant.is_active,
         max_requests_per_minute=tenant.max_requests_per_minute,
         max_tokens_per_month=tenant.max_tokens_per_month,
-        max_concurrent_tasks=tenant.max_concurrent_tasks
+        max_concurrent_tasks=tenant.max_concurrent_tasks,
     )
 
 
@@ -1312,7 +1276,7 @@ async def update_tenant(
 async def get_tenant_usage(
     tenant_id: str,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Get tenant usage statistics (admin only)."""
     if not api_key_info[1]:
@@ -1329,7 +1293,7 @@ async def get_tenant_usage(
 async def delete_tenant(
     tenant_id: str,
     api_key_info: Annotated[tuple, Depends(get_current_api_key)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Delete tenant (admin only)."""
     if not api_key_info[1]:
@@ -1344,18 +1308,14 @@ async def delete_tenant(
     if active_keys > 0:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot delete tenant with {active_keys} active API keys"
+            detail=f"Cannot delete tenant with {active_keys} active API keys",
         )
 
     db.delete(tenant)
     db.commit()
 
     audit_logger.log_operation(
-        "TENANT_DELETED",
-        api_key_info[0],
-        tenant_id,
-        "SUCCESS",
-        {"name": tenant.name}
+        "TENANT_DELETED", api_key_info[0], tenant_id, "SUCCESS", {"name": tenant.name}
     )
 
     return {"success": True}
@@ -1363,7 +1323,7 @@ async def delete_tenant(
 
 @app.get("/tenant/usage", response_model=TenantUsageResponse)
 async def get_current_tenant_usage(
-    tenant: Annotated[Tenant, Depends(get_current_tenant)]
+    tenant: Annotated[Tenant, Depends(get_current_tenant)],
 ):
     """Get current tenant's usage statistics."""
     stats = get_tenant_usage_stats(tenant.id)
@@ -1372,4 +1332,5 @@ async def get_current_tenant_usage(
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

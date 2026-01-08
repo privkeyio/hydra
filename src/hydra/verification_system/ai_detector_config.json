@@ -1,0 +1,85 @@
+{
+  "sensitivity": "medium",
+  "emoji_allowed": false,
+  "max_workers": 4,
+  "cache_size": 1000,
+  "thresholds": {
+    "low": 0.7,
+    "medium": 0.5,
+    "high": 0.3,
+    "paranoid": 0.1
+  },
+  "whitelist_patterns": [
+    "TODO: Security review",
+    "FIXME: Known issue #\\d+",
+    "XXX: Performance critical section"
+  ],
+  "whitelist_files": [
+    "tests/fixtures/*",
+    "docs/examples/*",
+    ".github/*"
+  ],
+  "custom_patterns": [
+    {
+      "category": "hydra_specific",
+      "pattern": "HYDRA_INTERNAL",
+      "severity": "low"
+    },
+    {
+      "category": "deprecated_patterns",
+      "pattern": "@deprecated",
+      "severity": "medium"
+    }
+  ],
+  "severity_weights": {
+    "high": 3.0,
+    "medium": 2.0,
+    "low": 1.0
+  },
+  "file_extensions": [
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".java",
+    ".cpp",
+    ".c",
+    ".go",
+    ".rs",
+    ".rb",
+    ".php",
+    ".swift",
+    ".kt",
+    ".scala"
+  ],
+  "ignore_directories": [
+    "node_modules",
+    "venv",
+    ".venv",
+    "env",
+    ".env",
+    "__pycache__",
+    ".git",
+    ".svn",
+    "dist",
+    "build",
+    "target",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".tox",
+    "htmlcov",
+    ".coverage"
+  ],
+  "report_settings": {
+    "include_line_numbers": true,
+    "max_pattern_display": 100,
+    "group_by_category": true,
+    "sort_by_severity": true
+  },
+  "performance": {
+    "batch_size": 50,
+    "timeout_per_file": 5,
+    "max_file_size_mb": 10
+  }
+}

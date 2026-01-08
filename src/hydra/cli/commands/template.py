@@ -10,46 +10,36 @@ def add_template_parser(subparsers):
     """Add template subcommands to the parser."""
     template_parser = subparsers.add_parser(
         "template",
-        help="Project template operations - list, create, and validate templates"
+        help="Project template operations - list, create, and validate templates",
     )
     template_subparsers = template_parser.add_subparsers(
-        dest="template_action",
-        help="Template operations"
+        dest="template_action", help="Template operations"
     )
 
     # List templates
-    template_subparsers.add_parser(
-        "list",
-        help="List all available project templates"
-    )
+    template_subparsers.add_parser("list", help="List all available project templates")
 
     # Create project from template
     create_parser = template_subparsers.add_parser(
-        "create",
-        help="Create a new project from a template"
+        "create", help="Create a new project from a template"
     )
+    create_parser.add_argument("template_name", help="Name of the template to use")
     create_parser.add_argument(
-        "template_name",
-        help="Name of the template to use"
-    )
-    create_parser.add_argument(
-        "output_dir",
-        help="Directory where the project will be created"
+        "output_dir", help="Directory where the project will be created"
     )
     create_parser.add_argument(
         "--param",
         action="append",
-        help="Template parameter in key=value format (can be used multiple times)"
+        help="Template parameter in key=value format (can be used multiple times)",
     )
 
     # Validate templates
     validate_parser = template_subparsers.add_parser(
-        "validate",
-        help="Validate template structure and configuration"
+        "validate", help="Validate template structure and configuration"
     )
     validate_parser.add_argument(
         "--template",
-        help="Specific template to validate (validates all if not specified)"
+        help="Specific template to validate (validates all if not specified)",
     )
 
 
@@ -76,10 +66,10 @@ def _parse_template_params(param_list):
     params = {}
     if param_list:
         for param_str in param_list:
-            if '=' not in param_str:
+            if "=" not in param_str:
                 print(f"Invalid parameter format: {param_str}. Use key=value")
                 return None
-            key, value = param_str.split('=', 1)
+            key, value = param_str.split("=", 1)
             try:
                 params[key] = json.loads(value)
             except Exception:
@@ -102,9 +92,9 @@ def _handle_create_template(engine, args):
         print(f"Project created successfully in {result['output_dir']}")
         print(f"Generated {len(result['generated_files'])} files")
 
-        if result['post_generation_commands']:
+        if result["post_generation_commands"]:
             print("\nRecommended next steps:")
-            for i, cmd in enumerate(result['post_generation_commands'], 1):
+            for i, cmd in enumerate(result["post_generation_commands"], 1):
                 print(f"  {i}. {cmd}")
         return 0
 
@@ -121,11 +111,12 @@ def _handle_validate_templates(args):
     if args.template:
         # Validate specific template
         template_dir = (
-            Path(__file__).parent.parent.parent / 'templates' / 'templates' / args.template
+            Path(__file__).parent.parent.parent
+            / "templates"
+            / "templates"
+            / args.template
         )
-        is_valid, errors = TemplateValidator.validate_template_structure(
-            template_dir
-        )
+        is_valid, errors = TemplateValidator.validate_template_structure(template_dir)
 
         if is_valid:
             print(f"Template '{args.template}' is valid ✅")
@@ -136,7 +127,7 @@ def _handle_validate_templates(args):
         return 0 if is_valid else 1
     else:
         # Validate all templates
-        templates_dir = Path(__file__).parent.parent.parent / 'templates' / 'templates'
+        templates_dir = Path(__file__).parent.parent.parent / "templates" / "templates"
         results = TemplateValidator.validate_all_templates(templates_dir)
 
         valid_count = sum(1 for is_valid, _ in results.values() if is_valid)
@@ -169,4 +160,3 @@ def handle_template_command(args):
     else:
         print("Unknown template action")
         return 1
-

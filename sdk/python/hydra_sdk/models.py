@@ -48,8 +48,12 @@ class HealthResponse(BaseModel):
 
 
 class CacheInvalidateRequest(BaseModel):
-    cache_type: str = Field(..., description="Cache type: 'code', 'task', 'api', or 'all'")
-    key: Optional[str] = Field(None, description="Specific key to invalidate (optional)")
+    cache_type: str = Field(
+        ..., description="Cache type: 'code', 'task', 'api', or 'all'"
+    )
+    key: Optional[str] = Field(
+        None, description="Specific key to invalidate (optional)"
+    )
 
 
 class CacheInvalidateResponse(BaseModel):

@@ -38,8 +38,12 @@ class Project(Base):
     is_active = Column(Boolean, default=True)
     settings = Column(JSON, default=dict)
 
-    tickets = relationship("Ticket", back_populates="project", cascade="all, delete-orphan")
-    sessions = relationship("Session", back_populates="project", cascade="all, delete-orphan")
+    tickets = relationship(
+        "Ticket", back_populates="project", cascade="all, delete-orphan"
+    )
+    sessions = relationship(
+        "Session", back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 class Ticket(Base):
@@ -49,12 +53,12 @@ class Ticket(Base):
 
     # Add table-level constraints and indexes for performance
     __table_args__ = (
-        UniqueConstraint('project_id', 'ticket_number', name='uq_project_ticket'),
-        Index('idx_ticket_status', 'status'),
-        Index('idx_ticket_priority', 'priority'),
-        Index('idx_ticket_model', 'model'),
-        Index('idx_ticket_dates', 'created_at', 'completed_at'),
-        Index('idx_ticket_project_status', 'project_id', 'status'),
+        UniqueConstraint("project_id", "ticket_number", name="uq_project_ticket"),
+        Index("idx_ticket_status", "status"),
+        Index("idx_ticket_priority", "priority"),
+        Index("idx_ticket_model", "model"),
+        Index("idx_ticket_dates", "created_at", "completed_at"),
+        Index("idx_ticket_project_status", "project_id", "status"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -76,25 +80,25 @@ class Ticket(Base):
     ticket_metadata = Column(JSON, default=dict)
 
     project = relationship("Project", back_populates="tickets")
-    executions = relationship("Execution", back_populates="ticket", cascade="all, delete-orphan")
+    executions = relationship(
+        "Execution", back_populates="ticket", cascade="all, delete-orphan"
+    )
 
     # Enhanced relationships for dependencies and artifacts
     dependencies_as_parent = relationship(
         "TicketDependency",
         foreign_keys="TicketDependency.parent_ticket_id",
         back_populates="parent_ticket",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
     dependencies_as_child = relationship(
         "TicketDependency",
         foreign_keys="TicketDependency.depends_on_ticket_id",
         back_populates="depends_on_ticket",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
     ticket_artifacts = relationship(
-        "TicketArtifact",
-        back_populates="ticket",
-        cascade="all, delete-orphan"
+        "TicketArtifact", back_populates="ticket", cascade="all, delete-orphan"
     )
 
 
@@ -114,7 +118,9 @@ class Session(Base):
     metrics = Column(JSON, default=dict)
 
     project = relationship("Project", back_populates="sessions")
-    executions = relationship("Execution", back_populates="session", cascade="all, delete-orphan")
+    executions = relationship(
+        "Execution", back_populates="session", cascade="all, delete-orphan"
+    )
 
 
 class Execution(Base):
@@ -156,7 +162,9 @@ class User(Base):
     api_key = Column(String(255), unique=True, index=True)
     settings = Column(JSON, default=dict)
 
-    audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")
+    audit_logs = relationship(
+        "AuditLog", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class AuditLog(Base):
@@ -183,14 +191,20 @@ class TicketDependency(Base):
 
     # Add table-level constraints and indexes
     __table_args__ = (
-        UniqueConstraint('parent_ticket_id', 'depends_on_ticket_id', name='uq_ticket_dependency_pair'),
-        Index('idx_dependency_type', 'dependency_type'),
-        Index('idx_parent_depends', 'parent_ticket_id', 'depends_on_ticket_id'),
+        UniqueConstraint(
+            "parent_ticket_id", "depends_on_ticket_id", name="uq_ticket_dependency_pair"
+        ),
+        Index("idx_dependency_type", "dependency_type"),
+        Index("idx_parent_depends", "parent_ticket_id", "depends_on_ticket_id"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    parent_ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False, index=True)
-    depends_on_ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False, index=True)
+    parent_ticket_id = Column(
+        Integer, ForeignKey("tickets.id"), nullable=False, index=True
+    )
+    depends_on_ticket_id = Column(
+        Integer, ForeignKey("tickets.id"), nullable=False, index=True
+    )
     dependency_type = Column(String(50), default="blocks")  # blocks, requires, suggests
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -198,12 +212,12 @@ class TicketDependency(Base):
     parent_ticket = relationship(
         "Ticket",
         foreign_keys=[parent_ticket_id],
-        back_populates="dependencies_as_parent"
+        back_populates="dependencies_as_parent",
     )
     depends_on_ticket = relationship(
         "Ticket",
         foreign_keys=[depends_on_ticket_id],
-        back_populates="dependencies_as_child"
+        back_populates="dependencies_as_child",
     )
 
 
@@ -214,10 +228,10 @@ class TicketArtifact(Base):
 
     # Add table-level indexes for better query performance
     __table_args__ = (
-        Index('idx_artifact_type', 'artifact_type'),
-        Index('idx_artifact_name', 'name'),
-        Index('idx_ticket_artifact', 'ticket_id', 'artifact_type'),
-        Index('idx_artifact_created', 'created_at'),
+        Index("idx_artifact_type", "artifact_type"),
+        Index("idx_artifact_name", "name"),
+        Index("idx_ticket_artifact", "ticket_id", "artifact_type"),
+        Index("idx_artifact_created", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -265,7 +279,9 @@ class DatabaseManager:
             # PostgreSQL or other databases
             self.engine = create_engine(self.database_url, pool_pre_ping=True)
 
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self.SessionLocal = sessionmaker(
+            autocommit=False, autoflush=False, bind=self.engine
+        )
 
     def create_tables(self):
         """Create all database tables."""

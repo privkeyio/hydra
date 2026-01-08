@@ -16,7 +16,7 @@ def context():
 
 
 @context.command()
-@click.option('--project', default='.', help='Project directory')
+@click.option("--project", default=".", help="Project directory")
 def show(project: str):
     """Show all tracked ticket contexts and artifacts."""
     tracker = ArtifactTracker(project)
@@ -38,25 +38,25 @@ def show(project: str):
         if ctx.artifacts:
             click.echo(f"   Artifacts ({len(ctx.artifacts)}):")
             for artifact in ctx.artifacts[:5]:
-                op_symbol = {
-                    'created': '➕',
-                    'modified': '✏️',
-                    'deleted': '➖'
-                }.get(artifact.operation, '📄')
-                desc = artifact.description or 'File'
+                op_symbol = {"created": "➕", "modified": "✏️", "deleted": "➖"}.get(
+                    artifact.operation, "📄"
+                )
+                desc = artifact.description or "File"
                 click.echo(f"     {op_symbol} {artifact.file_path} - {desc}")
             if len(ctx.artifacts) > 5:
                 click.echo(f"     ... and {len(ctx.artifacts) - 5} more")
 
         if ctx.acceptance_criteria_met:
-            click.echo(f"   Acceptance Criteria Met: {len(ctx.acceptance_criteria_met)}")
+            click.echo(
+                f"   Acceptance Criteria Met: {len(ctx.acceptance_criteria_met)}"
+            )
 
         click.echo()
 
 
 @context.command()
-@click.argument('ticket_id')
-@click.option('--project', default='.', help='Project directory')
+@click.argument("ticket_id")
+@click.option("--project", default=".", help="Project directory")
 def inspect(ticket_id: str, project: str):
     """Inspect detailed context for a specific ticket."""
     tracker = ArtifactTracker(project)
@@ -77,18 +77,16 @@ def inspect(ticket_id: str, project: str):
     if ctx.artifacts:
         click.echo(f"\nArtifacts ({len(ctx.artifacts)}):")
         for artifact in ctx.artifacts:
-            op_symbol = {
-                'created': '➕',
-                'modified': '✏️',
-                'deleted': '➖'
-            }.get(artifact.operation, '📄')
-            desc = artifact.description or 'File'
+            op_symbol = {"created": "➕", "modified": "✏️", "deleted": "➖"}.get(
+                artifact.operation, "📄"
+            )
+            desc = artifact.description or "File"
             click.echo(f"  {op_symbol} {artifact.file_path}")
             click.echo(f"     {desc}")
 
             if artifact.content_preview:
                 click.echo("     Preview:")
-                for line in artifact.content_preview.split('\n')[:5]:
+                for line in artifact.content_preview.split("\n")[:5]:
                     if line.strip():
                         click.echo(f"       {line[:80]}")
 
@@ -99,9 +97,9 @@ def inspect(ticket_id: str, project: str):
 
 
 @context.command()
-@click.argument('ticket_id', required=False)
-@click.option('--project', default='.', help='Project directory')
-@click.option('--all', 'clear_all', is_flag=True, help='Clear all contexts')
+@click.argument("ticket_id", required=False)
+@click.option("--project", default=".", help="Project directory")
+@click.option("--all", "clear_all", is_flag=True, help="Clear all contexts")
 def clear(ticket_id: Optional[str], project: str, clear_all: bool):
     """Clear context for a specific ticket or all tickets."""
     tracker = ArtifactTracker(project)
@@ -121,8 +119,8 @@ def clear(ticket_id: Optional[str], project: str, clear_all: bool):
 
 
 @context.command()
-@click.argument('ticket_id')
-@click.option('--project', default='.', help='Project directory')
+@click.argument("ticket_id")
+@click.option("--project", default=".", help="Project directory")
 def deps(ticket_id: str, project: str):
     """Show what context would be provided to a ticket based on its dependencies."""
     # Parse tickets.md to find dependencies
@@ -138,7 +136,7 @@ def deps(ticket_id: str, project: str):
         click.echo(f"❌ Ticket {ticket_id} not found")
         return
 
-    dependencies = ticket_data.get('dependencies', [])
+    dependencies = ticket_data.get("dependencies", [])
     if not dependencies:
         click.echo(f"Ticket {ticket_id} has no dependencies")
         return
@@ -153,8 +151,8 @@ def deps(ticket_id: str, project: str):
 
 
 @context.command()
-@click.option('--project', default='.', help='Project directory')
-@click.option('--format', type=click.Choice(['json', 'text']), default='text')
+@click.option("--project", default=".", help="Project directory")
+@click.option("--format", type=click.Choice(["json", "text"]), default="text")
 def export(project: str, format: str):
     """Export all ticket contexts."""
     tracker = ArtifactTracker(project)
@@ -163,11 +161,8 @@ def export(project: str, format: str):
         click.echo("No ticket contexts to export")
         return
 
-    if format == 'json':
-        data = {
-            tid: ctx.to_dict()
-            for tid, ctx in tracker.ticket_contexts.items()
-        }
+    if format == "json":
+        data = {tid: ctx.to_dict() for tid, ctx in tracker.ticket_contexts.items()}
         click.echo(json.dumps(data, indent=2))
     else:
         # Text format
@@ -182,5 +177,5 @@ def export(project: str, format: str):
             click.echo()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     context()

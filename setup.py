@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Setup configuration for Hydra package."""
 
-from setuptools import setup, find_packages
-import os
+
+from setuptools import find_packages, setup
 
 # Read the README file
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -10,7 +10,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 # Read requirements
 with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+    requirements = [
+        line.strip() for line in fh if line.strip() and not line.startswith("#")
+    ]
 
 # Development requirements
 dev_requirements = [

@@ -75,7 +75,7 @@ def send_progress_update(task_id: str, progress: int, message: str):
         "task_id": task_id,
         "progress": progress,
         "message": message,
-        "timestamp": asyncio.get_event_loop().time()
+        "timestamp": asyncio.get_event_loop().time(),
     }
 
     progress_updates[task_id] = update

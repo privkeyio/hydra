@@ -1,0 +1,94 @@
+env:
+  PIP_CACHE_DIR: /tmp/pip-cache
+  LLM_PROVIDER: mock
+  REDIS_URL: redis://localhost:6379/0
+  DATABASE_URL: "sqlite:///:memory:"
+  TESTING: "1"
+  CI: "true"
+
+lint_task:
+  container:
+    image: python:3.11-slim
+  pip_cache:
+    folder: $PIP_CACHE_DIR
+  install_script:
+    - pip install --upgrade pip
+    - pip install -e ".[dev]"
+  lint_script:
+    - ruff check src/ --exclude="src/hydra/templates/templates" --select=E9,F63,F7,F82
+    - ruff check src/ --exclude="src/hydra/templates/templates" --exit-zero
+
+test_unit_task:
+  depends_on:
+    - lint
+  container:
+    image: python:3.11-slim
+    additional_containers:
+      - name: redis
+        image: redis:7-alpine
+        port: 6379
+  pip_cache:
+    folder: $PIP_CACHE_DIR
+  install_script:
+    - apt-get update && apt-get install -y git netcat-openbsd
+    - pip install --upgrade pip
+    - pip install tiktoken psutil
+    - pip install -e ".[dev]"
+  wait_for_redis_script:
+    - timeout 30 sh -c 'until nc -z localhost 6379; do sleep 1; done'
+  test_script:
+    - python -m pytest tests/unit/ -v --tb=short --timeout=60 -m "not stress" --maxfail=10 --disable-warnings
+
+test_integration_task:
+  depends_on:
+    - lint
+  container:
+    image: python:3.11-slim
+    additional_containers:
+      - name: redis
+        image: redis:7-alpine
+        port: 6379
+  pip_cache:
+    folder: $PIP_CACHE_DIR
+  install_script:
+    - apt-get update && apt-get install -y git netcat-openbsd
+    - pip install --upgrade pip
+    - pip install tiktoken psutil
+    - pip install -e ".[dev]"
+  wait_for_redis_script:
+    - timeout 30 sh -c 'until nc -z localhost 6379; do sleep 1; done'
+  test_script:
+    - python -m pytest tests/integration/ -v --tb=short --timeout=120 -m "not requires_api_key and not stress and not external and not resource_intensive" --maxfail=10 --disable-warnings
+
+security_task:
+  depends_on:
+    - lint
+  container:
+    image: python:3.11-slim
+  pip_cache:
+    folder: $PIP_CACHE_DIR
+  install_script:
+    - pip install --upgrade pip
+    - pip install bandit
+  scan_script:
+    - bandit -r src -f json -o bandit-report.json || true
+  bandit_artifacts:
+    path: bandit-report.json
+    type: application/json
+
+build_task:
+  depends_on:
+    - test_unit
+    - test_integration
+  only_if: $CIRRUS_BRANCH == 'main' || $CIRRUS_TAG != ''
+  container:
+    image: python:3.11-slim
+  pip_cache:
+    folder: $PIP_CACHE_DIR
+  install_script:
+    - pip install --upgrade pip
+    - pip install build
+  build_script:
+    - python -m build
+  dist_artifacts:
+    path: dist/*

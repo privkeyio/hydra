@@ -2,7 +2,7 @@ env:
   PIP_CACHE_DIR: /tmp/pip-cache
   LLM_PROVIDER: mock
   REDIS_URL: redis://localhost:6379/0
-  DATABASE_URL: sqlite:///test.db
+  DATABASE_URL: sqlite:///:memory:
   TESTING: "1"
   CI: "true"
 

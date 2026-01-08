@@ -30,6 +30,7 @@ test_unit_task:
   pip_cache:
     folder: $PIP_CACHE_DIR
   install_script:
+    - apt-get update && apt-get install -y git
     - pip install --upgrade pip
     - pip install tiktoken psutil
     - pip install -e ".[dev]"
@@ -48,6 +49,7 @@ test_integration_task:
   pip_cache:
     folder: $PIP_CACHE_DIR
   install_script:
+    - apt-get update && apt-get install -y git
     - pip install --upgrade pip
     - pip install tiktoken psutil
     - pip install -e ".[dev]"
@@ -66,6 +68,7 @@ test_workflow_task:
   pip_cache:
     folder: $PIP_CACHE_DIR
   install_script:
+    - apt-get update && apt-get install -y git
     - pip install --upgrade pip
     - pip install tiktoken psutil
     - pip install -e ".[dev]"

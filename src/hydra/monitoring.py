@@ -10,7 +10,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
 from opentelemetry import metrics, trace
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
@@ -190,15 +190,9 @@ class HydraMonitoring:
             trace.set_tracer_provider(TracerProvider(resource=resource))
             self.tracer = trace.get_tracer(__name__)
 
-            jaeger_host = os.getenv('JAEGER_HOST', 'localhost')
-            jaeger_port = int(os.getenv('JAEGER_PORT', '14268'))
-
-            jaeger_exporter = JaegerExporter(
-                agent_host_name=jaeger_host,
-                agent_port=jaeger_port,
-            )
-
-            span_processor = BatchSpanProcessor(jaeger_exporter)
+            otlp_endpoint = os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4317')
+            otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
+            span_processor = BatchSpanProcessor(otlp_exporter)
             trace.get_tracer_provider().add_span_processor(span_processor)
 
             prometheus_reader = PrometheusMetricReader()

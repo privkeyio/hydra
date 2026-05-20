@@ -223,7 +223,7 @@ cat tickets.yaml
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 (MIT). See [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 

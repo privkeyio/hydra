@@ -21,8 +21,8 @@ pip install git+https://github.com/privkeyio/hydra.git
 export LLM_PROVIDER=mock
 
 # For real projects
-export LLM_PROVIDER=venice
-export VENICE_API_KEY=your_key  # Get from venice.ai
+export LLM_PROVIDER=nearai
+export NEARAI_API_KEY=your_key  # Get from cloud.near.ai
 ```
 
 ### 2. Create Tickets
@@ -99,7 +99,14 @@ export LLM_PROVIDER=mock
 ```
 No API needed, returns sample responses.
 
-### Venice (Recommended)
+### NEAR AI Cloud
+```bash
+export LLM_PROVIDER=nearai
+export NEARAI_API_KEY=your_key
+```
+OpenAI-compatible TEE inference through NEAR AI Cloud.
+
+### Venice
 ```bash
 export LLM_PROVIDER=venice
 export VENICE_API_KEY=your_key

@@ -16,6 +16,12 @@ export LLM_PROVIDER=venice
 export VENICE_API_KEY=your_key
 ```
 
+### NEAR AI Cloud Provider
+```bash
+export LLM_PROVIDER=nearai
+export NEARAI_API_KEY=your_key
+```
+
 ### Mock Provider (Testing)
 ```bash
 export LLM_PROVIDER=mock

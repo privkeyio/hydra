@@ -9,6 +9,7 @@ Hydra supports multiple LLM providers through a flexible provider abstraction la
 Hydra currently supports the following providers:
 
 - **Claude (Tmux)** - Interactive Claude Code CLI sessions via tmux
+- **NEAR AI Cloud** - OpenAI-compatible TEE inference
 - **Venice AI** - API-based access to various open-source models
 - **Mock Provider** - For testing and development
 
@@ -20,10 +21,11 @@ The simplest way to configure a provider is through environment variables:
 
 ```bash
 # Select the provider
-export LLM_PROVIDER=claude_tmux  # Options: claude_tmux, venice, mock
+export LLM_PROVIDER=claude_tmux  # Options: claude_tmux, nearai, venice, mock
 
 # Provider-specific configuration
 export CLAUDE_CLI_PATH=/path/to/claude  # For Claude provider
+export NEARAI_API_KEY=your_api_key      # For NEAR AI Cloud provider
 export VENICE_API_KEY=your_api_key      # For Venice provider
 
 # Optional settings
@@ -68,6 +70,20 @@ providers:
       fast: llama-3.1-8b
       balanced: llama-3.1-70b
       smart: llama-3.1-405b
+    features:
+      interactive: false
+      streaming: true
+      file_safety: false
+
+  nearai:
+    type: nearai
+    api_key: ${NEARAI_API_KEY}
+    base_url: https://cloud-api.near.ai/v1
+    default_model: zai-org/GLM-5.1-FP8
+    models:
+      fast: Qwen/Qwen3.6-35B-A3B-FP8
+      balanced: zai-org/GLM-5.1-FP8
+      smart: Qwen/Qwen3.5-122B-A10B
     features:
       interactive: false
       streaming: true
@@ -185,6 +201,34 @@ export LLM_MODEL=llama-3.1-70b
 hydra test-provider
 ```
 
+### NEAR AI Cloud Provider
+
+The NEAR AI Cloud provider connects to NEAR AI's OpenAI-compatible Cloud API
+and defaults to TEE-backed model entries from the public model catalog.
+
+#### Requirements
+
+- NEAR AI Cloud API key
+- Internet connection
+
+#### Configuration Options
+
+| Option | Environment Variable | Description | Default |
+|--------|---------------------|-------------|---------|
+| api_key | NEARAI_API_KEY | NEAR AI Cloud API key | Required |
+| base_url | NEARAI_BASE_URL | API endpoint URL | `https://cloud-api.near.ai/v1` |
+| model | LLM_MODEL | Model identifier | `zai-org/GLM-5.1-FP8` |
+| timeout | LLM_TIMEOUT | Request timeout | `300` |
+| max_retries | LLM_MAX_RETRIES | Retry attempts | `3` |
+
+#### Example Setup
+
+```bash
+export NEARAI_API_KEY=your_key
+export LLM_PROVIDER=nearai
+export LLM_MODEL=zai-org/GLM-5.1-FP8
+```
+
 ### Mock Provider
 
 The mock provider is useful for testing and development without consuming API credits.
@@ -217,14 +261,17 @@ Hydra uses a model mapping system to translate generic model identifiers to prov
 model_mappings:
   fast:
     claude: haiku
+    nearai: Qwen/Qwen3.6-35B-A3B-FP8
     venice: llama-3.1-8b
     
   balanced:
     claude: sonnet
+    nearai: zai-org/GLM-5.1-FP8
     venice: llama-3.1-70b
     
   smart:
     claude: opus
+    nearai: Qwen/Qwen3.5-122B-A10B
     venice: llama-3.1-405b
 ```
 
@@ -247,15 +294,15 @@ hydra generate --model sonnet "Create a web server"
 
 Not all providers support all features. Here's a compatibility matrix:
 
-| Feature | Claude | Venice | Mock |
-|---------|--------|--------|------|
-| Interactive Mode | ✓ | ✗ | ✗ |
-| Streaming Output | ✓ | ✓ | ✗ |
-| Session Persistence | ✓ | ✗ | ✗ |
-| File Safety Checks | ✓ | ✗ | ✓ |
-| Parallel Execution | ✓ | ✓ | ✓ |
-| Code Extraction | ✓ | ✓ | ✓ |
-| Custom Prompts | ✓ | ✓ | ✓ |
+| Feature | Claude | NEAR AI Cloud | Venice | Mock |
+|---------|--------|---------------|--------|------|
+| Interactive Mode | ✓ | ✗ | ✗ | ✗ |
+| Streaming Output | ✓ | ✓ | ✓ | ✗ |
+| Session Persistence | ✓ | ✗ | ✗ | ✗ |
+| File Safety Checks | ✓ | ✗ | ✗ | ✓ |
+| Parallel Execution | ✓ | ✓ | ✓ | ✓ |
+| Code Extraction | ✓ | ✓ | ✓ | ✓ |
+| Custom Prompts | ✓ | ✓ | ✓ | ✓ |
 
 ## Fallback Configuration
 

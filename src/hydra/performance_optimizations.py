@@ -268,7 +268,15 @@ class LLMRequestBatcher:
             "venice": (
                 os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
                 + "/chat/completions"
-            )
+            ),
+            "nearai": (
+                os.getenv("NEARAI_BASE_URL", "https://cloud-api.near.ai/v1")
+                + "/chat/completions"
+            ),
+            "nearai_api": (
+                os.getenv("NEARAI_BASE_URL", "https://cloud-api.near.ai/v1")
+                + "/chat/completions"
+            ),
         }
 
         headers = self._get_headers(provider)
@@ -286,6 +294,8 @@ class LLMRequestBatcher:
                 "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
                 "anthropic-version": "2023-06-01"
             }
+        elif provider in ["nearai", "nearai_api"]:
+            return {"Authorization": f"Bearer {os.getenv('NEARAI_API_KEY')}"}
         else:  # venice or default
             return {"Authorization": f"Bearer {os.getenv('VENICE_API_KEY')}"}
 

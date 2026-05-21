@@ -333,6 +333,11 @@ Available Providers:
     Status: ✓ Configured
     Models: llama-3.1-8b, llama-3.1-70b, llama-3.1-405b
     Features: streaming, parallel
+
+  nearai
+    Status: ✓ Configured
+    Models: Qwen/Qwen3.6-35B-A3B-FP8, zai-org/GLM-5.1-FP8
+    Features: streaming, parallel, tee-inference
     
   mock
     Status: ✓ Available
@@ -360,6 +365,7 @@ hydra provider test [options] [provider-name]
 hydra provider test
 
 # Test specific provider
+hydra provider test nearai
 hydra provider test venice
 
 # Full test with benchmarks
@@ -653,10 +659,11 @@ Configure Hydra through environment variables:
 
 ```bash
 # Provider selection
-export LLM_PROVIDER=venice
-export LLM_MODEL=llama-3.1-70b
+export LLM_PROVIDER=nearai
+export LLM_MODEL=zai-org/GLM-5.1-FP8
 
 # Provider-specific
+export NEARAI_API_KEY=your_key
 export VENICE_API_KEY=your_key
 export CLAUDE_CLI_PATH=/usr/local/bin/claude
 
@@ -677,8 +684,8 @@ Create `.hydra.yaml` in your project:
 
 ```yaml
 # .hydra.yaml
-provider: venice
-model: llama-3.1-70b
+provider: nearai
+model: zai-org/GLM-5.1-FP8
 context:
   - src/
   - tests/
@@ -696,6 +703,8 @@ default_provider: claude
 providers:
   claude:
     default_model: opus
+  nearai:
+    default_model: zai-org/GLM-5.1-FP8
   venice:
     default_model: llama-3.1-70b
     

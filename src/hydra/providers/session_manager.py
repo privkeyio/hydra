@@ -90,6 +90,10 @@ class SessionManager:
             api_key = os.getenv("VENICE_API_KEY")
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
+        elif provider in ["nearai", "nearai_api"]:
+            api_key = os.getenv("NEARAI_API_KEY")
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
 
         return headers
 

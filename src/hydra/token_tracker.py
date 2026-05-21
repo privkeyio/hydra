@@ -35,6 +35,7 @@ class Provider(str, Enum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     VENICE = "venice"
+    NEARAI = "nearai"
     MOCK = "mock"
 
 
@@ -69,6 +70,25 @@ TOKEN_COSTS = {
     ),
     "gpt-3.5-turbo": TokenCost(
         Provider.OPENAI, "gpt-3.5-turbo", 0.0005, 0.0015, 16385, 4096
+    ),
+    "zai-org/GLM-5.1-FP8": TokenCost(
+        Provider.NEARAI, "zai-org/GLM-5.1-FP8", 0.00085, 0.0033, 202752, 4096
+    ),
+    "Qwen/Qwen3.6-35B-A3B-FP8": TokenCost(
+        Provider.NEARAI,
+        "Qwen/Qwen3.6-35B-A3B-FP8",
+        0.00017,
+        0.0011,
+        262144,
+        4096,
+    ),
+    "Qwen/Qwen3.5-122B-A10B": TokenCost(
+        Provider.NEARAI,
+        "Qwen/Qwen3.5-122B-A10B",
+        0.0004,
+        0.0032,
+        131072,
+        4096,
     ),
 }
 
@@ -179,6 +199,7 @@ class TokenTracker:
             # Claude uses cl100k_base encoding similar to GPT
             self._tokenizers["anthropic"] = tiktoken.get_encoding("cl100k_base")
             self._tokenizers["openai"] = tiktoken.get_encoding("cl100k_base")
+            self._tokenizers["nearai"] = tiktoken.get_encoding("cl100k_base")
             self._tokenizers["default"] = tiktoken.get_encoding("cl100k_base")
         except Exception as e:
             logger.warning(f"Failed to initialize tokenizers: {e}")
@@ -198,8 +219,9 @@ class TokenTracker:
         if not text:
             return 0
 
+        provider_value = provider.value if isinstance(provider, Provider) else str(provider)
         tokenizer = self._tokenizers.get(
-            provider.value, self._tokenizers.get("default")
+            provider_value, self._tokenizers.get("default")
         )
 
         if tokenizer:

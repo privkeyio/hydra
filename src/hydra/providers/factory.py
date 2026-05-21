@@ -61,6 +61,8 @@ def auto_register_providers():
         'venice': 'VeniceProvider',
         'anthropic': 'AnthropicProvider',
         'openai': 'OpenAIProvider',
+        'nearai': 'NearAIProvider',
+        'nearai_api': 'NearAIProvider',
         'mock': 'MockProvider',
         'mock_provider': 'MockProvider',  # Alias for compatibility
         'claude_session': 'ClaudeSessionProvider',
@@ -94,7 +96,15 @@ class LLMProviderFactory:
 
     def __init__(self):
         # Auto-register core providers on first use
-        if not any(p in ProviderRegistry._providers for p in ['venice', 'anthropic', 'openai', 'mock', 'claude_session']):
+        core_providers = [
+            'venice',
+            'nearai',
+            'anthropic',
+            'openai',
+            'mock',
+            'claude_session',
+        ]
+        if not any(p in ProviderRegistry._providers for p in core_providers):
             auto_register_providers()
 
     def create(self, config: LLMConfig) -> LLMProvider:

@@ -118,6 +118,12 @@ class HydraConfig:
                 'VENICE_BASE_URL', 'https://api.venice.ai/api/v1'
             )
 
+        elif provider_type in ['nearai', 'nearai_api']:
+            config.api_key = os.getenv('NEARAI_API_KEY')
+            config.base_url = os.getenv(
+                'NEARAI_BASE_URL', 'https://cloud-api.near.ai/v1'
+            )
+
         elif provider_type == 'anthropic':
             config.api_key = os.getenv('ANTHROPIC_API_KEY')
 

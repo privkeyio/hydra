@@ -48,6 +48,8 @@ class ProviderRegistry:
         ),
         "venice": "hydra.providers.venice.VeniceProvider",
         "venice_api": "hydra.providers.venice.VeniceProvider",  # Alias for compatibility
+        "nearai": "hydra.providers.nearai.NearAIProvider",
+        "nearai_api": "hydra.providers.nearai.NearAIProvider",
         "anthropic_api": "hydra.providers.anthropic.AnthropicProvider",
         "mock_provider": "hydra.providers.mock_provider.MockProvider",
         "mock": "hydra.providers.mock_provider.MockProvider",
@@ -153,7 +155,12 @@ class ProviderRegistry:
     def _register_lazy_init_callbacks(self) -> None:
         """Register lazy initialization callbacks for providers."""
         # Register callbacks for expensive providers
-        for provider_type in ["claude_tmux", "claude_cli_enhanced", "venice_api"]:
+        for provider_type in [
+            "claude_tmux",
+            "claude_cli_enhanced",
+            "venice_api",
+            "nearai",
+        ]:
             if provider_type in self._providers:
                 provider_class = self._providers[provider_type]
 
@@ -472,7 +479,13 @@ class ProviderRegistry:
 
         """
         # Check API-based providers
-        if config.type in ["venice_api", "anthropic_api", "openai"]:
+        if config.type in [
+            "venice_api",
+            "nearai",
+            "nearai_api",
+            "anthropic_api",
+            "openai",
+        ]:
             return bool(config.api_key)
 
         # Check CLI-based providers

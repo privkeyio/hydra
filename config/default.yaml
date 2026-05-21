@@ -2,7 +2,7 @@
 
 # LLM Provider Configuration
 llm:
-  # Provider type: venice, anthropic, openai, claude_cli
+  # Provider type: nearai, venice, anthropic, openai, claude_cli
   provider: claude_cli
   
   # Model name (optional - uses provider default if not specified)

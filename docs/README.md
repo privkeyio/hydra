@@ -12,15 +12,17 @@ Multi-agent orchestration system with pluggable LLM provider support.
 ### Provider System
 - **[Provider Configuration](providers/configuration.md)** - Setup LLM providers
 - **[Provider Implementation](providers/implementation.md)** - Create custom providers
+- **[NEAR AI Cloud Setup](NEARAI_SETUP.md)** - Configure NEAR AI Cloud TEE inference
 
 ## 🚀 Quick Start
 
 ```bash
-# Set your provider (claude_tmux, venice, mock)
+# Set your provider (claude_tmux, nearai, venice, mock)
 export LLM_PROVIDER=claude_tmux
 
 # Configure provider credentials
 export CLAUDE_CLI_PATH=/path/to/claude  # For Claude
+export NEARAI_API_KEY=your_key         # For NEAR AI Cloud
 export VENICE_API_KEY=your_key         # For Venice
 
 # Run a task
@@ -36,6 +38,7 @@ hydra ticket parallel --workers 4
 | Provider | Type | Description |
 |----------|------|-------------|
 | `claude_tmux` | Interactive | Claude Code CLI via tmux sessions |
+| `nearai` | API | NEAR AI Cloud TEE inference |
 | `venice` | API | Venice.ai API integration |
 | `mock` | Testing | Development and testing provider |
 

@@ -223,6 +223,12 @@ class ProviderFactory:
             config.api_key = os.getenv("VENICE_API_KEY")
             config.base_url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/v1")
 
+        elif provider_type == "nearai" or provider_type == "nearai_api":
+            config.api_key = os.getenv("NEARAI_API_KEY")
+            config.base_url = os.getenv(
+                "NEARAI_BASE_URL", "https://cloud-api.near.ai/v1"
+            )
+
         elif "anthropic" in provider_type:
             config.api_key = os.getenv("ANTHROPIC_API_KEY")
             config.base_url = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
@@ -271,6 +277,9 @@ class ProviderFactory:
         # Provider-specific overrides
         if config.type == "venice_api" and os.getenv("VENICE_API_KEY"):
             config.api_key = os.getenv("VENICE_API_KEY")
+
+        elif config.type in ["nearai", "nearai_api"] and os.getenv("NEARAI_API_KEY"):
+            config.api_key = os.getenv("NEARAI_API_KEY")
 
         elif "anthropic" in config.type and os.getenv("ANTHROPIC_API_KEY"):
             config.api_key = os.getenv("ANTHROPIC_API_KEY")

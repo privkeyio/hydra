@@ -21,7 +21,7 @@ The simplest way to configure a provider is through environment variables:
 
 ```bash
 # Select the provider
-export LLM_PROVIDER=claude_tmux  # Options: claude_tmux, nearai, venice, mock
+export LLM_PROVIDER=claude_tmux  # Options: claude_tmux, nearai, venice, anthropic, openai, claude_cli, mock
 
 # Provider-specific configuration
 export CLAUDE_CLI_PATH=/path/to/claude  # For Claude provider
@@ -491,4 +491,4 @@ See the [Migration Guide](migration.md) for detailed instructions.
 - [Provider Implementation Guide](implementation.md) - Create custom providers
 - [Venice Setup Guide](venice-setup.md) - Detailed Venice configuration
 - [CLI Commands](../cli-commands.md) - Using providers with CLI
-- [API Reference](../api/providers.md) - Provider API documentation
+- [API Reference](../API_REFERENCE.md) - Provider API documentation

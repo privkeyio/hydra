@@ -65,7 +65,7 @@ pip install -e .
 ### Basic Setup
 
 ```bash
-# Choose your LLM provider (claude_tmux, nearai, venice, mock)
+# Choose your LLM provider (claude_tmux, nearai, venice, anthropic, openai, claude_cli, mock)
 export LLM_PROVIDER=nearai  # or claude_tmux
 
 # For Claude provider

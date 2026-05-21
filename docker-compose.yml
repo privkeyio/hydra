@@ -47,6 +47,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       VENICE_API_KEY: ${VENICE_API_KEY}
       NEARAI_API_KEY: ${NEARAI_API_KEY}
+      NEARAI_BASE_URL: ${NEARAI_BASE_URL}
       API_KEYS: ${API_KEYS:-hydra_test_key}
       RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-100}
       RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-3600}
@@ -79,6 +80,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       VENICE_API_KEY: ${VENICE_API_KEY}
       NEARAI_API_KEY: ${NEARAI_API_KEY}
+      NEARAI_BASE_URL: ${NEARAI_BASE_URL}
     depends_on:
       postgres:
         condition: service_healthy

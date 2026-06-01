@@ -155,6 +155,10 @@ class RequestBatcher:
                 "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
                 "anthropic-version": "2023-06-01"
             }
+        elif provider in ["nearai", "nearai_api"]:
+            base_url = os.getenv("NEARAI_BASE_URL", "https://cloud-api.near.ai/v1")
+            url = base_url + "/chat/completions"
+            headers = {"Authorization": f"Bearer {os.getenv('NEARAI_API_KEY')}"}
         else:
             base_url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
             url = base_url + "/chat/completions"
@@ -218,6 +222,14 @@ class StreamingResponseHandler:
                 headers = {
                     "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
                     "anthropic-version": "2023-06-01"
+                }
+            elif provider in ["nearai", "nearai_api"]:
+                base_url = os.getenv(
+                    "NEARAI_BASE_URL", "https://cloud-api.near.ai/v1"
+                )
+                url = base_url + "/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {os.getenv('NEARAI_API_KEY')}"
                 }
             else:
                 base_url = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
@@ -319,4 +331,3 @@ async def initialize_performance_optimizations():
 
 async def cleanup_performance_resources():
     await pool_manager.close_all()
-

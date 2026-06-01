@@ -33,6 +33,13 @@ except ImportError:
     VeniceProvider = None
     _VENICE_AVAILABLE = False
 
+try:
+    from .nearai import NearAIProvider
+    _NEARAI_AVAILABLE = True
+except ImportError:
+    NearAIProvider = None
+    _NEARAI_AVAILABLE = False
+
 # Create global factory instance
 provider_factory = LLMProviderFactory()
 
@@ -48,6 +55,8 @@ __all__ = [
 # Add optional providers to __all__ if available
 if _VENICE_AVAILABLE:
     __all__.append('VeniceProvider')
+if _NEARAI_AVAILABLE:
+    __all__.append('NearAIProvider')
 if _ANTHROPIC_AVAILABLE:
     __all__.append('AnthropicProvider')
 if _OPENAI_AVAILABLE:

@@ -65,13 +65,16 @@ pip install -e .
 ### Basic Setup
 
 ```bash
-# Choose your LLM provider (claude_tmux, venice, mock)
-export LLM_PROVIDER=venice  # or claude_tmux
+# Choose your LLM provider (claude_tmux, nearai, venice, anthropic, openai, claude_cli, mock)
+export LLM_PROVIDER=nearai  # or claude_tmux
 
 # For Claude provider
 export CLAUDE_CLI_PATH=/path/to/claude
 # OR
 export ANTHROPIC_API_KEY=your_key
+
+# For NEAR AI Cloud TEE inference
+export NEARAI_API_KEY=your_key  # Get from https://cloud.near.ai
 
 # For Venice provider (recommended for open-source models)
 export VENICE_API_KEY=your_key  # Get from https://venice.ai
@@ -186,6 +189,7 @@ hydra dashboard stop   # Stop the dashboard
 ## Provider Support
 
 - **Claude** (claude_tmux) - Interactive Claude Code CLI via tmux
+- **NEAR AI Cloud** (nearai) - OpenAI-compatible TEE inference
 - **Venice AI** (venice) - Production-ready with retry logic and streaming
 - **Anthropic** (anthropic) - Direct API integration
 - **OpenAI** (openai) - GPT-4 and GPT-3.5 support

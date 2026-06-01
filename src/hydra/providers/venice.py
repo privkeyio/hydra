@@ -48,6 +48,11 @@ class VeniceProvider(BaseProvider):
 
     # Provider type identifier
     PROVIDER_TYPE = "venice_api"
+    PROVIDER_SLUG = "venice"
+    DISPLAY_NAME = "Venice AI"
+    API_KEY_ENV_VAR = "VENICE_API_KEY"
+    DEFAULT_BASE_URL = "https://api.venice.ai/api/v1"
+    DEFAULT_MODEL = "qwen-2.5-coder-32b"
 
     # Venice model mappings with coding-optimized models
     VENICE_MODELS = {
@@ -124,6 +129,7 @@ class VeniceProvider(BaseProvider):
             "cost_per_token": 0.0000001,
         },
     }
+    MODEL_CATALOG = VENICE_MODELS
 
     # Model name mappings for compatibility
     MODEL_MAPPINGS = {
@@ -141,18 +147,21 @@ class VeniceProvider(BaseProvider):
         """Validate Venice-specific configuration."""
         # Get API key from config or environment
         if not self.config.api_key:
-            self.config.api_key = os.getenv("VENICE_API_KEY")
+            self.config.api_key = os.getenv(self.API_KEY_ENV_VAR)
 
         if not self.config.api_key:
-            raise ValueError("Venice provider requires api_key (set VENICE_API_KEY)")
+            raise ValueError(
+                f"{self.DISPLAY_NAME} provider requires api_key "
+                f"(set {self.API_KEY_ENV_VAR})"
+            )
 
         # Set default Venice values
         if not self.config.base_url:
-            self.config.base_url = "https://api.venice.ai/api/v1"
+            self.config.base_url = self.DEFAULT_BASE_URL
 
         # Default to coding model if not specified
         if not self.config.model:
-            self.config.model = "qwen-2.5-coder-32b"
+            self.config.model = self.DEFAULT_MODEL
 
         # Map model name if needed
         self._resolve_model_name()
@@ -208,7 +217,10 @@ class VeniceProvider(BaseProvider):
             'total_tokens': 0
         }
 
-        logger.info(f"Venice provider initialized with model: {self.config.model}")
+        logger.info(
+            f"{self.DISPLAY_NAME} provider initialized with model: "
+            f"{self.config.model}"
+        )
 
     def _resolve_model_name(self) -> None:
         """Resolve model name using mappings."""
@@ -221,14 +233,14 @@ class VeniceProvider(BaseProvider):
 
     @property
     def name(self) -> str:
-        return "venice"
+        return self.PROVIDER_SLUG
 
     def generate(self, prompt: str, **kwargs) -> str:
         """Generate a response from Venice AI with retry logic and error handling."""
         self.stats['total_requests'] += 1
 
         # Check budget before making request
-        estimated_tokens = self.token_tracker.count_tokens(prompt, "venice") + 1000
+        estimated_tokens = self.token_tracker.count_tokens(prompt, self.name) + 1000
         budget_ok, message = self.token_tracker.check_budget_available(
             estimated_tokens, self.config.model
         )
@@ -289,12 +301,12 @@ class VeniceProvider(BaseProvider):
             output_tokens = usage_data.completion_tokens
         else:
             # Estimate if not provided
-            input_tokens = self.token_tracker.count_tokens(str(messages), "venice")
-            output_tokens = self.token_tracker.count_tokens(content, "venice")
+            input_tokens = self.token_tracker.count_tokens(str(messages), self.name)
+            output_tokens = self.token_tracker.count_tokens(content, self.name)
 
         # Track usage
         self.token_tracker.track_usage(
-            provider="venice",
+            provider=self.name,
             model=self.config.model,
             prompt=prompt,
             response=content,
@@ -561,7 +573,7 @@ class VeniceProvider(BaseProvider):
 
         except Exception as e:
             self.stats['failed_requests'] += 1
-            logger.error(f"Venice streaming error: {e}")
+            logger.error(f"{self.DISPLAY_NAME} streaming error: {e}")
             raise
         finally:
             # Restore original timeout
@@ -657,7 +669,7 @@ class VeniceProvider(BaseProvider):
         """
         models = []
 
-        for model_id, info in self.VENICE_MODELS.items():
+        for model_id, info in self.MODEL_CATALOG.items():
             models.append(ModelInfo(
                 identifier=model_id,
                 display_name=info["display_name"],
@@ -667,7 +679,10 @@ class VeniceProvider(BaseProvider):
                 supports_streaming=info["supports_streaming"],
                 supports_interactive=info["supports_interactive"],
                 cost_per_token=info.get("cost_per_token"),
-                metadata={"provider": "venice"}
+                metadata={
+                    "provider": self.name,
+                    **info.get("metadata", {}),
+                }
             ))
 
         return models
@@ -687,11 +702,11 @@ class VeniceProvider(BaseProvider):
             model_identifier = self.MODEL_MAPPINGS[model_identifier]
 
         # Check if model is available
-        if model_identifier not in self.VENICE_MODELS:
+        if model_identifier not in self.MODEL_CATALOG:
             logger.warning(f"Model {model_identifier} not in known models")
 
         self.config.model = model_identifier
-        logger.info(f"Selected Venice model: {model_identifier}")
+        logger.info(f"Selected {self.DISPLAY_NAME} model: {model_identifier}")
         return True
 
     def get_model_mapping(self) -> Dict[str, str]:
@@ -719,7 +734,7 @@ class VeniceProvider(BaseProvider):
             text=response,
             code_blocks=code_blocks,
             metadata={
-                "provider": "venice",
+                "provider": self.name,
                 "model": self.config.model,
                 "timestamp": datetime.now().isoformat(),
                 "requires_code_extraction": len(code_blocks) > 0,
@@ -810,7 +825,7 @@ class VeniceProvider(BaseProvider):
         """
         session = Session(
             id=session_id,
-            provider="venice",
+            provider=self.name,
             model=self.config.model,
             created_at=datetime.now(),
             last_activity=datetime.now(),
@@ -967,12 +982,15 @@ class VeniceProvider(BaseProvider):
 
         if "api_key" in error_str.lower():
             return (
-                "Venice API key is invalid or not set. "
-                "Please check VENICE_API_KEY environment variable."
+                f"{self.DISPLAY_NAME} API key is invalid or not set. "
+                f"Please check {self.API_KEY_ENV_VAR} environment variable."
             )
 
         if "rate_limit" in error_str.lower():
-            return "Venice API rate limit exceeded. Please wait before retrying."
+            return (
+                f"{self.DISPLAY_NAME} API rate limit exceeded. "
+                "Please wait before retrying."
+            )
 
         if "model" in error_str.lower():
             return f"Model {self.config.model} not available. Please check model name."
@@ -1173,22 +1191,22 @@ class VeniceProvider(BaseProvider):
             prompt = self._build_ticket_prompt(ticket_content)
 
             # Generate response from Venice
-            logger.info("Generating Venice response for ticket execution")
+            logger.info(f"Generating {self.DISPLAY_NAME} response for ticket execution")
             response = self.generate(prompt, **kwargs)
             execution_result["response"] = response
 
             # Parse response to extract actions
-            logger.info("Parsing Venice response for actions")
+            logger.info(f"Parsing {self.DISPLAY_NAME} response for actions")
             actions = self._parse_venice_response(response)
 
             if not actions:
-                logger.warning("No actions extracted from Venice response")
+                logger.warning(f"No actions extracted from {self.DISPLAY_NAME} response")
                 execution_result["errors"].append(
                     "No executable actions found in response"
                 )
                 return execution_result
 
-            logger.info(f"Extracted {len(actions)} actions from Venice response")
+            logger.info(f"Extracted {len(actions)} actions from {self.DISPLAY_NAME} response")
 
             # Create execution context
             context = ExecutionContext(
@@ -1324,13 +1342,13 @@ class VeniceProvider(BaseProvider):
 
             # Enhance actions with Venice metadata
             for action in actions:
-                action.metadata["provider"] = "venice"
+                action.metadata["provider"] = self.name
                 action.metadata["model"] = self.config.model
 
             return actions
 
         except Exception as e:
-            logger.error(f"Failed to parse Venice response: {e}")
+            logger.error(f"Failed to parse {self.DISPLAY_NAME} response: {e}")
             # Try fallback parsing
             return self._fallback_parse_venice_response(response)
 
@@ -1363,7 +1381,7 @@ class VeniceProvider(BaseProvider):
                     content=content,
                     metadata={
                         "language": language,
-                        "source": "venice_parser",
+                        "source": f"{self.PROVIDER_SLUG}_parser",
                     }
                 )
                 actions.append(action)
@@ -1377,7 +1395,7 @@ class VeniceProvider(BaseProvider):
                         action = Action(
                             type=ActionType.RUN_COMMAND,
                             target=cmd,
-                            metadata={"source": "venice_parser"}
+                            metadata={"source": f"{self.PROVIDER_SLUG}_parser"}
                         )
                         actions.append(action)
 
@@ -1410,7 +1428,7 @@ class VeniceProvider(BaseProvider):
                     content=block.content,
                     metadata={
                         "language": block.language,
-                        "source": "venice_fallback",
+                        "source": f"{self.PROVIDER_SLUG}_fallback",
                     }
                 )
                 actions.append(action)
@@ -1422,7 +1440,7 @@ class VeniceProvider(BaseProvider):
                         action = Action(
                             type=ActionType.RUN_COMMAND,
                             target=line,
-                            metadata={"source": "venice_fallback"}
+                            metadata={"source": f"{self.PROVIDER_SLUG}_fallback"}
                         )
                         actions.append(action)
 
@@ -1510,7 +1528,7 @@ class VeniceProvider(BaseProvider):
 
         # Log final statistics
         logger.info(
-            f"Venice provider stats: requests={self.stats['total_requests']}, "
+            f"{self.DISPLAY_NAME} provider stats: requests={self.stats['total_requests']}, "
             f"successful={self.stats['successful_requests']}, "
             f"failed={self.stats['failed_requests']}, "
             f"retries={self.stats['retries']}"
@@ -1518,7 +1536,7 @@ class VeniceProvider(BaseProvider):
 
         # Close HTTP session for this provider
         try:
-            self.session_manager.close_session("venice")
+            self.session_manager.close_session(self.name)
         except Exception as e:
             logger.debug(f"Failed to close session: {e}")
 

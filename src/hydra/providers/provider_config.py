@@ -155,6 +155,75 @@ class ProviderConfigManager:
                 "context_extension": False
             }
         },
+        "nearai": {
+            "type": "nearai_api",
+            "enabled": True,
+            "api_key": "${NEARAI_API_KEY}",
+            "base_url": "https://cloud-api.near.ai/v1",
+            "default_model": "zai-org/GLM-5.1-FP8",
+            "models": {
+                "fast": {
+                    "provider_identifier": "Qwen/Qwen3.6-35B-A3B-FP8",
+                    "category": "fast",
+                    "context_window": 262144,
+                    "max_output_tokens": 4096,
+                    "cost_per_million_tokens": 0.17
+                },
+                "balanced": {
+                    "provider_identifier": "zai-org/GLM-5.1-FP8",
+                    "category": "balanced",
+                    "context_window": 202752,
+                    "max_output_tokens": 4096,
+                    "cost_per_million_tokens": 0.85
+                },
+                "smart": {
+                    "provider_identifier": "Qwen/Qwen3.5-122B-A10B",
+                    "category": "smart",
+                    "context_window": 131072,
+                    "max_output_tokens": 4096,
+                    "cost_per_million_tokens": 0.4
+                },
+                "coder": {
+                    "provider_identifier": "zai-org/GLM-5.1-FP8",
+                    "category": "smart",
+                    "context_window": 202752,
+                    "max_output_tokens": 4096,
+                    "cost_per_million_tokens": 0.85
+                },
+                "vision": {
+                    "provider_identifier": "Qwen/Qwen3-VL-30B-A3B-Instruct",
+                    "category": "balanced",
+                    "context_window": 256000,
+                    "max_output_tokens": 4096,
+                    "cost_per_million_tokens": 0.15
+                },
+                "opus": {
+                    "provider_identifier": "zai-org/GLM-5.1-FP8",
+                    "category": "smart",
+                    "context_window": 202752,
+                    "max_output_tokens": 4096,
+                    "cost_per_million_tokens": 0.85
+                },
+                "sonnet": {
+                    "provider_identifier": "Qwen/Qwen3.6-35B-A3B-FP8",
+                    "category": "balanced",
+                    "context_window": 262144,
+                    "max_output_tokens": 4096,
+                    "cost_per_million_tokens": 0.17
+                }
+            },
+            "features": {
+                "interactive": False,
+                "streaming": True,
+                "file_interception": False,
+                "session_persistence": False,
+                "code_execution": False,
+                "context_extension": False
+            },
+            "extra_params": {
+                "tee_inference": True
+            }
+        },
         "anthropic": {
             "type": "anthropic_api",
             "enabled": True,
@@ -387,7 +456,13 @@ class ProviderConfigManager:
                 continue
 
             # Validate API providers have required credentials
-            if config.type in ['venice_api', 'anthropic_api', 'openai_api']:
+            if config.type in [
+                'venice_api',
+                'nearai',
+                'nearai_api',
+                'anthropic_api',
+                'openai_api',
+            ]:
                 if not config.api_key and config.enabled:
                     import warnings
                     warnings.warn(
@@ -523,7 +598,13 @@ class ProviderConfigManager:
         for config in self._configs.values():
             if config.enabled:
                 # Skip API providers without keys
-                if config.type in ['venice_api', 'anthropic_api', 'openai_api']:
+                if config.type in [
+                    'venice_api',
+                    'nearai',
+                    'nearai_api',
+                    'anthropic_api',
+                    'openai_api',
+                ]:
                     if not config.api_key:
                         continue
                 return config

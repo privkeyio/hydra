@@ -94,6 +94,9 @@ class TestCLIParser:
         # Test provider flag
         args = parser.parse_args(['--provider', 'venice', 'template', 'list'])
         assert args.provider == 'venice'
+
+        args = parser.parse_args(['--provider', 'nearai', 'template', 'list'])
+        assert args.provider == 'nearai'
         
         # Test model flag
         args = parser.parse_args(['--model', 'gpt-4', 'template', 'list'])

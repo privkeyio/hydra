@@ -130,7 +130,15 @@ def create_parser() -> argparse.ArgumentParser:
     # Global provider override flags
     parser.add_argument(
         "--provider",
-        choices=["venice", "claude_tmux", "claude_code", "anthropic", "openai", "mock"],
+        choices=[
+            "nearai",
+            "venice",
+            "claude_tmux",
+            "claude_code",
+            "anthropic",
+            "openai",
+            "mock",
+        ],
         help="Override the LLM provider (default: from env or config)"
     )
     parser.add_argument(
@@ -301,4 +309,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

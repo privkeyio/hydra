@@ -548,9 +548,9 @@ class ClaudeOutputHandler(OutputHandler):
 class VeniceOutputHandler(OutputHandler):
     """Output handler for Venice AI text responses."""
 
-    def __init__(self):
+    def __init__(self, provider_name: str = "venice"):
         """Initialize Venice output handler."""
-        super().__init__("venice")
+        super().__init__(provider_name)
 
     def parse(self, response: str) -> ParsedResponse:
         """Parse Venice response.
@@ -569,7 +569,7 @@ class VeniceOutputHandler(OutputHandler):
             text=response,
             code_blocks=code_blocks,
             metadata={
-                "provider": "venice",
+                "provider": self.provider_name,
                 "requires_code_extraction": True
             }
         )
@@ -594,7 +594,7 @@ class VeniceOutputHandler(OutputHandler):
             text_sections=text_sections,
             commands=commands,
             files=files,
-            metadata={"provider": "venice", "model": "varies"}
+            metadata={"provider": self.provider_name, "model": "varies"}
         )
 
     def _extract_venice_code(self, response: str) -> List[CodeBlock]:
@@ -829,6 +829,7 @@ class OutputHandlerFactory:
         "claude": ClaudeOutputHandler,
         "claude_tmux": ClaudeOutputHandler,
         "venice": VeniceOutputHandler,
+        "nearai": VeniceOutputHandler,
     }
 
     @classmethod

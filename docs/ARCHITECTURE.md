@@ -149,6 +149,7 @@ LLMProvider (Abstract Base)
 │   ├── generate_json(prompt) -> Dict
 │   └── list_models() -> List[str]
 └── Implementations
+    ├── NearAIProvider
     ├── VeniceProvider
     ├── AnthropicProvider
     ├── OpenAIProvider
@@ -162,6 +163,7 @@ providers/
 ├── __init__.py      # Imports all providers
 ├── base.py          # Abstract base class
 ├── factory.py       # Factory with registry
+├── nearai.py        # NEAR AI Cloud implementation
 ├── venice.py        # Venice implementation
 ├── anthropic.py     # Anthropic implementation
 ├── openai.py        # OpenAI implementation
@@ -263,7 +265,8 @@ subprocess.run(
 ### API Key Management
 ```
 .env (git-ignored)
-├── LLM_PROVIDER (venice|anthropic|openai|claude_cli)
+├── LLM_PROVIDER (nearai|venice|anthropic|openai|claude_cli)
+├── NEARAI_API_KEY
 ├── VENICE_API_KEY
 ├── ANTHROPIC_API_KEY
 ├── OPENAI_API_KEY

@@ -310,6 +310,15 @@ Venice AI provider using OpenAI-compatible API.
 - `base_url`: API endpoint (default: https://api.venice.ai/api/v1)
 - `model`: Model to use (default: qwen-2.5-coder-32b)
 
+#### NearAIProvider
+
+NEAR AI Cloud provider using OpenAI-compatible TEE inference.
+
+**Configuration:**
+- `api_key`: Required NEAR AI Cloud API key
+- `base_url`: API endpoint (default: https://cloud-api.near.ai/v1)
+- `model`: Model to use (default: zai-org/GLM-5.1-FP8)
+
 #### AnthropicProvider
 
 Anthropic Claude provider.

@@ -706,7 +706,7 @@ class VeniceProvider(BaseProvider):
             logger.warning(f"Model {model_identifier} not in known models")
 
         self.config.model = model_identifier
-        logger.info(f"Selected Venice model: {model_identifier}")
+        logger.info(f"Selected {self.DISPLAY_NAME} model: {model_identifier}")
         return True
 
     def get_model_mapping(self) -> Dict[str, str]:
@@ -1191,22 +1191,22 @@ class VeniceProvider(BaseProvider):
             prompt = self._build_ticket_prompt(ticket_content)
 
             # Generate response from Venice
-            logger.info("Generating Venice response for ticket execution")
+            logger.info(f"Generating {self.DISPLAY_NAME} response for ticket execution")
             response = self.generate(prompt, **kwargs)
             execution_result["response"] = response
 
             # Parse response to extract actions
-            logger.info("Parsing Venice response for actions")
+            logger.info(f"Parsing {self.DISPLAY_NAME} response for actions")
             actions = self._parse_venice_response(response)
 
             if not actions:
-                logger.warning("No actions extracted from Venice response")
+                logger.warning(f"No actions extracted from {self.DISPLAY_NAME} response")
                 execution_result["errors"].append(
                     "No executable actions found in response"
                 )
                 return execution_result
 
-            logger.info(f"Extracted {len(actions)} actions from Venice response")
+            logger.info(f"Extracted {len(actions)} actions from {self.DISPLAY_NAME} response")
 
             # Create execution context
             context = ExecutionContext(
@@ -1348,7 +1348,7 @@ class VeniceProvider(BaseProvider):
             return actions
 
         except Exception as e:
-            logger.error(f"Failed to parse Venice response: {e}")
+            logger.error(f"Failed to parse {self.DISPLAY_NAME} response: {e}")
             # Try fallback parsing
             return self._fallback_parse_venice_response(response)
 
@@ -1381,7 +1381,7 @@ class VeniceProvider(BaseProvider):
                     content=content,
                     metadata={
                         "language": language,
-                        "source": "venice_parser",
+                        "source": f"{self.PROVIDER_SLUG}_parser",
                     }
                 )
                 actions.append(action)
@@ -1395,7 +1395,7 @@ class VeniceProvider(BaseProvider):
                         action = Action(
                             type=ActionType.RUN_COMMAND,
                             target=cmd,
-                            metadata={"source": "venice_parser"}
+                            metadata={"source": f"{self.PROVIDER_SLUG}_parser"}
                         )
                         actions.append(action)
 
@@ -1428,7 +1428,7 @@ class VeniceProvider(BaseProvider):
                     content=block.content,
                     metadata={
                         "language": block.language,
-                        "source": "venice_fallback",
+                        "source": f"{self.PROVIDER_SLUG}_fallback",
                     }
                 )
                 actions.append(action)
@@ -1440,7 +1440,7 @@ class VeniceProvider(BaseProvider):
                         action = Action(
                             type=ActionType.RUN_COMMAND,
                             target=line,
-                            metadata={"source": "venice_fallback"}
+                            metadata={"source": f"{self.PROVIDER_SLUG}_fallback"}
                         )
                         actions.append(action)
 
@@ -1528,7 +1528,7 @@ class VeniceProvider(BaseProvider):
 
         # Log final statistics
         logger.info(
-            f"Venice provider stats: requests={self.stats['total_requests']}, "
+            f"{self.DISPLAY_NAME} provider stats: requests={self.stats['total_requests']}, "
             f"successful={self.stats['successful_requests']}, "
             f"failed={self.stats['failed_requests']}, "
             f"retries={self.stats['retries']}"

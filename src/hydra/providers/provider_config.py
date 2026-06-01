@@ -156,7 +156,7 @@ class ProviderConfigManager:
             }
         },
         "nearai": {
-            "type": "nearai",
+            "type": "nearai_api",
             "enabled": True,
             "api_key": "${NEARAI_API_KEY}",
             "base_url": "https://cloud-api.near.ai/v1",
